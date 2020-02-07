@@ -1,1 +1,22 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+.DS_Store
+
+# Log files
+*.log
+
+# Executable files
+*.sh
+
+# virtualenv
+.venv
 venv/
+ENV/
+
+# Pycharm Project
+.idea/
+
+# Other project-specific folders
+videos/
