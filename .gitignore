@@ -20,3 +20,4 @@ ENV/
 
 # Other project-specific folders
 videos/
+tmp/
