@@ -46,8 +46,8 @@ class DAVIS2017Dataset(torch.utils.data.Dataset):
 
             # Resize both image and frames if the size is not correct
             if self.image_size != (image.shape[0], image.shape[1]):
-                image = cv2.resize(image, dsize=self.image_size, interpolation=cv2.INTER_LINEAR)
-                mask = cv2.resize(mask, dsize=self.image_size, interpolation=cv2.INTER_NEAREST)
+                image = cv2.resize(image, dsize=(image.shape[1], image.shape[0]), interpolation=cv2.INTER_LINEAR)
+                mask = cv2.resize(mask, dsize=(image.shape[1], image.shape[0]), interpolation=cv2.INTER_NEAREST)
 
             # Apply dilatation
             mask = cv2.dilate(mask, cv2.getStructuringElement(cv2.MORPH_CROSS, (3, 3)), iterations=4).astype(np.float32)

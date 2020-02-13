@@ -12,7 +12,9 @@ class CopyPasteData(skeltorch.Data):
 
     def __init__(self):
         super().__init__()
-        self.transforms = torchvision.transforms.Compose([torchvision.transforms.Resize(self.image_size)])
+        self.transforms = torchvision.transforms.Compose([
+            torchvision.transforms.Resize(self.image_size)
+        ])
 
     def create(self, data_folder_path: str, conf: skeltorch.Configuration):
         pass
