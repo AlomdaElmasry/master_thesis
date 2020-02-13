@@ -8,12 +8,13 @@ import cv2
 
 class DAVIS2017Dataset(torch.utils.data.Dataset):
 
-    def __init__(self, split, dataset_folder, image_size):
+    def __init__(self, split, dataset_folder, frame_transforms=None, mask_transforms=None):
         self.split = split
         self.dataset_folder = dataset_folder
-        self.image_size = image_size
         self.images_folder = os.path.join(self.dataset_folder, 'JPEGImages', '480p')
         self.annotations_folder = os.path.join(self.dataset_folder, 'Annotations', '480p')
+        self.frame_transforms = frame_transforms
+        self.mask_transforms = mask_transforms
         self._validate_arguments()
         self._load_split()
 
@@ -31,32 +32,33 @@ class DAVIS2017Dataset(torch.utils.data.Dataset):
         images_filenames = sorted(glob.glob(os.path.join(self.images_folder, self.items[item], '*.jpg')))
         masks_filenames = sorted(glob.glob(os.path.join(self.annotations_folder, self.items[item], '*.png')))
 
-        # Allocate space for both frames and masks
-        images = torch.zeros((3, len(images_filenames), self.image_size[0], self.image_size[1]))
-        masks = torch.zeros((1, len(masks_filenames), self.image_size[0], self.image_size[1]))
+        # Create variables to return
+        frames, masks = None, None
 
         # Iterate all the files
         for i in range(len(images_filenames)):
             # Load both the frame and the masks as Numpy arrays -> (H, W, C)
-            image = np.array(Image.open(images_filenames[i]).convert('RGB')) / 255
-            mask = np.array(Image.open(masks_filenames[i]).convert('P'))
+            frame = np.array(Image.open(images_filenames[i]).convert('RGB')) / 255
+            mask = np.expand_dims(np.array(Image.open(masks_filenames[i]).convert('P')), 2)
 
-            # Binarize mask so the values are (0,1)
-            mask = (mask > 0.5).astype(np.uint8)
+            # Apply transforms to the frame
+            if self.frame_transforms is not None:
+                frame = self.frame_transforms(frame)
 
-            # Resize both image and frames if the size is not correct
-            if self.image_size != (image.shape[0], image.shape[1]):
-                image = cv2.resize(image, dsize=(self.image_size[1], self.image_size[0]), interpolation=cv2.INTER_LINEAR)
-                mask = cv2.resize(mask, dsize=(self.image_size[1], self.image_size[0]), interpolation=cv2.INTER_NEAREST)
+            # Apply transforms to the mask
+            if self.mask_transforms is not None:
+                mask = self.mask_transforms(mask)
 
-            # Apply dilatation
-            mask = cv2.dilate(mask, cv2.getStructuringElement(cv2.MORPH_CROSS, (3, 3)), iterations=4).astype(np.float32)
+            # Allocate space for both frames and masks
+            if frames is None or masks is None:
+                frames = torch.zeros((frame.shape[2], len(images_filenames), frame.shape[0], frame.shape[1]))
+                masks = torch.zeros((mask.shape[2], len(masks_filenames), mask.shape[0], mask.shape[1]))
 
             # Store both frame and mask as Tensors
-            images[:, i, :, :] = torch.from_numpy(image).permute(2, 0, 1)
-            masks[:, i, :, :] = torch.from_numpy(mask).unsqueeze(0)
+            frames[:, i, :, :] = torch.from_numpy(frame).permute(2, 0, 1)
+            masks[:, i, :, :] = torch.from_numpy(mask).permute(2, 0, 1)
 
-        return images, masks, item
+        return frames, masks, item
 
     def __len__(self):
         return len(self.items)
