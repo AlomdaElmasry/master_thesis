@@ -76,11 +76,11 @@ class CopyPasteRunner(skeltorch.Runner):
                         # Obtain an estimation of the inpainted frame
                         comp = self.model(
                             rfeats[:, :, ridx],
-                            it_data[0][:, :, ridx],
-                            it_data[1][:, :, ridx],
-                            it_data[0][:, :, f],
-                            it_data[1][:, :, f],
-                            it_target[:, :, f]
+                            frames[:, :, ridx],
+                            masks[:, :, ridx],
+                            frames[:, :, f],
+                            masks[:, :, f],
+                            GTs[:, :, f]
                         )
 
                         # Shape: batch x 3 x 240 x 424 (estimation of the image)
