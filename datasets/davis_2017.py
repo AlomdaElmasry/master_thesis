@@ -33,7 +33,7 @@ class DAVIS2017Dataset(torch.utils.data.Dataset):
         masks = torch.zeros((1, len(masks_filenames), self.image_size[0], self.image_size[1]))
         for i in range(len(images_filenames)):
             image_pil = Image.open(images_filenames[i]).convert('RGB')
-            mask_pil = Image.open(masks_filenames[i])
+            mask_pil = Image.open(masks_filenames[i]).convert('P')
             if self.transforms:
                 image_pil = self.transforms(image_pil)
                 mask_pil = self.transforms(mask_pil)
