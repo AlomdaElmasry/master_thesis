@@ -10,11 +10,7 @@ import os.path
 class CopyPasteRunner(skeltorch.Runner):
 
     def init_model(self):
-        self.model = nn.DataParallel(CPNet()).to(self.execution.device)
-        self.model.load_state_dict(torch.load(os.path.join('./weight/weight.pth'), map_location=self.execution.device))
-
-    def load_checkpoint(self):
-        pass
+        self.model = CPNet().to(self.execution.device)
 
     def init_optimizer(self):
         self.optimizer = torch.optim.Adam(self.model.parameters())
