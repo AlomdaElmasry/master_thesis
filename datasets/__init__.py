@@ -5,7 +5,7 @@ import torch
 
 class MovementSimulator:
 
-    def __init__(self, max_displacement=1, max_scaling=0.01, max_rotation=np.pi / 32):
+    def __init__(self, max_displacement=1, max_scaling=0.01, max_rotation=np.pi / 16):
         self.max_displacement = max_displacement
         self.max_scaling = max_scaling
         self.max_rotation = max_rotation

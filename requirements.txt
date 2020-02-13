@@ -6,3 +6,6 @@ scipy
 matplotlib
 scikit-image
 git+https://github.com/pdollar/coco.git#egg=pycocotools&subdirectory=PythonAPI
+tensorboardX
+jsonschema
+torchvision
