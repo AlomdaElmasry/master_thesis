@@ -20,7 +20,7 @@ class CopyPasteData(skeltorch.Data):
     def load_datasets(self, data_path: str, conf: Configuration):
         if conf.get('data', 'dataset') == 'davis-2017':
             train_dataset = DAVIS2017Dataset(
-                'train', os.path.join(data_path, 'DAVIS-2017'), self.image_size, self.transforms
+                'train', os.path.join(data_path, 'DAVIS-2017'), self.image_size
             )
             self.datasets['train'] = MaskedDataset(train_dataset, None)
 
