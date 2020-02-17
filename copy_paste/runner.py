@@ -30,8 +30,9 @@ class CopyPasteRunner(skeltorch.Runner):
         self.model.eval()
 
         # Iterate through the data of the loader
-        #    it_data is a tuple containing masked frames (pos=0) and masks (pos=1)
-        #    it_target contains the ground truth frames
+        #    it_data[0] is (B, 3, F, H, W) and contains masked frames
+        #    it_data[1] is (B, 1, F, H, W) and contains masks
+        #    it_target contains ground truth frames
         #    it_info contains the index of the video
         for it_data, it_target, it_info in self.experiment.data.loaders['train']:
 
@@ -48,6 +49,7 @@ class CopyPasteRunner(skeltorch.Runner):
             for t in range(2):
 
                 # Create two aux variables to store input frames and masks in current direction
+                # Note: could be done better creating a copy of it_data[0] and replacing those values directly.
                 input_frames = it_data[0].clone()
                 input_masks = it_data[1].clone()
 
@@ -57,26 +59,30 @@ class CopyPasteRunner(skeltorch.Runner):
 
                 # Iterate over all the frames of the video
                 for f in index:
-
                     # Obtain a list containing the references frames of the current target frame
                     ridx = CopyPasteRunner.get_reference_frame_indexes(f, it_data[0].size(2))
 
-                    # Inpainting Part
-                    with torch.no_grad():
-                        frames_inpainted[:, t, :, f] = self.model(input_frames, input_masks, it_target, f, ridx)
-                        input_frames[:, :, f] = frames_inpainted[:, t, :, f]
-                        input_masks[:, :, f] = 0
-                        print('feat done')
+                    # Obtain an estimation of the inpainted frame f
+                    frames_inpainted[:, t, :, f] = self.model(input_frames, input_masks, it_target, f, ridx)
 
-            # TO BE EXPLAINED
+                    # Replace input_frames and input_masks with previous predictions to improve quality
+                    input_frames[:, :, f] = frames_inpainted[:, t, :, f]
+                    input_masks[:, :, f] = 0
+
+            # Store in disk each inpainted frame
             for f in range(frames_inpainted.size(3)):
+                # Obtain both forward and backward estimates
                 forward_prediction = frames_inpainted[:, 0, :, f].cpu().squeeze(0).permute(1, 2, 0).numpy()
                 backward_prediction = frames_inpainted[:, 1, :, f].cpu().squeeze(0).permute(1, 2, 0).numpy()
+
+                # Combine both estimates giving more importance depending on whether the estimate has been made using
+                # more or less auxiliar frames with mask
                 final_predition = forward_prediction * f / len(index) + backward_prediction * (len(index) - f) / \
                                   len(index)
+
+                # Convert the image to range [0, 255] and save it in disk
                 pil_img = Image.fromarray((final_predition * 255.).astype(np.uint8))
                 pil_img.save(os.path.join(self.execution.args['data_output'], 'f{}.jpg'.format(f)))
-                print('frame done')
 
     def test_alignment(self):
         """Lalala"""

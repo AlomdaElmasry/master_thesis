@@ -245,14 +245,15 @@ class CM_Module(nn.Module):
 
 
 class CPNet(nn.Module):
-    def __init__(self, mode='Train'):
+    def __init__(self):
         super(CPNet, self).__init__()
-        self.A_Encoder = A_Encoder()  # Align
+        # Align Modules
+        self.A_Encoder = A_Encoder()
         self.A_Regressor = A_Regressor()  # output: alignment network
 
-        self.Encoder = Encoder()  # Merge
+        # Copy and Paste Modules
+        self.Encoder = Encoder()
         self.CM_Module = CM_Module()
-
         self.Decoder = Decoder()
 
         self.register_buffer('mean', torch.FloatTensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1))
@@ -305,7 +306,7 @@ class CPNet(nn.Module):
         # Return stacked GTs
         return torch.stack(aligned_r_, dim=2), torch.stack(rvmap_, dim=2), torch.stack(aligned_gts, dim=2)
 
-    def copy_and_paste(self, target_frame, target_mask, target_gt, aligned_frames, aligned_masks):
+    def copy_and_paste(self, target_frame, target_mask, aligned_frames, aligned_masks):
         # Get Copy and Paste features
         cfeats = [self.Encoder(target_frame, target_mask)]
         for f in range(aligned_frames.size(2)):
@@ -313,31 +314,26 @@ class CPNet(nn.Module):
         c_feats = torch.stack(cfeats, dim=2)
 
         p_in, c_mask = self.CM_Module(c_feats, 1 - target_mask, aligned_masks)
-        pred = self.Decoder(p_in)
-        comp = pred * target_mask + target_gt * (1.0 - target_mask)
-
-        return comp
+        return self.Decoder(p_in)
 
     def forward(self, frames, masks, gts, target_index, reference_indexes):
 
-        # Get important parameters
-        B, C, H, W = frames[:, :, 0].size()  # B C H W
+        # Get frame, mask an GT associated to the target index
+        target_frame = frames[:, :, target_index]
+        target_mask = masks[:, :, target_index]
+        target_gt = masks[:, :, target_index]
 
-        # Get Aligned Frames
+        # Step 1: Align Auxiliar Frames
         aligned_frames, aligned_masks, _ = self.align_estimate(frames, masks, gts, target_index, reference_indexes)
 
         # Step 2: Copy and Paste
         predicted_target = self.copy_and_paste(
-            target_frame=frames[:, :, target_index],
-            target_mask=masks[:, :, target_index],
-            target_gt=gts[:, :, target_index],
+            target_frame=target_frame,
+            target_mask=target_mask,
             aligned_frames=aligned_frames,
             aligned_masks=aligned_masks
         )
 
-        # Combine prediction with GT of the frame
-        comp = predicted_target * (masks[:, :, target_index]) + \
-               gts[:, :, target_index] * (1. - masks[:, :, target_index])
-
-        # Limit the output range [0, 1] and return
-        return torch.clamp(comp, 0, 1)
+        # Combine prediction with GT of the frame. Limit the output range [0, 1].
+        inpainted_frame = predicted_target * target_mask + target_gt * (1. - target_mask)
+        return torch.clamp(inpainted_frame, 0, 1)
