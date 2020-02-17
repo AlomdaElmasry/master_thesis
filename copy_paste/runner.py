@@ -42,10 +42,11 @@ class CopyPasteRunner(skeltorch.Runner):
             frames_inpainted = torch.zeros((B, 2, C, F, H, W), device='cpu')
 
             # Create a list containing the indexes of the frames
-            index = [f for f in reversed(range(it_data[0].size(2)))]
+            index = [f for f in range(it_data[0].size(2))]
 
             # Use the model twice: forward (0) and backward (1)
             for t in range(2):
+
                 # Create two aux variables to store input frames and masks in current direction
                 input_frames = it_data[0].clone()
                 input_masks = it_data[1].clone()
@@ -56,27 +57,24 @@ class CopyPasteRunner(skeltorch.Runner):
 
                 # Iterate over all the frames of the video
                 for f in index:
+
                     # Obtain a list containing the references frames of the current target frame
                     ridx = CopyPasteRunner.get_reference_frame_indexes(f, it_data[0].size(2))
 
                     # Inpainting Part
                     with torch.no_grad():
-                        # Obtain an estimation of the inpainted frame
                         frames_inpainted[:, t, :, f] = self.model(input_frames, input_masks, it_target, f, ridx)
-
-                        # Update frame and mask with the predictions -> mask is all zeros
                         input_frames[:, :, f] = frames_inpainted[:, t, :, f]
                         input_masks[:, :, f] = 0
-
                         print('feat done')
 
             # TO BE EXPLAINED
             for f in range(frames_inpainted.size(3)):
                 forward_prediction = frames_inpainted[:, 0, :, f].cpu().squeeze(0).permute(1, 2, 0).numpy()
                 backward_prediction = frames_inpainted[:, 1, :, f].cpu().squeeze(0).permute(1, 2, 0).numpy()
-                final_predition = forward_prediction * (len(index) - f) / len(index) + \
-                                  backward_prediction * f / len(index)
-                pil_img = Image.fromarray((final_predition * 8).astype(np.uint8))
+                final_predition = forward_prediction * f / len(index) + backward_prediction * (len(index) - f) / \
+                                  len(index)
+                pil_img = Image.fromarray((final_predition * 255.).astype(np.uint8))
                 pil_img.save(os.path.join(self.execution.args['data_output'], 'f{}.jpg'.format(f)))
                 print('frame done')
 
