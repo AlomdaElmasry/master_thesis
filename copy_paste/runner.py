@@ -35,29 +35,21 @@ class CopyPasteRunner(skeltorch.Runner):
         #    it_info contains the index of the video
         for it_data, it_target, it_info in self.experiment.data.loaders['train']:
 
-            frames = it_data[0].to(self.execution.device)
-            masks = it_data[1].to(self.execution.device)
-            GTs = it_target.to(self.execution.device)
-
-            # Get alignment features
-            with torch.no_grad():
-                rfeats = self.model(frames, masks)
-
             # Clone the masked frames and the masks
-            frames_ = frames.clone()
-            masks_ = masks.clone()
+            frames_ = it_data[0].clone()
+            masks_ = it_data[1].clone()
 
             # Create a list containing the indexes of the frames
-            index = [f for f in reversed(range(frames.size(2)))]
+            index = [f for f in reversed(range(it_data[0].size(2)))]
 
             # Use the model twice: forward (0) and backward (1)
             for t in range(2):  # forward : 0, backward : 1
 
                 # TO BE EXPLAINED
                 if t == 1:
-                    comp0 = frames.clone()
-                    frames = frames_
-                    masks = masks_
+                    comp0 = it_data[0].clone()
+                    it_data[0] = frames_
+                    it_data[1] = masks_
                     index.reverse()
 
                 # Iterate over all the frames of the video
@@ -69,33 +61,14 @@ class CopyPasteRunner(skeltorch.Runner):
                     with torch.no_grad():
 
                         # Obtain an estimation of the inpainted frame
-                        comp = self.model(
-                            rfeats[:, :, ridx],
-                            frames[:, :, ridx],
-                            masks[:, :, ridx],
-                            frames[:, :, f],
-                            masks[:, :, f],
-                            GTs[:, :, f]
-                        )
+                        comp = self.model(it_data[0], it_data[1], it_target, f, ridx)
 
                         # Shape: batch x 3 x 240 x 424 (estimation of the image)
                         c_s = comp.shape
 
-                        # Fs shape: batch x 3 x 1 (frames) x 240 x 424
-                        Fs = torch.empty((c_s[0], c_s[1], 1, c_s[2], c_s[3])).float().to(self.execution.device)
-
-                        # Hs shape: batch x 1 x 1 x 240 x 424 (mask) -> no mask
-                        Hs = torch.zeros((c_s[0], 1, 1, c_s[2], c_s[3])).float().to(self.execution.device)
-
-                        # Set FS to the output prediction
-                        Fs[:, :, 0] = comp.detach()
-
                         # Update frame and mask with the predictions -> mask is all zeros
-                        frames[:, :, f] = Fs[:, :, 0]
-                        masks[:, :, f] = Hs[:, :, 0]
-
-                        # Update rfeats of the frame
-                        rfeats[:, :, f] = self.model(Fs, Hs)[:, :, 0]
+                        it_data[0][:, :, f] = comp.detach()
+                        it_data[1][:, :, f] = torch.zeros((c_s[0], 1, 1, c_s[2], c_s[3])).float().to(self.execution.device)
 
                         print('feat done')
 

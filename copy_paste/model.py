@@ -258,7 +258,7 @@ class CPNet(nn.Module):
         self.register_buffer('mean', torch.FloatTensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1))
         self.register_buffer('mean3d', torch.FloatTensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1, 1))
 
-    def encoding(self, frames, holes):
+    def align_encode(self, frames, holes):
 
         batch_size, _, num_frames, height, width = frames.size()
         # padding
@@ -271,98 +271,73 @@ class CPNet(nn.Module):
         feats = torch.stack(feat_, dim=2)
         return feats
 
-    def inpainting(self, rfeats, rframes, rholes, frame, hole, gt):
-
-        batch_size, _, height, width = frame.size()  # B C H W
-        num_r = rfeats.size()[2]  # # of reference frames
-
-        # padding
-        (rframes, rholes, frame, hole, gt), pad = pad_divide_by([rframes, rholes, frame, hole, gt], 8, (height, width))
-
-        # Target embedding
-        tfeat = self.A_Encoder(frame, hole)
-
-        # c_feat: Encoder(Copy Network) features
-        c_feat_ = [self.Encoder(frame, hole)]
-        L_align = torch.zeros_like(frame)
-
-        # aligned_r: aligned reference frames
-        aligned_r_ = []
-
-        # rvmap: aligned reference frames valid maps
-        rvmap_ = []
-
-        for r in range(num_r):
-            theta_rt = self.A_Regressor(tfeat, rfeats[:, :, r])
-            grid_rt = F.affine_grid(theta_rt, frame.size())
-
-            # aligned_r: aligned reference frame
-            # reference frame affine transformation
-            aligned_r = F.grid_sample(rframes[:, :, r], grid_rt)
-            aligned_r_.append(aligned_r)
-
-            # aligned_v: aligned reference visiblity map
-            # reference mask affine transformation
-            aligned_v = F.grid_sample(1 - rholes[:, :, r], grid_rt)
-            aligned_v = (aligned_v > 0.5).float()
-            rvmap_.append(aligned_v)
-
-            # intersection of target and reference valid map
-            trvmap = (1 - hole) * aligned_v
-            # compare the aligned frame - target frame
-
-            c_feat_.append(self.Encoder(aligned_r, aligned_v))
-
-        # Stack all the features inside matrices
-        aligned_rs = torch.stack(aligned_r_, 2)
-        rvmaps = torch.stack(rvmap_, dim=2)
-        c_feats = torch.stack(c_feat_, dim=2)
-
-        # p_in: paste network input(target features + c_out + c_mask)
-        p_in, c_mask = self.CM_Module(c_feats, 1 - hole, rvmaps)
-        pred = self.Decoder(p_in)
-        comp = pred * (hole) + gt * (1. - hole)
-
-        # _, _, _, H, W = aligned_rs.shape
-        # c_mask = (F.upsample(c_mask, size=(H, W), mode='bilinear', align_corners=False)).detach()
-
-        # Cut a possible added pad
-        if pad[2] + pad[3] > 0:
-            comp = comp[:, :, pad[2]:-pad[3], :]
-
-        if pad[0] + pad[1] > 0:
-            comp = comp[:, :, :, pad[0]:-pad[1]]
-
-        # Limit the output range [0, 1] and return
-        comp = torch.clamp(comp, 0, 1)
-        return comp
-
-    def forward(self, *args, **kwargs):
-        if len(args) == 2:
-            return self.encoding(*args)
-        else:
-            return self.inpainting(*args, **kwargs)
-
-    def align_frames(self, frames, masks, gts, target_index, reference_indexes):
+    def align_estimate(self, frames, masks, gts, target_index, reference_indexes):
 
         # Get important parameters
         B, C, H, W = frames[:, :, 0].size()  # B C H W
 
         # Get alignment features
-        rfeats = self.encoding(frames, masks)
+        rfeats = self.align_encode(frames, masks)
 
         # Add padding to everything
         (frames, masks, gts), pad = pad_divide_by([frames, masks, gts], 8, (H, W))
 
         # List to store the aligned GTs
+        aligned_r_ = []
+        rvmap_ = []
         aligned_gts = []
 
         # Iterate over the reference frames
         for r in reference_indexes:
+            # Predict Affine transformation and created grid
             theta_rt = self.A_Regressor(rfeats[:, :, target_index], rfeats[:, :, r])
             grid_rt = F.affine_grid(theta_rt, (B, C, H, W))
-            aligned_gt = F.grid_sample(gts[:, :, r], grid_rt)
-            aligned_gts.append(aligned_gt)
+
+            # Align Frame, Mask and GT
+            aligned_r_.append(F.grid_sample(frames[:, :, r], grid_rt))
+
+            aligned_v = F.grid_sample(1 - masks[:, :, r], grid_rt)
+            aligned_v = (aligned_v > 0.5).float()
+            rvmap_.append(aligned_v)
+
+            aligned_gts.append(F.grid_sample(gts[:, :, r], grid_rt))
 
         # Return stacked GTs
-        return torch.stack(aligned_gts, dim=2)
+        return torch.stack(aligned_r_, dim=2), torch.stack(rvmap_, dim=2), torch.stack(aligned_gts, dim=2)
+
+    def copy_and_paste(self, target_frame, target_mask, target_gt, aligned_frames, aligned_masks):
+        # Get Copy and Paste features
+        cfeats = [self.Encoder(target_frame, target_mask)]
+        for f in range(aligned_frames.size(2)):
+            cfeats.append(self.Encoder(aligned_frames[:, :, f], aligned_masks[:, :, f]))
+        c_feats = torch.stack(cfeats, dim=2)
+
+        p_in, c_mask = self.CM_Module(c_feats, 1 - target_mask, aligned_masks)
+        pred = self.Decoder(p_in)
+        comp = pred * target_mask + target_gt * (1.0 - target_mask)
+
+        return comp
+
+    def forward(self, frames, masks, gts, target_index, reference_indexes):
+
+        # Get important parameters
+        B, C, H, W = frames[:, :, 0].size()  # B C H W
+
+        # Get Aligned Frames
+        aligned_frames, aligned_masks, _ = self.align_estimate(frames, masks, gts, target_index, reference_indexes)
+
+        # Step 2: Copy and Paste
+        predicted_target = self.copy_and_paste(
+            target_frame=frames[:, :, target_index],
+            target_mask=masks[:, :, target_index],
+            target_gt=gts[:, :, target_index],
+            aligned_frames=aligned_frames,
+            aligned_masks=aligned_masks
+        )
+
+        # Combine prediction with GT of the frame
+        comp = predicted_target * (masks[:, :, target_index]) + \
+               gts[:, :, target_index] * (1. - masks[:, :, target_index])
+
+        # Limit the output range [0, 1] and return
+        return torch.clamp(comp, 0, 1)
