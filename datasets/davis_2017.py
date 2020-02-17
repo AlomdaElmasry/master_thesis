@@ -8,11 +8,12 @@ import cv2
 
 class DAVIS2017Dataset(torch.utils.data.Dataset):
 
-    def __init__(self, split, dataset_folder, frame_transforms=None, mask_transforms=None):
+    def __init__(self, split, dataset_folder, device='cpu', frame_transforms=None, mask_transforms=None):
         self.split = split
         self.dataset_folder = dataset_folder
         self.images_folder = os.path.join(self.dataset_folder, 'JPEGImages', '480p')
         self.annotations_folder = os.path.join(self.dataset_folder, 'Annotations', '480p')
+        self.device = device
         self.frame_transforms = frame_transforms
         self.mask_transforms = mask_transforms
         self._validate_arguments()
@@ -51,8 +52,10 @@ class DAVIS2017Dataset(torch.utils.data.Dataset):
 
             # Allocate space for both frames and masks
             if frames is None or masks is None:
-                frames = torch.zeros((frame.shape[2], len(images_filenames), frame.shape[0], frame.shape[1]))
-                masks = torch.zeros((mask.shape[2], len(masks_filenames), mask.shape[0], mask.shape[1]))
+                frames = torch.zeros((frame.shape[2], len(images_filenames), frame.shape[0], frame.shape[1]),
+                                     device=self.device)
+                masks = torch.zeros((mask.shape[2], len(masks_filenames), mask.shape[0], mask.shape[1]),
+                                    device=self.device)
 
             # Store both frame and mask as Tensors
             frames[:, i, :, :] = torch.from_numpy(frame).permute(2, 0, 1)

@@ -1,10 +1,10 @@
 import skeltorch
 from .model import CPNet
-import torch.nn as nn
 import torch.optim
 import numpy as np
 from PIL import Image
 import os.path
+import matplotlib.pyplot as plt
 
 
 class CopyPasteRunner(skeltorch.Runner):
@@ -109,6 +109,37 @@ class CopyPasteRunner(skeltorch.Runner):
                         canvas = Image.fromarray(canvas)
                         canvas.save(os.path.join(save_path, 'f{}.jpg'.format(f)))
                         print('frame done')
+
+    def test_alignment(self):
+        """Lalala"""
+
+        # Set model to evaluation mode
+        self.model.eval()
+
+        # Iterate through the data of the loader
+        #    it_data is a tuple containing masked frames (pos=0) and masks (pos=1)
+        #    it_target contains the ground truth frames
+        #    it_info contains the index of the video
+        for it_data, it_target, it_info in self.experiment.data.loaders['train']:
+
+            # Get alignment features
+            with torch.no_grad():
+
+                # Set a frame index and obtain its reference frames
+                target_index = 0
+                reference_indexes = CopyPasteRunner.get_reference_frame_indexes(target_index, it_data[0].size(2))
+
+                # Obtained aligned frames (provisional)
+                aligned_frames = self.model.align_frames(
+                    it_data[0], it_data[1], it_target, target_index, reference_indexes
+                )
+
+                for i in range(aligned_frames.size(3)):
+                    np_image = aligned_frames[0, :, i, :].permute(1, 2, 0).squeeze(2).numpy()
+                    plt.imshow(np_image)
+                    plt.show()
+                exit()
+
 
     @staticmethod
     def get_reference_frame_indexes(target_frame, num_frames, num_length=120):

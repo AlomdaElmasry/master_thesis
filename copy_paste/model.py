@@ -299,13 +299,13 @@ class CPNet(nn.Module):
             # aligned_r: aligned reference frame
             # reference frame affine transformation
             aligned_r = F.grid_sample(rframes[:, :, r], grid_rt)
+            aligned_r_.append(aligned_r)
 
             # aligned_v: aligned reference visiblity map
             # reference mask affine transformation
             aligned_v = F.grid_sample(1 - rholes[:, :, r], grid_rt)
             aligned_v = (aligned_v > 0.5).float()
-
-            aligned_r_.append(aligned_r)
+            rvmap_.append(aligned_v)
 
             # intersection of target and reference valid map
             trvmap = (1 - hole) * aligned_v
@@ -313,31 +313,28 @@ class CPNet(nn.Module):
 
             c_feat_.append(self.Encoder(aligned_r, aligned_v))
 
-            rvmap_.append(aligned_v)
-
+        # Stack all the features inside matrices
         aligned_rs = torch.stack(aligned_r_, 2)
-
-        c_feats = torch.stack(c_feat_, dim=2)
         rvmaps = torch.stack(rvmap_, dim=2)
+        c_feats = torch.stack(c_feat_, dim=2)
 
         # p_in: paste network input(target features + c_out + c_mask)
         p_in, c_mask = self.CM_Module(c_feats, 1 - hole, rvmaps)
-
         pred = self.Decoder(p_in)
-
-        _, _, _, H, W = aligned_rs.shape
-        c_mask = (F.upsample(c_mask, size=(H, W), mode='bilinear', align_corners=False)).detach()
-
         comp = pred * (hole) + gt * (1. - hole)
 
+        # _, _, _, H, W = aligned_rs.shape
+        # c_mask = (F.upsample(c_mask, size=(H, W), mode='bilinear', align_corners=False)).detach()
+
+        # Cut a possible added pad
         if pad[2] + pad[3] > 0:
             comp = comp[:, :, pad[2]:-pad[3], :]
 
         if pad[0] + pad[1] > 0:
             comp = comp[:, :, :, pad[0]:-pad[1]]
 
+        # Limit the output range [0, 1] and return
         comp = torch.clamp(comp, 0, 1)
-
         return comp
 
     def forward(self, *args, **kwargs):
@@ -345,3 +342,27 @@ class CPNet(nn.Module):
             return self.encoding(*args)
         else:
             return self.inpainting(*args, **kwargs)
+
+    def align_frames(self, frames, masks, gts, target_index, reference_indexes):
+
+        # Get important parameters
+        B, C, H, W = frames[:, :, 0].size()  # B C H W
+
+        # Get alignment features
+        rfeats = self.encoding(frames, masks)
+
+        # Add padding to everything
+        (frames, masks, gts), pad = pad_divide_by([frames, masks, gts], 8, (H, W))
+
+        # List to store the aligned GTs
+        aligned_gts = []
+
+        # Iterate over the reference frames
+        for r in reference_indexes:
+            theta_rt = self.A_Regressor(rfeats[:, :, target_index], rfeats[:, :, r])
+            grid_rt = F.affine_grid(theta_rt, (B, C, H, W))
+            aligned_gt = F.grid_sample(gts[:, :, r], grid_rt)
+            aligned_gts.append(aligned_gt)
+
+        # Return stacked GTs
+        return torch.stack(aligned_gts, dim=2)
