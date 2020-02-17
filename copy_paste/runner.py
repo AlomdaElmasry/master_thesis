@@ -74,8 +74,8 @@ class CopyPasteRunner(skeltorch.Runner):
 
             # TO BE EXPLAINED
             for f in range(frames_inpainted.size(3)):
-                forward_prediction = frames_inpainted[:, 0, :, f].cpu().squeeze(0).permute(2, 1, 0).numpy()
-                backward_prediction = frames_inpainted[:, 1, :, f].cpu().squeeze(0).permute(2, 1, 0).numpy()
+                forward_prediction = frames_inpainted[:, 0, :, f].cpu().squeeze(0).permute(1, 2, 0).numpy()
+                backward_prediction = frames_inpainted[:, 1, :, f].cpu().squeeze(0).permute(1, 2, 0).numpy()
                 final_predition = forward_prediction * (len(index) - f) / len(index) + \
                                   backward_prediction * f / len(index)
                 pil_img = Image.fromarray((final_predition * 8).astype(np.uint8))
