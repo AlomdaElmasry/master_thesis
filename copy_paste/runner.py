@@ -46,8 +46,6 @@ class CopyPasteRunner(skeltorch.Runner):
 
             # Use the model twice: forward (0) and backward (1)
             for t in range(2):
-                break
-
                 # Create two aux variables to store input frames and masks in current direction
                 input_frames = it_data[0].clone()
                 input_masks = it_data[1].clone()
