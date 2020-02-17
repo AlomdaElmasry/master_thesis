@@ -35,21 +35,25 @@ class CopyPasteRunner(skeltorch.Runner):
         #    it_info contains the index of the video
         for it_data, it_target, it_info in self.experiment.data.loaders['train']:
 
-            # Clone the masked frames and the masks
-            frames_ = it_data[0].clone()
-            masks_ = it_data[1].clone()
+            # Get relevant sizes of the iteration
+            B, C, F, H, W = it_data[0].size()
+
+            # Create a matrix to store inpainted frames. Size (B, 2, C, F, H, W), where the 2 is due to double direction
+            frames_inpainted = torch.zeros((B, 2, C, F, H, W), device='cpu')
 
             # Create a list containing the indexes of the frames
             index = [f for f in reversed(range(it_data[0].size(2)))]
 
             # Use the model twice: forward (0) and backward (1)
-            for t in range(2):  # forward : 0, backward : 1
+            for t in range(2):
+                break
 
-                # TO BE EXPLAINED
+                # Create two aux variables to store input frames and masks in current direction
+                input_frames = it_data[0].clone()
+                input_masks = it_data[1].clone()
+
+                # Reverse the indexes in backward pass
                 if t == 1:
-                    comp0 = it_data[0].clone()
-                    it_data[0] = frames_
-                    it_data[1] = masks_
                     index.reverse()
 
                 # Iterate over all the frames of the video
@@ -59,29 +63,24 @@ class CopyPasteRunner(skeltorch.Runner):
 
                     # Inpainting Part
                     with torch.no_grad():
-
                         # Obtain an estimation of the inpainted frame
-                        comp = self.model(it_data[0], it_data[1], it_target, f, ridx)
-
-                        # Shape: batch x 3 x 240 x 424 (estimation of the image)
-                        c_s = comp.shape
+                        frames_inpainted[:, t, :, f] = self.model(input_frames, input_masks, it_target, f, ridx)
 
                         # Update frame and mask with the predictions -> mask is all zeros
-                        it_data[0][:, :, f] = comp.detach()
-                        it_data[1][:, :, f] = torch.zeros((c_s[0], 1, 1, c_s[2], c_s[3])).float().to(self.execution.device)
+                        input_frames[:, :, f] = frames_inpainted[:, t, :, f]
+                        input_masks[:, :, f] = 0
 
                         print('feat done')
 
-                    # TO BE EXPLAINED
-                    save_path = self.execution.args['data_output']
-                    if t == 1:
-                        est = comp0[:, :, f].cpu() * (len(index) - f) / len(index) + comp.detach().cpu() * f / len(index)
-                        canvas = (est[0].permute(1, 2, 0).numpy() * 255.).astype(np.uint8)
-                        if canvas.shape[1] % 2 != 0:
-                            canvas = np.pad(canvas, [[0, 0], [0, 1], [0, 0]], mode='constant')
-                        canvas = Image.fromarray(canvas)
-                        canvas.save(os.path.join(save_path, 'f{}.jpg'.format(f)))
-                        print('frame done')
+            # TO BE EXPLAINED
+            for f in range(frames_inpainted.size(3)):
+                forward_prediction = frames_inpainted[:, 0, :, f].cpu().squeeze(0).permute(2, 1, 0).numpy()
+                backward_prediction = frames_inpainted[:, 1, :, f].cpu().squeeze(0).permute(2, 1, 0).numpy()
+                final_predition = forward_prediction * (len(index) - f) / len(index) + \
+                                  backward_prediction * f / len(index)
+                pil_img = Image.fromarray((final_predition * 8).astype(np.uint8))
+                pil_img.save(os.path.join(self.execution.args['data_output'], 'f{}.jpg'.format(f)))
+                print('frame done')
 
     def test_alignment(self):
         """Lalala"""
@@ -112,7 +111,6 @@ class CopyPasteRunner(skeltorch.Runner):
                     plt.imshow(np_image)
                     plt.show()
                 exit()
-
 
     @staticmethod
     def get_reference_frame_indexes(target_frame, num_frames, num_length=120):
