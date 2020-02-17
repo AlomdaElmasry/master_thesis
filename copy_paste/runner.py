@@ -100,7 +100,7 @@ class CopyPasteRunner(skeltorch.Runner):
                         print('feat done')
 
                     # TO BE EXPLAINED
-                    save_path = '/Users/DavidAlvarezDLT/Desktop/test_mine'
+                    save_path = self.execution.args['data_output']
                     if t == 1:
                         est = comp0[:, :, f].cpu() * (len(index) - f) / len(index) + comp.detach().cpu() * f / len(index)
                         canvas = (est[0].permute(1, 2, 0).numpy() * 255.).astype(np.uint8)
