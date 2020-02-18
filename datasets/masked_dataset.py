@@ -1,5 +1,5 @@
 import torch.utils.data
-import datasets.davis_2017
+import datasets.framed_dataset
 import datasets.coco_masks
 
 
@@ -11,7 +11,7 @@ class MaskedDataset(torch.utils.data.Dataset):
         self._validate_arguments()
 
     def _validate_arguments(self):
-        assert isinstance(self.data, datasets.davis_2017.DAVIS2017Dataset)
+        assert isinstance(self.data, datasets.framed_dataset.FramedDataset)
         if self.masks is not None:
             assert isinstance(self.masks, datasets.coco_masks.COCOMasks)
 

@@ -8,9 +8,10 @@ from PIL import Image
 
 class OverlapFrames:
 
-    def __init__(self, reference_index, alpha):
-        self.reference_index = reference_index
+    def __init__(self, reference_frame_index, alpha, frame_step=1):
+        self.reference_index = reference_frame_index
         self.alpha = alpha
+        self.frame_step = frame_step
         self.sequence = None
 
     def add_sequence(self, sequence):
@@ -19,7 +20,8 @@ class OverlapFrames:
     def add_sequence_from_path(self, sequence_path):
         frames = []
         for frame_path in sorted(os.listdir(sequence_path), key=lambda x: int(re.search(r'\d+', x).group())):
-            frames.append(cv2.imread(os.path.join(sequence_path, frame_path)))
+            frame_bgr = cv2.imread(os.path.join(sequence_path, frame_path))
+            frames.append(cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB))
         self.sequence = np.stack(frames, axis=0)
 
     def _get_image_path(self, dest_folder, filename):
@@ -44,9 +46,8 @@ class OverlapFrames:
         self._validate_parameters()
 
         # Compose the image
-        overlapped_image = Image.fromarray(self.sequence[self.reference_index]).convert('RGBA')
-        for i in range(self.sequence.shape[0]):
-            break
+        overlapped_image = Image.fromarray(self.sequence[self.reference_index], mode='RGB').convert('RGBA')
+        for i in range(0, self.sequence.shape[0], self.frame_step):
             if i == self.reference_index:
                 continue
             aux_frame = Image.fromarray(self.sequence[i]).convert('RGBA')
@@ -77,7 +78,8 @@ class FramesToVideo:
     def add_sequence_from_path(self, sequence_path):
         frames = []
         for frame_path in sorted(os.listdir(sequence_path), key=lambda x: int(re.search(r'\d+', x).group())):
-            frames.append(cv2.imread(os.path.join(sequence_path, frame_path)))
+            frame_bgr = cv2.imread(os.path.join(sequence_path, frame_path))
+            frames.append(cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB))
         self.sequences.append(np.stack(frames, axis=0))
 
     def _get_sequence_size(self):
@@ -135,10 +137,7 @@ class FramesToVideo:
                         video_frame, dsize=(sequence_size[1], sequence_size[0]), interpolation=cv2.INTER_LINEAR
                     )
                 video_frame = np.pad(video_frame, ((self.margin, self.margin), (self.margin, self.margin), (0, 0)))
-                it_frame[
-                (j // 2) * sequence_padded_size[0]:(j // 2 + 1) * sequence_padded_size[0],
-                (j % 2) * sequence_padded_size[1]:(j % 2 + 1) * sequence_padded_size[1],
-                :
-                ] = video_frame
-            final_video.write(it_frame)
+                it_frame[(j // 2) * sequence_padded_size[0]:(j // 2 + 1) * sequence_padded_size[0],
+                (j % 2) * sequence_padded_size[1]:(j % 2 + 1) * sequence_padded_size[1], :] = video_frame
+            final_video.write(cv2.cvtColor(it_frame, cv2.COLOR_RGB2BGR))
         final_video.release()

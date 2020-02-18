@@ -5,6 +5,7 @@ import numpy as np
 from PIL import Image
 import os.path
 import matplotlib.pyplot as plt
+import utils
 
 
 class CopyPasteRunner(skeltorch.Runner):
@@ -96,23 +97,33 @@ class CopyPasteRunner(skeltorch.Runner):
         #    it_info contains the index of the video
         for it_data, it_target, it_info in self.experiment.data.loaders['train']:
 
-            # Get alignment features
-            with torch.no_grad():
+            # Set a frame index and obtain its reference frames
+            target_index = 0
+            reference_indexes = CopyPasteRunner.get_reference_frame_indexes(target_index, it_data[0].size(2))
 
-                # Set a frame index and obtain its reference frames
-                target_index = 0
-                reference_indexes = CopyPasteRunner.get_reference_frame_indexes(target_index, it_data[0].size(2))
+            # Obtained aligned frames (provisional)
+            _, _, aligned_gts = self.model.align(it_data[0], it_data[1], it_target, target_index, reference_indexes)
 
-                # Obtained aligned frames (provisional)
-                aligned_frames = self.model.align_frames(
-                    it_data[0], it_data[1], it_target, target_index, reference_indexes
-                )
+            # Iterate over batch items and create the result for each one
+            for b in range(aligned_gts.size(0)):
 
-                for i in range(aligned_frames.size(3)):
-                    np_image = aligned_frames[0, :, i, :].permute(1, 2, 0).squeeze(2).numpy()
-                    plt.imshow(np_image)
-                    plt.show()
-                exit()
+                # Create a numpy array of size (F,H,W,C)
+                aligned_gts_np = (aligned_gts[b].detach().cpu().permute(1, 2, 3, 0).numpy() * 255).astype(np.uint8)
+
+                # Check whether to create a video or an overlay of frames
+                if self.execution.args['save_as_video']:
+                    frames_to_video = utils.FramesToVideo(0, 25, None)
+                    frames_to_video.add_sequence(aligned_gts_np)
+                    frames_to_video.save(self.execution.args['data_output'])
+                else:
+                    overlap_frames = utils.OverlapFrames(target_index, 50, 10)
+                    overlap_frames.add_sequence(aligned_gts_np)
+                    overlap_frames.save(self.execution.args['data_output'])
+
+                # Log correct execution
+                self.logger.info('Alignment test generated as {} for video {}'.format(
+                    'video' if self.execution.args['save_as_video'] else 'image overlay', it_info[b]
+                ))
 
     @staticmethod
     def get_reference_frame_indexes(target_frame, num_frames, num_length=120):

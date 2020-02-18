@@ -1,5 +1,5 @@
 import skeltorch
-from datasets.davis_2017 import DAVIS2017Dataset
+from datasets.framed_dataset import FramedDataset
 from datasets.masked_dataset import MaskedDataset
 from datasets.transforms import Resize, Dilatate, Binarize
 import os.path
@@ -21,22 +21,28 @@ class CopyPasteData(skeltorch.Data):
         self.load_loaders()
 
     def _get_transforms(self):
-        frame_transforms = torchvision.transforms.Compose([Resize(size=(240, 480), method=cv2.INTER_LINEAR)])
-        mask_transforms = torchvision.transforms.Compose([Binarize(), Resize(size=(240, 480), method=cv2.INTER_NEAREST),
-                                                          Dilatate(filter_size=(3, 3), iterations=4)])
+        frame_transforms = torchvision.transforms.Compose([
+            Resize(size=(240, 480), method=cv2.INTER_LINEAR)
+        ])
+        mask_transforms = torchvision.transforms.Compose([
+            Binarize(),
+            Resize(size=(240, 480), method=cv2.INTER_NEAREST),
+            Dilatate(filter_size=(3, 3), iterations=4)
+        ])
         return frame_transforms, mask_transforms
 
     def load_datasets(self):
         frame_transforms, mask_transforms = self._get_transforms()
         if self.configuration.get('data', 'dataset') == 'davis-2017':
-            train_dataset = DAVIS2017Dataset(
-                split='train',
+            train_dataset = FramedDataset(
                 dataset_folder=os.path.join(self.execution.args['data_path'], 'DAVIS-2017'),
-                device=self.execution.device,
-                frame_transforms=frame_transforms,
-                mask_transforms=mask_transforms
+                split='train',
+                n_frames=5,
+                gt_transforms=frame_transforms,
+                mask_transforms=mask_transforms,
+                device=self.execution.device
             )
             self.datasets = {'train': MaskedDataset(train_dataset, None)}
 
     def load_loaders(self):
-        self.loaders = {'train': torch.utils.data.DataLoader(self.datasets['train'], batch_size=1)}
+        self.loaders = {'train': torch.utils.data.DataLoader(self.datasets['train'], batch_size=8)}

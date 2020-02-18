@@ -272,7 +272,7 @@ class CPNet(nn.Module):
         feats = torch.stack(feat_, dim=2)
         return feats
 
-    def align_estimate(self, frames, masks, gts, target_index, reference_indexes):
+    def align(self, frames, masks, gts, target_index, reference_indexes):
 
         # Get important parameters
         B, C, H, W = frames[:, :, 0].size()  # B C H W
@@ -324,7 +324,7 @@ class CPNet(nn.Module):
         target_gt = masks[:, :, target_index]
 
         # Step 1: Align Auxiliar Frames
-        aligned_frames, aligned_masks, _ = self.align_estimate(frames, masks, gts, target_index, reference_indexes)
+        aligned_frames, aligned_masks, _ = self.align(frames, masks, gts, target_index, reference_indexes)
 
         # Step 2: Copy and Paste
         predicted_target = self.copy_and_paste(
