@@ -39,4 +39,4 @@ class CopyPasteData(skeltorch.Data):
             self.datasets = {'train': MaskedDataset(train_dataset, None)}
 
     def load_loaders(self):
-        self.loaders = {'train': torch.utils.data.DataLoader(self.datasets['train'], batch_size=1, num_workers=2)}
+        self.loaders = {'train': torch.utils.data.DataLoader(self.datasets['train'], batch_size=1)}
