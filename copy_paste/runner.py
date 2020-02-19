@@ -36,6 +36,11 @@ class CopyPasteRunner(skeltorch.Runner):
         #    it_target contains ground truth frames
         #    it_info contains the index of the video
         for it_data, it_target, it_info in self.experiment.data.loaders['train']:
+
+            # Data to CPU
+            it_data[0] = it_data[0].cpu()
+            it_data[1] = it_data[1].cpu()
+
             # Get relevant sizes of the iteration
             B, C, F, H, W = it_data[0].size()
 
@@ -49,8 +54,8 @@ class CopyPasteRunner(skeltorch.Runner):
             for t in range(2):
                 # Create two aux variables to store input frames and masks in current direction
                 # Note: could be done better creating a copy of it_data[0] and replacing those values directly.
-                input_frames = it_data[0].clone()
-                input_masks = it_data[1].clone()
+                input_frames = it_data[0].clone().to(self.execution.device)
+                input_masks = it_data[1].clone().to(self.execution.device)
 
                 # Reverse the indexes in backward pass
                 if t == 1:
