@@ -41,14 +41,13 @@ class CopyPasteRunner(skeltorch.Runner):
             B, C, F, H, W = it_data[0].size()
 
             # Create a matrix to store inpainted frames. Size (B, 2, C, F, H, W), where the 2 is due to double direction
-            frames_inpainted = torch.zeros((B, 2, C, F, H, W), device='cpu')
+            frames_inpainted = np.zeros((B, 2, C, F, H, W))
 
             # Create a list containing the indexes of the frames
             index = [f for f in range(it_data[0].size(2))]
 
             # Use the model twice: forward (0) and backward (1)
             for t in range(2):
-
                 # Create two aux variables to store input frames and masks in current direction
                 # Note: could be done better creating a copy of it_data[0] and replacing those values directly.
                 input_frames = it_data[0].clone()
@@ -60,21 +59,37 @@ class CopyPasteRunner(skeltorch.Runner):
 
                 # Iterate over all the frames of the video
                 for f in index:
+
+                    if f > 0:
+                        continue
                     # Obtain a list containing the references frames of the current target frame
                     ridx = CopyPasteRunner.get_reference_frame_indexes(f, it_data[0].size(2))
 
-                    # Obtain an estimation of the inpainted frame f
-                    frames_inpainted[:, t, :, f] = self.model(input_frames, input_masks, it_target, f, ridx)
-
                     # Replace input_frames and input_masks with previous predictions to improve quality
-                    input_frames[:, :, f] = frames_inpainted[:, t, :, f]
+                    input_frames[:, :, f] = self.model(input_frames, input_masks, it_target, f, ridx)
                     input_masks[:, :, f] = 0
 
+                    # Obtain an estimation of the inpainted frame f
+                    frames_inpainted[:, t, :, f] = input_frames[:, :, f].detach().cpu().numpy()
+
+            # Combine both forward and backward predictions
+            forward_factor = np.arange(start=0, stop=frames_inpainted.shape[3]) / len(index)
+            backward_factor = (len(index) - np.arange(start=0, stop=frames_inpainted.shape[3])) / len(index)
+            frames_inpainted = (frames_inpainted[:, 0].transpose(0, 1, 3, 4, 2) * forward_factor +
+                                frames_inpainted[:, 1].transpose(0, 1, 3, 4, 2) * backward_factor
+                                ).transpose(0, 1, 4, 2, 3)
+
+            for f in range(frames_inpainted.shape[2]):
+                pil_img = Image.fromarray((frames_inpainted[0, :, f] * 255.).astype(np.uint8))
+                pil_img.save(os.path.join(self.execution.args['data_output'], 'f{}.jpg'.format(f)))
+
+            exit()
+
             # Store in disk each inpainted frame
-            for f in range(frames_inpainted.size(3)):
+            for f in range(frames_inpainted.shape[3]):
                 # Obtain both forward and backward estimates
-                forward_prediction = frames_inpainted[:, 0, :, f].cpu().squeeze(0).permute(1, 2, 0).numpy()
-                backward_prediction = frames_inpainted[:, 1, :, f].cpu().squeeze(0).permute(1, 2, 0).numpy()
+                forward_prediction = frames_inpainted[:, 0, :, f].squeeze(0).transpose(1, 2, 0)
+                backward_prediction = frames_inpainted[:, 1, :, f].squeeze(0).transpose(1, 2, 0)
 
                 # Combine both estimates giving more importance depending on whether the estimate has been made using
                 # more or less auxiliar frames with mask
@@ -82,8 +97,12 @@ class CopyPasteRunner(skeltorch.Runner):
                                   len(index)
 
                 # Convert the image to range [0, 255] and save it in disk
+                print(np.mean(final_predition))
                 pil_img = Image.fromarray((final_predition * 255.).astype(np.uint8))
-                pil_img.save(os.path.join(self.execution.args['data_output'], 'f{}.jpg'.format(f)))
+                # pil_img.save(os.path.join(self.execution.args['data_output'], 'f{}.jpg'.format(f)))
+                plt.imshow(final_predition)
+                plt.show()
+                exit()
 
     def test_alignment(self):
         """Lalala"""
@@ -112,13 +131,13 @@ class CopyPasteRunner(skeltorch.Runner):
 
                 # Check whether to create a video or an overlay of frames
                 if self.execution.args['save_as_video']:
-                    frames_to_video = utils.FramesToVideo(0, 25, None)
+                    frames_to_video = utils.FramesToVideo(0, 10, None)
                     frames_to_video.add_sequence(aligned_gts_np)
-                    frames_to_video.save(self.execution.args['data_output'])
+                    frames_to_video.save(self.execution.args['data_output'], it_info[b])
                 else:
                     overlap_frames = utils.OverlapFrames(target_index, 50, 10)
                     overlap_frames.add_sequence(aligned_gts_np)
-                    overlap_frames.save(self.execution.args['data_output'])
+                    overlap_frames.save(self.execution.args['data_output'], it_info[b])
 
                 # Log correct execution
                 self.logger.info('Alignment test generated as {} for video {}'.format(

@@ -38,6 +38,7 @@ class FramedDataset(torch.utils.data.Dataset):
         gts_folder = os.path.join(self.dataset_folder, 'JPEGImages', '480p')
         masks_folder = os.path.join(self.dataset_folder, 'Annotations', '480p')
         split_filename = 'train.txt' if self.split == 'train' else 'val.txt'
+        split_filename = 'val.txt'
         with open(os.path.join(self.dataset_folder, 'ImageSets', '2017', split_filename)) as items_file:
             self.sequence_names = items_file.read().splitlines()
             self.sequences_gts = [sorted(glob.glob(os.path.join(gts_folder, item, '*.jpg'))) for item in
@@ -94,8 +95,8 @@ class FramedDataset(torch.utils.data.Dataset):
                 frame_mask = self.mask_transforms(frame_mask)
 
             # Store both frame and mask as Tensors
-            gts.append(torch.from_numpy(frame_gt).permute(2, 0, 1).to(self.device))
-            masks.append(torch.from_numpy(frame_mask.astype(np.float64)).permute(2, 0, 1).to(self.device))
+            gts.append(torch.from_numpy(frame_gt.astype(np.float32)).permute(2, 0, 1).to(self.device))
+            masks.append(torch.from_numpy(frame_mask.astype(np.float32)).permute(2, 0, 1).to(self.device))
 
         # Return framed sequence as (C,F,H,W)
         return torch.stack(gts, dim=1), torch.stack(masks, dim=1), self.sequence_names[sequence_index]
