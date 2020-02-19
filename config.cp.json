@@ -1,0 +1,12 @@
+{
+  "data": {
+    "train_dataset": "youtube-vos",
+    "train_dataset_masks": "coco",
+    "train_size": [256, 256],
+    "test_dataset": "davis-2017",
+    "test_size": [240, 480]
+  },
+  "training": {
+    "batch_size": 8
+  }
+}

@@ -54,8 +54,6 @@ class FramedDataset(torch.utils.data.Dataset):
         self.sequences_gts = [sorted(glob.glob(os.path.join(gts_folder, item, '*.jpg'))) for item in
                               self.sequence_names]
 
-        a = 1
-
     def _create_index(self):
         self.sequences_limits = np.cumsum([len(images) for images in self.sequences_gts])
 
