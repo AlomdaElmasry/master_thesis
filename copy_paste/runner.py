@@ -22,9 +22,6 @@ class CopyPasteRunner(skeltorch.Runner):
     def step_validation(self, it_data: any, it_target: any, it_info: any):
         pass
 
-    def train(self):
-        raise NotImplementedError
-
     def test(self):
 
         # Set model to evaluation mode
@@ -35,25 +32,25 @@ class CopyPasteRunner(skeltorch.Runner):
         #    it_data[1] is (B, 1, F, H, W) and contains masks
         #    it_target contains ground truth frames
         #    it_info contains the index of the video
-        for it_data, it_target, it_info in self.experiment.data.loaders['train']:
-
-            # Data to CPU
-            it_data[0] = it_data[0].cpu()
-            it_data[1] = it_data[1].cpu()
+        for it_data, it_target, it_info in self.experiment.data.loaders['test']:
 
             # Get relevant sizes of the iteration
             B, C, F, H, W = it_data[0].size()
 
             # Create a matrix to store inpainted frames. Size (B, 2, C, F, H, W), where the 2 is due to double direction
-            frames_inpainted = np.zeros((B, 2, C, F, H, W))
+            frames_inpainted = np.zeros((B, 2, C, F, H, W), dtype=np.float32)
 
             # Create a list containing the indexes of the frames
             index = [f for f in range(it_data[0].size(2))]
 
+            # Move data to cpu for memory purposes
+            it_data[0] = it_data[0].cpu()
+            it_data[1] = it_data[1].cpu()
+
             # Use the model twice: forward (0) and backward (1)
             for t in range(2):
                 # Create two aux variables to store input frames and masks in current direction
-                # Note: could be done better creating a copy of it_data[0] and replacing those values directly.
+                # Move to current device for memory purposes
                 input_frames = it_data[0].clone().to(self.execution.device)
                 input_masks = it_data[1].clone().to(self.execution.device)
 
@@ -75,34 +72,36 @@ class CopyPasteRunner(skeltorch.Runner):
                     frames_inpainted[:, t, :, f] = input_frames[:, :, f].detach().cpu().numpy()
                     print('{} done'.format(f))
 
-            # Combine both forward and backward predictions. frames_inpainted is now (B,F,H,W,C)
-            # forward_factor = np.arange(start=0, stop=frames_inpainted.shape[3]) / len(index)
-            # backward_factor = (len(index) - np.arange(start=0, stop=frames_inpainted.shape[3])) / len(index)
-            # frames_inpainted = (frames_inpainted[:, 0].transpose(0, 1, 3, 4, 2) * forward_factor +
-            #                     frames_inpainted[:, 1].transpose(0, 1, 3, 4, 2) * backward_factor
-            #                     ).transpose(0, 4, 2, 3, 1)
-            #
-            # for f in range(frames_inpainted.shape[1]):
-            #     pil_img = Image.fromarray((frames_inpainted[0, f] * 255.).astype(np.uint8))
-            #     pil_img.save(os.path.join(self.execution.args['data_output'], 'f{}.jpg'.format(f)))
-            #
-            # exit()
+            # Create forward and backward factors and combine them.
+            # Transpose frames_inpainted to be (B,F,H,W,C)
+            # Change scale from float64 [0,1] to uint8 [0,255]
+            forward_factor = np.arange(start=0, stop=frames_inpainted.shape[3]) / len(index)
+            backward_factor = (len(index) - np.arange(start=0, stop=frames_inpainted.shape[3])) / len(index)
+            frames_inpainted = (frames_inpainted[:, 0].transpose(0, 1, 3, 4, 2) * forward_factor +
+                                frames_inpainted[:, 1].transpose(0, 1, 3, 4, 2) * backward_factor
+                                ).transpose(0, 4, 2, 3, 1)
+            frames_inpainted = (frames_inpainted * 255.).astype(np.uint8)
 
-            # Store in disk each inpainted frame
-            for f in range(frames_inpainted.shape[3]):
-                # Obtain both forward and backward estimates
-                forward_prediction = frames_inpainted[:, 0, :, f].squeeze(0).transpose(1, 2, 0)
-                backward_prediction = frames_inpainted[:, 1, :, f].squeeze(0).transpose(1, 2, 0)
+            # Iterate over batch items and create the result for each one
+            for b in range(frames_inpainted.shape[0]):
 
-                # Combine both estimates giving more importance depending on whether the estimate has been made using
-                # more or less auxiliar frames with mask
-                final_predition = forward_prediction * f / len(index) + backward_prediction * (len(index) - f) / \
-                                  len(index)
+                # Save the result as frames or videos depending on the request
+                if self.execution.args['save_as_video']:
+                    frames_to_video = utils.FramesToVideo(0, 10, None)
+                    frames_to_video.add_sequence(frames_inpainted[b])
+                    frames_to_video.save(self.execution.args['data_output'], it_info[b])
+                else:
+                    frames_path = os.path.join(self.execution.args['data_output'], it_info[b])
+                    if not os.path.exists(frames_path):
+                        os.makedirs(os.path.join(frames_path))
+                    for f in range(frames_inpainted.shape[1]):
+                        pil_img = Image.fromarray((frames_inpainted[0, f] * 255.).astype(np.uint8))
+                        pil_img.save(os.path.join(frames_path, '{}.jpg'.format(f)))
 
-                # Convert the image to range [0, 255] and save it in disk
-                print(np.mean(final_predition))
-                pil_img = Image.fromarray((final_predition * 255.).astype(np.uint8))
-                pil_img.save(os.path.join(self.execution.args['data_output'], 'f{}.jpg'.format(f)))
+                # Log progress
+                self.logger.info('Test generated as {} for video {}'.format(
+                    'video' if self.execution.args['save_as_video'] else 'frames', it_info[b]
+                ))
 
     def test_alignment(self):
         """Lalala"""
@@ -114,7 +113,7 @@ class CopyPasteRunner(skeltorch.Runner):
         #    it_data is a tuple containing masked frames (pos=0) and masks (pos=1)
         #    it_target contains the ground truth frames
         #    it_info contains the index of the video
-        for it_data, it_target, it_info in self.experiment.data.loaders['train']:
+        for it_data, it_target, it_info in self.experiment.data.loaders['test']:
 
             # Set a frame index and obtain its reference frames
             target_index = 0
@@ -123,23 +122,23 @@ class CopyPasteRunner(skeltorch.Runner):
             # Obtained aligned frames (provisional)
             _, _, aligned_gts = self.model.align(it_data[0], it_data[1], it_target, target_index, reference_indexes)
 
+            # Create a numpy array of size (B,F,H,W,C)
+            aligned_gts = (aligned_gts.detach().cpu().permute(0, 2, 3, 4, 1).numpy() * 255).astype(np.uint8)
+
             # Iterate over batch items and create the result for each one
-            for b in range(aligned_gts.size(0)):
+            for b in range(aligned_gts.shape[0]):
 
-                # Create a numpy array of size (F,H,W,C)
-                aligned_gts_np = (aligned_gts[b].detach().cpu().permute(1, 2, 3, 0).numpy() * 255).astype(np.uint8)
-
-                # Check whether to create a video or an overlay of frames
+                # Save the result as overlay frames or videos depending on the request
                 if self.execution.args['save_as_video']:
                     frames_to_video = utils.FramesToVideo(0, 10, None)
-                    frames_to_video.add_sequence(aligned_gts_np)
+                    frames_to_video.add_sequence(aligned_gts[b])
                     frames_to_video.save(self.execution.args['data_output'], it_info[b])
                 else:
                     overlap_frames = utils.OverlapFrames(target_index, 50, 10)
-                    overlap_frames.add_sequence(aligned_gts_np)
+                    overlap_frames.add_sequence(aligned_gts[b])
                     overlap_frames.save(self.execution.args['data_output'], it_info[b])
 
-                # Log correct execution
+                # Log progress
                 self.logger.info('Alignment test generated as {} for video {}'.format(
                     'video' if self.execution.args['save_as_video'] else 'image overlay', it_info[b]
                 ))
