@@ -8,7 +8,7 @@ import numpy as np
 import utils
 
 
-class COCOMasks(torch.utils.data.Dataset):
+class MasksDataset(torch.utils.data.Dataset):
 
     def __init__(self, data_folder, json_filename='instances_train2017.json'):
         self.emulator = utils.MovementSimulator()
@@ -41,7 +41,7 @@ class COCOMasks(torch.utils.data.Dataset):
         raise NotImplementedError
 
     def get_item(self, item, size, n):
-        mask = torch.from_numpy(self.coco.annToMask(self.coco.loadAnns(self.masks_ids[item])[0]).astype(np.float))
+        mask = torch.from_numpy(self.coco.annToMask(self.coco.loadAnns(self.masks_ids[item])[0]).astype(np.float32))
         frame = self._resize_frame(mask.unsqueeze(0), size)
         return self.emulator.simulate_movement(frame, n - 1)
 

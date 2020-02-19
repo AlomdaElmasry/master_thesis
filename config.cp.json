@@ -7,6 +7,7 @@
     "test_size": [240, 480]
   },
   "training": {
-    "batch_size": 8
+    "batch_size": 8,
+    "lr": 1e-4
   }
 }

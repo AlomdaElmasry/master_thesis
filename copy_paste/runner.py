@@ -6,6 +6,7 @@ from PIL import Image
 import os.path
 import matplotlib.pyplot as plt
 import utils
+import torch.nn.functional as F
 
 
 class CopyPasteRunner(skeltorch.Runner):
@@ -17,10 +18,52 @@ class CopyPasteRunner(skeltorch.Runner):
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=1e-4)
 
     def step_train(self, it_data: any, it_target: any, it_info: any):
-        pass
+
+        # Take the frame in the middle as target
+        target_frame = it_data[0].size(2) // 2
+
+        # User all other frames as reference frames
+        reference_frames = list(range(it_data[0].size(2)))
+        reference_frames.pop(target_frame)
+
+        # Propagate through the model
+        y_hat_comp, y_hat, c_mask, (aligned_frames, aligned_masks) = self.model(
+            it_data[0], it_data[1], it_target, target_frame, reference_frames
+        )
+
+        # Get visibility map of aligned frames and target frame
+        visibility_maps = (1 - it_data[1][:, :, target_frame].unsqueeze(2)) * aligned_masks
+
+        # Compute loss and return
+        return self.compute_loss(y_hat_comp, y_hat, c_mask, aligned_frames, it_data[0][:, :, target_frame],
+                                 it_data[1][:, :, target_frame], visibility_maps)
 
     def step_validation(self, it_data: any, it_target: any, it_info: any):
         pass
+
+    def compute_loss(self, y_hat_comp, y_hat, c_mask, aligned_frames, target_frame, target_mask, visibility_maps):
+        # Loss 1: Alignment Loss
+        alignment_input = aligned_frames * visibility_maps
+        alignment_target = target_frame.unsqueeze(2).repeat(1, 1, aligned_frames.size(2), 1, 1) * visibility_maps
+        loss_alignment = F.l1_loss(alignment_input, alignment_target, reduction='sum')
+
+        # Loss 2: Visible Hole
+        vh_input = target_mask * c_mask * y_hat
+        vh_target = target_mask * c_mask * target_frame
+        loss_vh = F.l1_loss(vh_input, vh_target, reduction='sum')
+
+        # Loss 3: Non-Visible Hole
+        nvh_input = target_mask * (1 - c_mask) * y_hat
+        nvh_target = target_mask * (1 - c_mask) * target_frame
+        loss_nvh = F.l1_loss(nvh_input, nvh_target, reduction='sum')
+
+        # Loss 4: Non-Hole
+        nh_input = (1 - target_mask) * c_mask * y_hat
+        nh_target = (1 - target_mask) * c_mask * target_frame
+        loss_nh = F.l1_loss(nh_input, nh_target, reduction='sum')
+
+        # Return combination of the losses
+        return 2 * loss_alignment + 10 * loss_vh + 20 * loss_nvh + 6 * loss_nh
 
     def test(self):
         # Set model to evaluation mode
@@ -60,11 +103,13 @@ class CopyPasteRunner(skeltorch.Runner):
                 # Iterate over all the frames of the video
                 for f in index:
                     # Obtain a list containing the references frames of the current target frame
-                    ridx = CopyPasteRunner.get_reference_frame_indexes(f, it_data[0].size(2))
+                    reference_frames = CopyPasteRunner.get_reference_frame_indexes(f, it_data[0].size(2))
 
                     # Replace input_frames and input_masks with previous predictions to improve quality
                     with torch.no_grad():
-                        input_frames[:, :, f] = self.model(input_frames, input_masks, it_target, f, ridx)
+                        input_frames[:, :, f], _, _, _ = self.model(
+                            input_frames, input_masks, it_target, f, reference_frames
+                        )
                         input_masks[:, :, f] = 0
 
                     # Obtain an estimation of the inpainted frame f

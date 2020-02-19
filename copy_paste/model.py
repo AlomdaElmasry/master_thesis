@@ -294,26 +294,38 @@ class CPNet(nn.Module):
             theta_rt = self.A_Regressor(rfeats[:, :, target_index], rfeats[:, :, r])
             grid_rt = F.affine_grid(theta_rt, (B, C, H, W))
 
-            # Align Frame, Mask and GT
+            # Align Masked Frame
             aligned_r_.append(F.grid_sample(frames[:, :, r], grid_rt))
 
+            # Align Mask
             aligned_v = F.grid_sample(1 - masks[:, :, r], grid_rt)
             aligned_v = (aligned_v > 0.5).float()
             rvmap_.append(aligned_v)
 
+            # Align GT
             aligned_gts.append(F.grid_sample(gts[:, :, r], grid_rt))
 
         # Return stacked GTs
         return torch.stack(aligned_r_, dim=2), torch.stack(rvmap_, dim=2), torch.stack(aligned_gts, dim=2)
 
     def copy_and_paste(self, target_frame, target_mask, aligned_frames, aligned_masks):
-        # Get Copy and Paste features
+        # Get important parameters
+        B, C, H, W = target_frame.size()  # B C H W
+
+        # Get c_features of everything
         cfeats = [self.Encoder(target_frame, target_mask)]
         for f in range(aligned_frames.size(2)):
             cfeats.append(self.Encoder(aligned_frames[:, :, f], aligned_masks[:, :, f]))
         cfeats = torch.stack(cfeats, dim=2)
+
+        # Apply Content-Matching Module
         p_in, c_mask = self.CM_Module(cfeats, 1 - target_mask, aligned_masks)
-        return self.Decoder(p_in)
+
+        # Upscale c_mask to match the size of the mask
+        c_mask = (F.upsample(c_mask, size=(H, W), mode='bilinear', align_corners=False)).detach()
+
+        # Return both inpainted frame y_hat and c_mask
+        return self.Decoder(p_in), c_mask
 
     def forward(self, frames, masks, gts, target_index, reference_indexes):
 
@@ -326,13 +338,18 @@ class CPNet(nn.Module):
         aligned_frames, aligned_masks, _ = self.align(frames, masks, gts, target_index, reference_indexes)
 
         # Step 2: Copy and Paste
-        predicted_target = self.copy_and_paste(
+        y_hat, c_mask = self.copy_and_paste(
             target_frame=target_frame,
             target_mask=target_mask,
             aligned_frames=aligned_frames,
             aligned_masks=aligned_masks
         )
 
+        # Clip the output to be between [0, 1]
+        y_hat = torch.clamp(y_hat, 0, 1)
+
         # Combine prediction with GT of the frame. Limit the output range [0, 1].
-        inpainted_frame = predicted_target * target_mask + target_gt * (1. - target_mask)
-        return torch.clamp(inpainted_frame, 0, 1)
+        y_hat_comp = y_hat * target_mask + target_gt * (1. - target_mask)
+
+        # Return y_hat_comp, y_hat, c_mask, (aligned_frames, aligned_masks)
+        return y_hat_comp, y_hat, c_mask, (aligned_frames, aligned_masks)
