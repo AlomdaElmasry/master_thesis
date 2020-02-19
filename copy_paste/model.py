@@ -311,9 +311,8 @@ class CPNet(nn.Module):
         cfeats = [self.Encoder(target_frame, target_mask)]
         for f in range(aligned_frames.size(2)):
             cfeats.append(self.Encoder(aligned_frames[:, :, f], aligned_masks[:, :, f]))
-        c_feats = torch.stack(cfeats, dim=2)
-
-        p_in, c_mask = self.CM_Module(c_feats, 1 - target_mask, aligned_masks)
+        cfeats = torch.stack(cfeats, dim=2)
+        p_in, c_mask = self.CM_Module(cfeats, 1 - target_mask, aligned_masks)
         return self.Decoder(p_in)
 
     def forward(self, frames, masks, gts, target_index, reference_indexes):

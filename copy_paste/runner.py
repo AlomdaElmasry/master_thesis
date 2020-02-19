@@ -67,8 +67,9 @@ class CopyPasteRunner(skeltorch.Runner):
                     ridx = CopyPasteRunner.get_reference_frame_indexes(f, it_data[0].size(2))
 
                     # Replace input_frames and input_masks with previous predictions to improve quality
-                    input_frames[:, :, f] = self.model(input_frames, input_masks, it_target, f, ridx)
-                    input_masks[:, :, f] = 0
+                    with torch.no_grad():
+                        input_frames[:, :, f] = self.model(input_frames, input_masks, it_target, f, ridx)
+                        input_masks[:, :, f] = 0
 
                     # Obtain an estimation of the inpainted frame f
                     frames_inpainted[:, t, :, f] = input_frames[:, :, f].detach().cpu().numpy()
