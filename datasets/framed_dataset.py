@@ -9,15 +9,15 @@ class FramedDataset(torch.utils.data.Dataset):
     sequences_gts = None
     sequences_masks = None
 
-    def __init__(self, dataset_folder, dataset_name, split, n_frames=-1, gt_transforms=None, mask_transforms=None,
+    def __init__(self, dataset_name, dataset_folder, split, n_frames=-1, gt_transforms=None, mask_transforms=None,
                  device='cpu'):
-        self.split = split
-        self.dataset_folder = dataset_folder
         self.dataset_name = dataset_name
+        self.dataset_folder = dataset_folder
+        self.split = split
         self.n_frames = n_frames
-        self.device = device
         self.gt_transforms = gt_transforms
         self.mask_transforms = mask_transforms
+        self.device = device
         self._validate_arguments()
         self._load_paths()
         self._create_index()
@@ -95,7 +95,7 @@ class FramedDataset(torch.utils.data.Dataset):
 
             # Store both frame and mask as Tensors
             gts.append(torch.from_numpy(frame_gt).permute(2, 0, 1).to(self.device))
-            masks.append(torch.from_numpy(frame_mask).permute(2, 0, 1).to(self.device))
+            masks.append(torch.from_numpy(frame_mask.astype(np.float64)).permute(2, 0, 1).to(self.device))
 
         # Return framed sequence as (C,F,H,W)
         return torch.stack(gts, dim=1), torch.stack(masks, dim=1), self.sequence_names[sequence_index]
