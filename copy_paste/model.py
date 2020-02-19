@@ -2,7 +2,7 @@ from __future__ import division
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
+import matplotlib.pyplot as plt
 
 class Conv2d(nn.Module):
     def __init__(self, in_ch, out_ch, kernel_size=3, stride=1, padding=1, D=1, activation=nn.ReLU()):
@@ -320,7 +320,7 @@ class CPNet(nn.Module):
         # Get frame, mask an GT associated to the target index
         target_frame = frames[:, :, target_index]
         target_mask = masks[:, :, target_index]
-        target_gt = masks[:, :, target_index]
+        target_gt = gts[:, :, target_index]
 
         # Step 1: Align Auxiliar Frames
         aligned_frames, aligned_masks, _ = self.align(frames, masks, gts, target_index, reference_indexes)
