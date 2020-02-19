@@ -14,7 +14,7 @@ class CopyPasteRunner(skeltorch.Runner):
         self.model = CPNet().to(self.execution.device)
 
     def init_optimizer(self):
-        self.optimizer = torch.optim.Adam(self.model.parameters())
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=1e-4)
 
     def step_train(self, it_data: any, it_target: any, it_info: any):
         pass
@@ -23,7 +23,6 @@ class CopyPasteRunner(skeltorch.Runner):
         pass
 
     def test(self):
-
         # Set model to evaluation mode
         self.model.eval()
 
@@ -70,7 +69,6 @@ class CopyPasteRunner(skeltorch.Runner):
 
                     # Obtain an estimation of the inpainted frame f
                     frames_inpainted[:, t, :, f] = input_frames[:, :, f].detach().cpu().numpy()
-                    print('{} done'.format(f))
 
             # Create forward and backward factors and combine them.
             # Transpose frames_inpainted to be (B,F,H,W,C)
@@ -95,7 +93,7 @@ class CopyPasteRunner(skeltorch.Runner):
                     if not os.path.exists(frames_path):
                         os.makedirs(os.path.join(frames_path))
                     for f in range(frames_inpainted.shape[1]):
-                        pil_img = Image.fromarray((frames_inpainted[0, f] * 255.).astype(np.uint8))
+                        pil_img = Image.fromarray(frames_inpainted[b, f])
                         pil_img.save(os.path.join(frames_path, '{}.jpg'.format(f)))
 
                 # Log progress
@@ -104,8 +102,6 @@ class CopyPasteRunner(skeltorch.Runner):
                 ))
 
     def test_alignment(self):
-        """Lalala"""
-
         # Set model to evaluation mode
         self.model.eval()
 
