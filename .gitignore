@@ -18,6 +18,10 @@ ENV/
 # Pycharm Project
 .idea/
 
+# Experiments
+experiments/
+!experiments/.gitkeep
+
 # Other project-specific folders
 videos/
 tmp/

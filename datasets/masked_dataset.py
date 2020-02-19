@@ -1,5 +1,5 @@
 import torch.utils.data
-import datasets.davis_2017
+import datasets.framed_dataset
 import datasets.coco_masks
 
 
@@ -11,14 +11,16 @@ class MaskedDataset(torch.utils.data.Dataset):
         self._validate_arguments()
 
     def _validate_arguments(self):
-        assert isinstance(self.data, datasets.davis_2017.DAVIS2017Dataset)
-        assert isinstance(self.masks, datasets.coco_masks.COCOMasks)
+        assert isinstance(self.data, datasets.framed_dataset.FramedDataset)
+        if self.masks is not None:
+            assert isinstance(self.masks, datasets.coco_masks.COCOMasks)
 
     def __getitem__(self, item):
-        gt, annotations = self.data[item]
-        masks = self.masks.get_item(10, (gt.size(2), gt.size(3)), gt.size(1))
-        masked_frames = (1 - masks) * gt
-        return masked_frames, masks, gt
+        gt, annotations, info = self.data[item]
+        masks = self.masks.get_item(10, (gt.size(2), gt.size(3)), gt.size(1)) if self.masks else annotations
+        fill_tensor = torch.as_tensor(data=[0.485, 0.456, 0.406], device=gt.device)
+        masked_frames = (1 - masks) * gt + masks*fill_tensor.view(3, 1, 1, 1)
+        return (masked_frames, masks), gt, info
 
     def __len__(self):
         return len(self.data)
