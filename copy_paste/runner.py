@@ -59,9 +59,6 @@ class CopyPasteRunner(skeltorch.Runner):
 
                 # Iterate over all the frames of the video
                 for f in index:
-
-                    if f > 0:
-                        continue
                     # Obtain a list containing the references frames of the current target frame
                     ridx = CopyPasteRunner.get_reference_frame_indexes(f, it_data[0].size(2))
 
@@ -72,15 +69,15 @@ class CopyPasteRunner(skeltorch.Runner):
                     # Obtain an estimation of the inpainted frame f
                     frames_inpainted[:, t, :, f] = input_frames[:, :, f].detach().cpu().numpy()
 
-            # Combine both forward and backward predictions
+            # Combine both forward and backward predictions. frames_inpainted is now (B,F,H,W,C)
             forward_factor = np.arange(start=0, stop=frames_inpainted.shape[3]) / len(index)
             backward_factor = (len(index) - np.arange(start=0, stop=frames_inpainted.shape[3])) / len(index)
             frames_inpainted = (frames_inpainted[:, 0].transpose(0, 1, 3, 4, 2) * forward_factor +
                                 frames_inpainted[:, 1].transpose(0, 1, 3, 4, 2) * backward_factor
-                                ).transpose(0, 1, 4, 2, 3)
+                                ).transpose(0, 4, 2, 3, 1)
 
             for f in range(frames_inpainted.shape[2]):
-                pil_img = Image.fromarray((frames_inpainted[0, :, f] * 255.).astype(np.uint8))
+                pil_img = Image.fromarray((frames_inpainted[0, f] * 255.).astype(np.uint8))
                 pil_img.save(os.path.join(self.execution.args['data_output'], 'f{}.jpg'.format(f)))
 
             exit()
