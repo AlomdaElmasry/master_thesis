@@ -11,6 +11,7 @@ from vgg_16.model import get_pretrained_model
 import random
 import torch.utils.data
 
+
 class CopyPasteRunner(skeltorch.Runner):
     model_vgg = None
 
@@ -86,6 +87,10 @@ class CopyPasteRunner(skeltorch.Runner):
         nh_input = (1 - m) * c_mask * y_hat
         nh_target = (1 - m) * c_mask * y
         loss_nh = F.l1_loss(nh_input, nh_target)
+
+        # Verify that the VGG model is in the same device
+        if self.model_vgg.device != self.model.device:
+            self.model_vgg = self.model_vgg.to(self.model.device)
 
         # Loss 5: Perceptual
         loss_perceptual = 0

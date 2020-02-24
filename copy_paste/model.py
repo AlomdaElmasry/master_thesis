@@ -4,6 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
 
+
 class Conv2d(nn.Module):
     def __init__(self, in_ch, out_ch, kernel_size=3, stride=1, padding=1, D=1, activation=nn.ReLU()):
         super(Conv2d, self).__init__()
