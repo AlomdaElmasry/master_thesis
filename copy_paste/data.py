@@ -71,7 +71,7 @@ class CopyPasteData(skeltorch.Data):
     def load_loaders(self, data_path, device):
         batch_size = self.configuration.get('training', 'batch_size')
         self.loaders = {
-            'train': torch.utils.data.DataLoader(self.datasets['train'], batch_size=batch_size),
-            'validation': torch.utils.data.DataLoader(self.datasets['validation'], batch_size=batch_size),
+            'train': torch.utils.data.DataLoader(self.datasets['train'], shuffle=True, batch_size=batch_size),
+            'validation': torch.utils.data.DataLoader(self.datasets['validation'], shuffle=True, batch_size=batch_size),
             'test': torch.utils.data.DataLoader(self.datasets['test'], batch_size=1)
         }
