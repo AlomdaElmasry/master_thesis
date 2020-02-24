@@ -20,6 +20,6 @@ class MovementSimulator:
         frames = [frame]
         for i in range(n):
             frames.append(torch.from_numpy(
-                warp(frames[i].numpy().squeeze(0), self._create_random_transformation())
+                warp(frames[i].numpy().squeeze(0), self._create_random_transformation()).astype(np.float32)
             ).unsqueeze(0))
         return torch.stack(frames, dim=1)
