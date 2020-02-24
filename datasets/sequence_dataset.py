@@ -7,14 +7,23 @@ import torchvision
 
 
 class SequencesDataset(torch.utils.data.Dataset):
+    dataset_name = None
+    dataset_folder = None
+    split = None
     logger = None
+    n_frames = None
+    masks_dataset = None
+    gt_transforms = None
+    mask_transforms = None
+    device = None
+
     sequences_gts = None
     sequences_masks = None
     channels_mean = None
 
     def __init__(self, dataset_name, dataset_folder, split, logger, n_frames=-1, masks_dataset=None,
                  gt_transforms=torchvision.transforms.Compose([]), mask_transforms=torchvision.transforms.Compose([]),
-                 device='cpu'):
+                 device=torch.device('cpu')):
         self.dataset_name = dataset_name
         self.dataset_folder = dataset_folder
         self.split = split
@@ -27,7 +36,7 @@ class SequencesDataset(torch.utils.data.Dataset):
         self._validate_arguments()
         self._load_paths()
         self._create_index()
-        self.channels_mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
+        self.channels_mean = torch.as_tensor([0.485, 0.456, 0.406], dtype=torch.float32, device=self.device)
 
     def _validate_arguments(self):
         if not os.path.exists(self.dataset_folder):
@@ -82,31 +91,37 @@ class SequencesDataset(torch.utils.data.Dataset):
             frames_indexes = np.clip(frames_indexes, 0, len(self.sequences_gts[sequence_index]) - 1)
 
         # Create variables to return
-        gts, masks = [], []
+        gts, masks = None, None
 
         # Iterate all the files
-        for f in frames_indexes:
+        for i, f in enumerate(frames_indexes):
             # Load both the frame and the masks as Numpy arrays -> (H, W, C)
-            frame_gt = np.array(Image.open(self.sequences_gts[sequence_index][f])) / 255
+            frame_gt = (np.array(Image.open(self.sequences_gts[sequence_index][f])) / 255)
             frame_gt = self.gt_transforms(frame_gt)
-            gts.append(torch.from_numpy(frame_gt.astype(np.float32)).permute(2, 0, 1).to(self.device))
+
+            # Create GTs Tensor in the first iteration of the loop
+            if gts is None:
+                gts = torch.zeros((frame_gt.shape[2], len(frames_indexes), frame_gt.shape[0], frame_gt.shape[1]),
+                                  dtype=torch.float32, device=self.device)
+
+            # Store transformed image into the Tensor
+            gts[:, i] = torch.from_numpy(frame_gt.astype(np.float32)).permute(2, 0, 1)
+
+            # Create Masks Tensor in the first iteration of the loop if no masks provider is set
+            if masks is None and self.masks_dataset is None:
+                masks = torch.zeros((1, len(frames_indexes), frame_gt.shape[0], frame_gt.shape[1]), dtype=torch.float32,
+                                    device=self.device)
+            elif masks is None:
+                masks = self.masks_dataset.get_random_item((frame_gt.shape[0], frame_gt.shape[1]), len(frames_indexes))
 
             # Check whether to use the mask of the instance or a random one
             if self.masks_dataset is None:
-                frame_mask = np.expand_dims(np.array(Image.open(self.sequences_masks[sequence_index][f])), 2)
+                frame_mask = np.array(Image.open(self.sequences_masks[sequence_index][f]))
                 frame_mask = self.mask_transforms(frame_mask)
-                masks.append(torch.from_numpy(frame_mask.astype(np.float32)).permute(2, 0, 1).to(self.device))
-
-        # Stack variables
-        gts = torch.stack(gts, dim=1)
-        masks = torch.stack(masks, dim=1) if len(masks) > 0 else masks
-
-        # Check whether to use randomly-generated masks
-        if self.masks_dataset is not None:
-            masks = self.masks_dataset.get_item(10, (gts[0].shape[1], gts[0].shape[2]), len(frames_indexes))
+                masks[:, i] = torch.from_numpy(frame_mask.astype(np.float32)).permute(2, 0, 1) > 0.5
 
         # Compute masked data
-        masked_sequences = (1 - masks) * gts # + (masks * np.reshape(self.channels_mean, (3, 1, 1, 1)))
+        masked_sequences = (1 - masks) * gts + (masks.permute(3, 2, 1, 0) * self.channels_mean).permute(3, 2, 1, 0)
 
         # Return framed sequence as (C,F,H,W)
         return (masked_sequences, masks), gts, self.sequences_names[sequence_index]

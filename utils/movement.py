@@ -17,9 +17,10 @@ class MovementSimulator:
         return AffineTransform(translation=(tx, ty), scale=(sx, sy), rotation=rot).inverse
 
     def simulate_movement(self, frame, n):
-        frames = [frame]
-        for i in range(n):
-            frames.append(torch.from_numpy(
-                warp(frames[i].numpy().squeeze(0), self._create_random_transformation()).astype(np.float32)
-            ).unsqueeze(0))
-        return torch.stack(frames, dim=1)
+        frames = torch.zeros((1, n, frame.size(1), frame.size(2)), dtype=torch.float32)
+        frames[:, 0] = frame
+        for i in range(1, n):
+            frames[:, i] = torch.from_numpy(
+                warp(frames[:, i - 1].numpy().squeeze(0), self._create_random_transformation())
+            )
+        return frames
