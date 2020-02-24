@@ -44,23 +44,23 @@ class CopyPasteRunner(skeltorch.Runner):
         # Loss 1: Alignment Loss
         alignment_input = aligned_frames * visibility_maps
         alignment_target = target_frame.unsqueeze(2).repeat(1, 1, aligned_frames.size(2), 1, 1) * visibility_maps
-        loss_alignment = F.l1_loss(alignment_input, alignment_target)
+        loss_alignment = F.l1_loss(alignment_input, alignment_target, reduction='mean')
         # Divide by the number of 1s in the visibility maps
 
         # Loss 2: Visible Hole
         vh_input = target_mask * c_mask * y_hat
         vh_target = target_mask * c_mask * target_frame
-        loss_vh = F.l1_loss(vh_input, vh_target, reduction='sum')
+        loss_vh = F.l1_loss(vh_input, vh_target, reduction='mean')
 
         # Loss 3: Non-Visible Hole
         nvh_input = target_mask * (1 - c_mask) * y_hat
         nvh_target = target_mask * (1 - c_mask) * target_frame
-        loss_nvh = F.l1_loss(nvh_input, nvh_target, reduction='sum')
+        loss_nvh = F.l1_loss(nvh_input, nvh_target, reduction='mean')
 
         # Loss 4: Non-Hole
         nh_input = (1 - target_mask) * c_mask * y_hat
         nh_target = (1 - target_mask) * c_mask * target_frame
-        loss_nh = F.l1_loss(nh_input, nh_target, reduction='sum')
+        loss_nh = F.l1_loss(nh_input, nh_target, reduction='mean')
 
         # Return combination of the losses
         return 2 * loss_alignment + 10 * loss_vh + 20 * loss_nvh + 6 * loss_nh

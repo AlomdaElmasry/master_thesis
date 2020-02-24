@@ -23,13 +23,13 @@ class CopyPasteData(skeltorch.Data):
             Binarize(), Resize(size=(240, 480), method=cv2.INTER_NEAREST), Dilatate(filter_size=(3, 3), iterations=4)
         ])
 
-    def _get_dataset_path(self, dataset_name):
+    def _get_dataset_path(self, data_path, dataset_name):
         if dataset_name == 'davis-2017':
-            return os.path.join(self.execution.args['data_path'], 'DAVIS-2017')
+            return os.path.join(data_path, 'DAVIS-2017')
         elif dataset_name == 'youtube-vos':
-            return os.path.join(self.execution.args['data_path'], 'YouTubeVOS')
+            return os.path.join(data_path, 'YouTubeVOS')
         elif dataset_name == 'coco':
-            return os.path.join(self.execution.args['data_path'], 'CoCo')
+            return os.path.join(data_path, 'CoCo')
         else:
             return None
 
@@ -38,7 +38,7 @@ class CopyPasteData(skeltorch.Data):
         # masks_dataset = MasksDataset(data_folder=self._get_dataset_path('coco'))
         train_dataset = SequencesDataset(
             dataset_name=self.configuration.get('data', 'test_dataset'),
-            dataset_folder=self._get_dataset_path(self.configuration.get('data', 'test_dataset')),
+            dataset_folder=self._get_dataset_path(data_path, self.configuration.get('data', 'test_dataset')),
             split='train',
             n_frames=5,
             masks_dataset=None,
@@ -48,7 +48,7 @@ class CopyPasteData(skeltorch.Data):
         )
         validation_dataset = SequencesDataset(
             dataset_name=self.configuration.get('data', 'test_dataset'),
-            dataset_folder=self._get_dataset_path(self.configuration.get('data', 'test_dataset')),
+            dataset_folder=self._get_dataset_path(data_path, self.configuration.get('data', 'test_dataset')),
             split='train',
             n_frames=5,
             masks_dataset=None,
@@ -58,7 +58,7 @@ class CopyPasteData(skeltorch.Data):
         )
         test_dataset = SequencesDataset(
             dataset_name=self.configuration.get('data', 'test_dataset'),
-            dataset_folder=self._get_dataset_path(self.configuration.get('data', 'test_dataset')),
+            dataset_folder=self._get_dataset_path(data_path, self.configuration.get('data', 'test_dataset')),
             split='train',
             n_frames=-1,
             masks_dataset=None,
@@ -69,10 +69,9 @@ class CopyPasteData(skeltorch.Data):
         self.datasets = {'train': train_dataset, 'validation': validation_dataset, 'test': test_dataset}
 
     def load_loaders(self, data_path, device):
-        batch_size = 1 if self.execution.command in ['test', 'test_alignment'] else \
-            self.configuration.get('training', 'batch_size')
+        batch_size = self.configuration.get('training', 'batch_size')
         self.loaders = {
             'train': torch.utils.data.DataLoader(self.datasets['train'], batch_size=batch_size),
             'validation': torch.utils.data.DataLoader(self.datasets['validation'], batch_size=batch_size),
-            'test': torch.utils.data.DataLoader(self.datasets['test'], batch_size=batch_size)
+            'test': torch.utils.data.DataLoader(self.datasets['test'], batch_size=1)
         }
