@@ -10,9 +10,9 @@ import utils
 
 class MasksDataset(torch.utils.data.Dataset):
 
-    def __init__(self, data_folder, json_filename='instances_train2017.json'):
+    def __init__(self, dataset_folder, json_filename='instances_train2017.json'):
         self.emulator = utils.MovementSimulator()
-        self.json_path = os.path.join(data_folder, json_filename)
+        self.json_path = os.path.join(dataset_folder, json_filename)
         self.coco = pycocotools.coco.COCO(self.json_path)
         self.masks_ids = self.coco.getAnnIds(iscrowd=False)
 

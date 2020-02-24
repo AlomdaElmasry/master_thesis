@@ -6,6 +6,7 @@ from PIL import Image
 import os.path
 import utils
 import torch.nn.functional as F
+import matplotlib.pyplot as plt
 
 
 class CopyPasteRunner(skeltorch.Runner):
@@ -17,9 +18,22 @@ class CopyPasteRunner(skeltorch.Runner):
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=1e-4)
 
     def train_step(self, it_data):
-
         # Decompose iteration data
         (it_data_masked, it_data_masks), it_data_gt, it_data_info = it_data
+
+        # Plot sample
+        plt_masked = it_data_masked[0, :, 0].permute(1, 2, 0).numpy()
+        plt_mask = it_data_masks[0, :, 0].squeeze(0).numpy()
+        plt_gt = it_data_gt[0, :, 0].permute(1, 2, 0).numpy()
+
+        plt.imshow(plt_masked)
+        plt.show()
+
+        plt.imshow(plt_mask)
+        plt.show()
+
+        plt.imshow(plt_gt)
+        plt.show()
 
         # Take the frame in the middle as target
         target_frame = it_data_masked.size(2) // 2

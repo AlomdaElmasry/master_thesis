@@ -35,28 +35,30 @@ class CopyPasteData(skeltorch.Data):
 
     def load_datasets(self, data_path, device):
         self.load_transforms()
-        # masks_dataset = MasksDataset(data_folder=self._get_dataset_path('coco'))
-        train_dataset = SequencesDataset(
-            dataset_name=self.configuration.get('data', 'test_dataset'),
-            dataset_folder=self._get_dataset_path(data_path, self.configuration.get('data', 'test_dataset')),
+        masks_dataset = MasksDataset(
+            dataset_folder=self._get_dataset_path(data_path, self.configuration.get('data', 'train_dataset_masks'))
+        )
+        self.datasets['train'] = SequencesDataset(
+            dataset_name=self.configuration.get('data', 'train_dataset'),
+            dataset_folder=self._get_dataset_path(data_path, self.configuration.get('data', 'train_dataset')),
             split='train',
             n_frames=5,
-            masks_dataset=None,
+            masks_dataset=masks_dataset,
             gt_transforms=self.frame_transforms,
             mask_transforms=self.mask_transforms,
             device=device
         )
-        validation_dataset = SequencesDataset(
-            dataset_name=self.configuration.get('data', 'test_dataset'),
-            dataset_folder=self._get_dataset_path(data_path, self.configuration.get('data', 'test_dataset')),
+        self.datasets['validation'] = SequencesDataset(
+            dataset_name=self.configuration.get('data', 'train_dataset'),
+            dataset_folder=self._get_dataset_path(data_path, self.configuration.get('data', 'train_dataset')),
             split='train',
             n_frames=5,
-            masks_dataset=None,
+            masks_dataset=masks_dataset,
             gt_transforms=self.frame_transforms,
             mask_transforms=self.mask_transforms,
             device=device
         )
-        test_dataset = SequencesDataset(
+        self.datasets['test'] = SequencesDataset(
             dataset_name=self.configuration.get('data', 'test_dataset'),
             dataset_folder=self._get_dataset_path(data_path, self.configuration.get('data', 'test_dataset')),
             split='train',
@@ -66,12 +68,15 @@ class CopyPasteData(skeltorch.Data):
             mask_transforms=self.mask_transforms,
             device=device
         )
-        self.datasets = {'train': train_dataset, 'validation': validation_dataset, 'test': test_dataset}
 
     def load_loaders(self, data_path, device):
         batch_size = self.configuration.get('training', 'batch_size')
-        self.loaders = {
-            'train': torch.utils.data.DataLoader(self.datasets['train'], shuffle=True, batch_size=batch_size),
-            'validation': torch.utils.data.DataLoader(self.datasets['validation'], shuffle=True, batch_size=batch_size),
-            'test': torch.utils.data.DataLoader(self.datasets['test'], batch_size=1)
-        }
+        self.loaders['train'] = torch.utils.data.DataLoader(
+            self.datasets['train'], shuffle=True, batch_size=batch_size
+        )
+        self.loaders['validation'] = torch.utils.data.DataLoader(
+            self.datasets['validation'], shuffle=True, batch_size=batch_size
+        )
+        self.loaders['test'] = torch.utils.data.DataLoader(
+            self.datasets['test'], batch_size=1
+        )
