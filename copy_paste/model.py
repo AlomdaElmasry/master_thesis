@@ -354,4 +354,4 @@ class CPNet(nn.Module):
         y_hat_comp = y_hat * m_t + y_t * (1 - m_t)
 
         # Return y_hat_comp, y_hat, c_mask, (aligned_frames, aligned_masks)
-        return y_hat_comp, y_hat, c_mask, (aligned_frames, aligned_masks)
+        return y_hat, y_hat_comp, c_mask, (aligned_frames, aligned_masks)

@@ -12,11 +12,10 @@ class CopyPasteData(skeltorch.Data):
         pass
 
     def load_datasets(self, data_path, device):
-        # masks_dataset = MasksDataset(
-        #     dataset_folder=os.path.join(data_path, self.dataset_paths[self.configuration.get('data', 'masks_dataset')]),
-        #     device=device
-        # )
-        masks_dataset = None
+        masks_dataset = MasksDataset(
+            dataset_folder=os.path.join(data_path, self.dataset_paths[self.configuration.get('data', 'masks_dataset')]),
+            device=device
+        )
         self.datasets['train'] = SequencesDataset(
             dataset_name=self.configuration.get('data', 'train_dataset'),
             dataset_folder=os.path.join(data_path, self.dataset_paths[self.configuration.get('data', 'train_dataset')]),

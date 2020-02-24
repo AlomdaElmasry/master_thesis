@@ -8,7 +8,8 @@ import utils
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
 from vgg_16.model import get_pretrained_model
-
+import random
+import torch.utils.data
 
 class CopyPasteRunner(skeltorch.Runner):
     model_vgg = None
@@ -24,25 +25,13 @@ class CopyPasteRunner(skeltorch.Runner):
         # Decompose iteration data
         (it_data_masked, it_data_masks), it_data_gt, it_data_info = it_data
 
-        # Plot sample
-        plt_masked = it_data_masked[0, :, 0].permute(1, 2, 0).numpy()
-        plt_mask = it_data_masks[0, :, 0].squeeze(0).numpy()
-        plt_gt = it_data_gt[0, :, 0].permute(1, 2, 0).numpy()
-
-        # for i in range(it_data_masks.size(2)):
-        #     plt_masked = it_data_masked[0, :, i].permute(1, 2, 0).numpy()
-        #     plt.imshow(plt_masked)
-        #     plt.show()
-
-        # Take the frame in the middle as target
+        # Get target and reference frames
         target_frame = it_data_masked.size(2) // 2
-
-        # User all other frames as reference frames
         reference_frames = list(range(it_data_masked.size(2)))
         reference_frames.pop(target_frame)
 
         # Propagate through the model
-        y_hat_comp, y_hat, c_mask, (aligned_frames, aligned_masks) = self.model(
+        y_hat, y_hat_comp, c_mask, (aligned_frames, aligned_masks) = self.model(
             it_data_masked, it_data_masks, it_data_gt, target_frame, reference_frames
         )
 
@@ -53,6 +42,29 @@ class CopyPasteRunner(skeltorch.Runner):
         return self.compute_loss(y=it_data_gt[:, :, target_frame], y_hat=y_hat, y_hat_comp=y_hat_comp,
                                  x_t=it_data_masked[:, :, target_frame], x_rt=aligned_frames, c_mask=c_mask,
                                  m=it_data_masks[:, :, target_frame], v=visibility_maps)
+
+    def train_after_epoch_tasks(self):
+        # Create provisional DataLoader with the randomly selected samples and select 5 items
+        loader = torch.utils.data.DataLoader(self.experiment.data.datasets['train'], shuffle=True, batch_size=5)
+
+        # Get the data
+        (it_data_masked, it_data_masks), it_data_gt, it_data_info = next(iter(loader))
+
+        # Get target and reference frames
+        target_frame = it_data_masked.size(2) // 2
+        reference_frames = list(range(it_data_masked.size(2)))
+        reference_frames.pop(target_frame)
+
+        # Propagate the data through the model
+        with torch.no_grad():
+            y_hat, y_hat_comp, _, _ = self.model(
+                it_data_masked, it_data_masks, it_data_gt, target_frame, reference_frames
+            )
+
+        # Log each image of the batch in TensorBoard
+        self.experiment.tbx.add_images('y-hat', y_hat, global_step=self.counters['epoch'])
+        self.experiment.tbx.add_images('y-hat-comp', y_hat_comp, global_step=self.counters['epoch'])
+        self.experiment.tbx.flush()
 
     def compute_loss(self, y, y_hat, y_hat_comp, x_t, x_rt, v, m, c_mask):
         # Loss 1: Alignment Loss
