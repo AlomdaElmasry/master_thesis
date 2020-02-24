@@ -103,7 +103,7 @@ class SequencesDataset(torch.utils.data.Dataset):
             masks = self.masks_dataset.get_item(10, (gts[0].shape[1], gts[0].shape[2]), len(frames_indexes))
 
         # Compute masked data
-        masked_sequences = (1 - masks) * gts + (masks * np.reshape(self.channels_mean, (3, 1, 1, 1)))
+        masked_sequences = (1 - masks) * gts # + (masks * np.reshape(self.channels_mean, (3, 1, 1, 1)))
 
         # Return framed sequence as (C,F,H,W)
         return (masked_sequences, masks), gts, self.sequences_names[sequence_index]

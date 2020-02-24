@@ -261,8 +261,10 @@ class CPNet(nn.Module):
 
     def align_encode(self, frames, holes):
 
+        # Get important parameters
         batch_size, _, num_frames, height, width = frames.size()
-        # padding
+
+        # Add padding to everything
         (frames, holes), pad = pad_divide_by([frames, holes], 8, (frames.size()[3], frames.size()[4]))
 
         feat_ = []

@@ -4,7 +4,6 @@ import torch.optim
 import numpy as np
 from PIL import Image
 import os.path
-import matplotlib.pyplot as plt
 import utils
 import torch.nn.functional as F
 
@@ -12,40 +11,41 @@ import torch.nn.functional as F
 class CopyPasteRunner(skeltorch.Runner):
 
     def init_model(self):
-        self.model = CPNet().to(self.execution.device)
+        self.model = CPNet()
 
     def init_optimizer(self):
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=1e-4)
 
-    def step_train(self, it_data: any, it_target: any, it_info: any):
+    def train_step(self, it_data):
+
+        # Decompose iteration data
+        (it_data_masked, it_data_masks), it_data_gt, it_data_info = it_data
 
         # Take the frame in the middle as target
-        target_frame = it_data[0].size(2) // 2
+        target_frame = it_data_masked.size(2) // 2
 
         # User all other frames as reference frames
-        reference_frames = list(range(it_data[0].size(2)))
+        reference_frames = list(range(it_data_masked.size(2)))
         reference_frames.pop(target_frame)
 
         # Propagate through the model
         y_hat_comp, y_hat, c_mask, (aligned_frames, aligned_masks) = self.model(
-            it_data[0], it_data[1], it_target, target_frame, reference_frames
+            it_data_masked, it_data_masks, it_data_gt, target_frame, reference_frames
         )
 
         # Get visibility map of aligned frames and target frame
-        visibility_maps = (1 - it_data[1][:, :, target_frame].unsqueeze(2)) * aligned_masks
+        visibility_maps = (1 - it_data_masks[:, :, target_frame].unsqueeze(2)) * aligned_masks
 
         # Compute loss and return
-        return self.compute_loss(y_hat_comp, y_hat, c_mask, aligned_frames, it_data[0][:, :, target_frame],
-                                 it_data[1][:, :, target_frame], visibility_maps)
-
-    def step_validation(self, it_data: any, it_target: any, it_info: any):
-        pass
+        return self.compute_loss(y_hat_comp, y_hat, c_mask, aligned_frames, it_data_masked[:, :, target_frame],
+                                 it_data_masks[:, :, target_frame], visibility_maps)
 
     def compute_loss(self, y_hat_comp, y_hat, c_mask, aligned_frames, target_frame, target_mask, visibility_maps):
         # Loss 1: Alignment Loss
         alignment_input = aligned_frames * visibility_maps
         alignment_target = target_frame.unsqueeze(2).repeat(1, 1, aligned_frames.size(2), 1, 1) * visibility_maps
-        loss_alignment = F.l1_loss(alignment_input, alignment_target, reduction='sum')
+        loss_alignment = F.l1_loss(alignment_input, alignment_target)
+        # Divide by the number of 1s in the visibility maps
 
         # Loss 2: Visible Hole
         vh_input = target_mask * c_mask * y_hat

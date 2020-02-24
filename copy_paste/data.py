@@ -14,14 +14,8 @@ class CopyPasteData(skeltorch.Data):
     frame_transforms: torchvision.transforms.Compose
     mask_transforms: torchvision.transforms.Compose
 
-    def create(self):
+    def create(self, data_path):
         pass
-
-    def load(self, data_file_path: str):
-        super().load(data_file_path)
-        self.load_transforms()
-        self.load_datasets()
-        self.load_loaders()
 
     def load_transforms(self):
         self.frame_transforms = torchvision.transforms.Compose([Resize(size=(240, 480), method=cv2.INTER_LINEAR)])
@@ -39,7 +33,8 @@ class CopyPasteData(skeltorch.Data):
         else:
             return None
 
-    def load_datasets(self):
+    def load_datasets(self, data_path, device):
+        self.load_transforms()
         # masks_dataset = MasksDataset(data_folder=self._get_dataset_path('coco'))
         train_dataset = SequencesDataset(
             dataset_name=self.configuration.get('data', 'test_dataset'),
@@ -49,7 +44,7 @@ class CopyPasteData(skeltorch.Data):
             masks_dataset=None,
             gt_transforms=self.frame_transforms,
             mask_transforms=self.mask_transforms,
-            device=self.execution.device
+            device=device
         )
         validation_dataset = SequencesDataset(
             dataset_name=self.configuration.get('data', 'test_dataset'),
@@ -59,7 +54,7 @@ class CopyPasteData(skeltorch.Data):
             masks_dataset=None,
             gt_transforms=self.frame_transforms,
             mask_transforms=self.mask_transforms,
-            device=self.execution.device
+            device=device
         )
         test_dataset = SequencesDataset(
             dataset_name=self.configuration.get('data', 'test_dataset'),
@@ -69,11 +64,11 @@ class CopyPasteData(skeltorch.Data):
             masks_dataset=None,
             gt_transforms=self.frame_transforms,
             mask_transforms=self.mask_transforms,
-            device=self.execution.device
+            device=device
         )
         self.datasets = {'train': train_dataset, 'validation': validation_dataset, 'test': test_dataset}
 
-    def load_loaders(self):
+    def load_loaders(self, data_path, device):
         batch_size = 1 if self.execution.command in ['test', 'test_alignment'] else \
             self.configuration.get('training', 'batch_size')
         self.loaders = {
