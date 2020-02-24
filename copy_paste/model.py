@@ -332,17 +332,17 @@ class CPNet(nn.Module):
     def forward(self, frames, masks, gts, target_index, reference_indexes):
 
         # Get frame, mask an GT associated to the target index
-        target_frame = frames[:, :, target_index]
-        target_mask = masks[:, :, target_index]
-        target_gt = gts[:, :, target_index]
+        x_t = frames[:, :, target_index]
+        m_t = masks[:, :, target_index]
+        y_t = gts[:, :, target_index]
 
         # Step 1: Align Auxiliar Frames
         aligned_frames, aligned_masks, _ = self.align(frames, masks, gts, target_index, reference_indexes)
 
         # Step 2: Copy and Paste
         y_hat, c_mask = self.copy_and_paste(
-            target_frame=target_frame,
-            target_mask=target_mask,
+            target_frame=x_t,
+            target_mask=m_t,
             aligned_frames=aligned_frames,
             aligned_masks=aligned_masks
         )
@@ -351,7 +351,7 @@ class CPNet(nn.Module):
         y_hat = torch.clamp(y_hat, 0, 1)
 
         # Combine prediction with GT of the frame. Limit the output range [0, 1].
-        y_hat_comp = y_hat * target_mask + target_gt * (1. - target_mask)
+        y_hat_comp = y_hat * m_t + y_t * (1 - m_t)
 
         # Return y_hat_comp, y_hat, c_mask, (aligned_frames, aligned_masks)
         return y_hat_comp, y_hat, c_mask, (aligned_frames, aligned_masks)

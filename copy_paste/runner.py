@@ -7,12 +7,15 @@ import os.path
 import utils
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
+from vgg_16.model import get_pretrained_model
 
 
 class CopyPasteRunner(skeltorch.Runner):
+    model_vgg = None
 
     def init_model(self):
         self.model = CPNet()
+        self.model_vgg = get_pretrained_model()
 
     def init_optimizer(self):
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=1e-4)
@@ -20,6 +23,16 @@ class CopyPasteRunner(skeltorch.Runner):
     def train_step(self, it_data):
         # Decompose iteration data
         (it_data_masked, it_data_masks), it_data_gt, it_data_info = it_data
+
+        # Plot sample
+        plt_masked = it_data_masked[0, :, 0].permute(1, 2, 0).numpy()
+        plt_mask = it_data_masks[0, :, 0].squeeze(0).numpy()
+        plt_gt = it_data_gt[0, :, 0].permute(1, 2, 0).numpy()
+
+        # for i in range(it_data_masks.size(2)):
+        #     plt_masked = it_data_masked[0, :, i].permute(1, 2, 0).numpy()
+        #     plt.imshow(plt_masked)
+        #     plt.show()
 
         # Take the frame in the middle as target
         target_frame = it_data_masked.size(2) // 2
@@ -37,33 +50,55 @@ class CopyPasteRunner(skeltorch.Runner):
         visibility_maps = (1 - it_data_masks[:, :, target_frame].unsqueeze(2)) * aligned_masks
 
         # Compute loss and return
-        return self.compute_loss(y_hat_comp, y_hat, c_mask, aligned_frames, it_data_masked[:, :, target_frame],
-                                 it_data_masks[:, :, target_frame], visibility_maps)
+        return self.compute_loss(y=it_data_gt[:, :, target_frame], y_hat=y_hat, y_hat_comp=y_hat_comp,
+                                 x_t=it_data_masked[:, :, target_frame], x_rt=aligned_frames, c_mask=c_mask,
+                                 m=it_data_masks[:, :, target_frame], v=visibility_maps)
 
-    def compute_loss(self, y_hat_comp, y_hat, c_mask, aligned_frames, target_frame, target_mask, visibility_maps):
+    def compute_loss(self, y, y_hat, y_hat_comp, x_t, x_rt, v, m, c_mask):
         # Loss 1: Alignment Loss
-        alignment_input = aligned_frames * visibility_maps
-        alignment_target = target_frame.unsqueeze(2).repeat(1, 1, aligned_frames.size(2), 1, 1) * visibility_maps
-        loss_alignment = F.l1_loss(alignment_input, alignment_target, reduction='mean')
-        # Divide by the number of 1s in the visibility maps
+        alignment_input = x_rt * v
+        alignment_target = x_t.unsqueeze(2).repeat(1, 1, x_rt.size(2), 1, 1) * v
+        loss_alignment = F.l1_loss(alignment_input, alignment_target, reduction='sum') / torch.sum(v)
 
         # Loss 2: Visible Hole
-        vh_input = target_mask * c_mask * y_hat
-        vh_target = target_mask * c_mask * target_frame
-        loss_vh = F.l1_loss(vh_input, vh_target, reduction='mean')
+        vh_input = m * c_mask * y_hat
+        vh_target = m * c_mask * y
+        loss_vh = F.l1_loss(vh_input, vh_target)
 
         # Loss 3: Non-Visible Hole
-        nvh_input = target_mask * (1 - c_mask) * y_hat
-        nvh_target = target_mask * (1 - c_mask) * target_frame
-        loss_nvh = F.l1_loss(nvh_input, nvh_target, reduction='mean')
+        nvh_input = m * (1 - c_mask) * y_hat
+        nvh_target = m * (1 - c_mask) * y
+        loss_nvh = F.l1_loss(nvh_input, nvh_target)
 
         # Loss 4: Non-Hole
-        nh_input = (1 - target_mask) * c_mask * y_hat
-        nh_target = (1 - target_mask) * c_mask * target_frame
-        loss_nh = F.l1_loss(nh_input, nh_target, reduction='mean')
+        nh_input = (1 - m) * c_mask * y_hat
+        nh_target = (1 - m) * c_mask * y
+        loss_nh = F.l1_loss(nh_input, nh_target)
+
+        # Loss 5: Perceptual
+        loss_perceptual = 0
+        with torch.no_grad():
+            _, vgg_y = self.model_vgg(y)
+            _, vgg_y_hat_comp = self.model_vgg(y_hat_comp)
+            for p in range(len(vgg_y)):
+                loss_perceptual += F.l1_loss(vgg_y_hat_comp[p], vgg_y[p])
+            loss_perceptual /= len(vgg_y)
+
+        # Loss 6: Style
+        loss_style = 0
+        for p in range(len(vgg_y)):
+            B, C, H, W = vgg_y[p].size()
+            G_y = torch.mm(vgg_y[p].view(B * C, H * W), vgg_y[p].view(B * C, H * W).t())
+            G_y_comp = torch.mm(vgg_y_hat_comp[p].view(B * C, H * W), vgg_y_hat_comp[p].view(B * C, H * W).t())
+            loss_style += F.l1_loss(G_y_comp / (B * C * H * W), G_y / (B * C * H * W))
+        loss_style /= len(vgg_y)
+
+        # Loss 7: Smoothing Checkerboard Effect
+        loss_smoothing = 0
 
         # Return combination of the losses
-        return 2 * loss_alignment + 10 * loss_vh + 20 * loss_nvh + 6 * loss_nh
+        return 2 * loss_alignment + 10 * loss_vh + 20 * loss_nvh + 6 * loss_nh + 0.01 * loss_perceptual + \
+               24 * loss_style + 0.1 * loss_smoothing
 
     def test(self):
         # Set model to evaluation mode

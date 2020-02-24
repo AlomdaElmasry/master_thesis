@@ -3,35 +3,39 @@ import torch.utils.data
 from PIL import Image
 import glob
 import numpy as np
-import torchvision
+
+from utils.transforms import ImageTransforms
 
 
 class SequencesDataset(torch.utils.data.Dataset):
     dataset_name = None
     dataset_folder = None
     split = None
+    image_size = None
+    frames_n = None
+    frames_spacing = None
+    dilatation_filter_size = None
+    dilatation_iterations = None
     logger = None
-    n_frames = None
     masks_dataset = None
-    gt_transforms = None
-    mask_transforms = None
     device = None
 
     sequences_gts = None
     sequences_masks = None
     channels_mean = None
 
-    def __init__(self, dataset_name, dataset_folder, split, logger, n_frames=-1, masks_dataset=None,
-                 gt_transforms=torchvision.transforms.Compose([]), mask_transforms=torchvision.transforms.Compose([]),
-                 device=torch.device('cpu')):
+    def __init__(self, dataset_name, dataset_folder, split, image_size, frames_n, frames_spacing,
+                 dilatation_filter_size, dilatation_iterations, logger, masks_dataset=None, device=torch.device('cpu')):
         self.dataset_name = dataset_name
         self.dataset_folder = dataset_folder
         self.split = split
+        self.image_size = image_size
+        self.frames_n = frames_n
+        self.frames_spacing = frames_spacing
+        self.dilatation_filter_size = dilatation_filter_size
+        self.dilatation_iterations = dilatation_iterations
         self.logger = logger
-        self.n_frames = n_frames
         self.masks_dataset = masks_dataset
-        self.gt_transforms = gt_transforms
-        self.mask_transforms = mask_transforms
         self.device = device
         self._validate_arguments()
         self._load_paths()
@@ -43,7 +47,7 @@ class SequencesDataset(torch.utils.data.Dataset):
             raise ValueError('Dataset folder {} does not exist.'.format(self.dataset_folder))
         assert self.dataset_name in ['davis-2017', 'youtube-vos']
         assert self.split in ['train', 'validation', 'test']
-        assert self.n_frames == -1 or self.n_frames % 2 == 1
+        assert self.frames_n == -1 or self.frames_n % 2 == 1
         assert not (self.dataset_name == 'youtube-vos' and self.masks_dataset is None)
 
     def _load_paths(self):
@@ -76,7 +80,7 @@ class SequencesDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, item):
         # Case 1: return all the frames of the sequence. Each item is associated to one sequence_index.
-        if self.n_frames == -1:
+        if self.frames_n == -1:
             sequence_index = item
             frames_indexes = list(range(len(self.sequences_gts[sequence_index])))
 
@@ -87,38 +91,45 @@ class SequencesDataset(torch.utils.data.Dataset):
         else:
             sequence_index = next(x[0] for x in enumerate(self.sequences_limits) if x[1] > item)
             frame_index = item - (self.sequences_limits[sequence_index - 1] if sequence_index > 0 else 0)
-            frames_indexes = list(range(frame_index - self.n_frames // 2, frame_index + self.n_frames // 2 + 1))
+            frames_indexes = list(range(
+                frame_index - (self.frames_n // 2) * self.frames_spacing,
+                frame_index + (self.frames_n // 2) * self.frames_spacing + 1,
+                self.frames_spacing
+            ))
             frames_indexes = np.clip(frames_indexes, 0, len(self.sequences_gts[sequence_index]) - 1)
 
-        # Create variables to return
-        gts, masks = None, None
+        # Create torch.Tensor for the GTs
+        gts = torch.zeros(
+            (3, len(frames_indexes), self.image_size[0], self.image_size[1]),
+            dtype=torch.float32,
+            device=self.device
+        )
+
+        # Get the mask from the mask generator or create torch.Tensor to be filled
+        if self.masks_dataset is None:
+            masks = torch.zeros(
+                (1, len(frames_indexes), self.image_size[0], self.image_size[1]),
+                dtype=torch.float32,
+                device=self.device
+            )
+        else:
+            masks = self.masks_dataset.get_random_item((self.image_size[0], self.image_size[1]), len(frames_indexes))
+
+        # Store previous crop position to create coherent cuts
+        crop_position = None
 
         # Iterate all the files
         for i, f in enumerate(frames_indexes):
-            # Load both the frame and the masks as Numpy arrays -> (H, W, C)
-            frame_gt = (np.array(Image.open(self.sequences_gts[sequence_index][f])) / 255)
-            frame_gt = self.gt_transforms(frame_gt)
-
-            # Create GTs Tensor in the first iteration of the loop
-            if gts is None:
-                gts = torch.zeros((frame_gt.shape[2], len(frames_indexes), frame_gt.shape[0], frame_gt.shape[1]),
-                                  dtype=torch.float32, device=self.device)
-
-            # Store transformed image into the Tensor
+            # Load the frame and perform a random resize / crop of the given size
+            frame_gt = np.array(Image.open(self.sequences_gts[sequence_index][f])) / 255
+            frame_gt, crop_position = self._transform_gt(frame_gt, crop_position)
             gts[:, i] = torch.from_numpy(frame_gt.astype(np.float32)).permute(2, 0, 1)
-
-            # Create Masks Tensor in the first iteration of the loop if no masks provider is set
-            if masks is None and self.masks_dataset is None:
-                masks = torch.zeros((1, len(frames_indexes), frame_gt.shape[0], frame_gt.shape[1]), dtype=torch.float32,
-                                    device=self.device)
-            elif masks is None:
-                masks = self.masks_dataset.get_random_item((frame_gt.shape[0], frame_gt.shape[1]), len(frames_indexes))
 
             # Check whether to use the mask of the instance or a random one
             if self.masks_dataset is None:
                 frame_mask = np.array(Image.open(self.sequences_masks[sequence_index][f]))
-                frame_mask = self.mask_transforms(frame_mask)
-                masks[:, i] = torch.from_numpy(frame_mask.astype(np.float32)).permute(2, 0, 1) > 0.5
+                frame_mask = self._transform_mask(frame_mask)
+                masks[:, i] = torch.from_numpy(frame_mask.astype(np.float32)).permute(2, 0, 1)
 
         # Compute masked data
         masked_sequences = (1 - masks) * gts + (masks.permute(3, 2, 1, 0) * self.channels_mean).permute(3, 2, 1, 0)
@@ -127,4 +138,13 @@ class SequencesDataset(torch.utils.data.Dataset):
         return (masked_sequences, masks), gts, self.sequences_names[sequence_index]
 
     def __len__(self):
-        return len(self.sequences_gts) if self.n_frames == -1 else self.sequences_limits[-1]
+        return len(self.sequences_gts) if self.frames_n == -1 else self.sequences_limits[-1]
+
+    def _transform_gt(self, frame_gt, crop_position):
+        return ImageTransforms.crop(frame_gt, self.image_size, crop_position) \
+            if self.split in ['train', 'validation'] else (ImageTransforms.resize(frame_gt, self.image_size), None)
+
+    def _transform_mask(self, frame_mask):
+        frame_mask = ImageTransforms.binarize(frame_mask)
+        frame_mask = ImageTransforms.resize(frame_mask, self.image_size)
+        return ImageTransforms.dilatate(frame_mask, self.dilatation_filter_size, self.dilatation_iterations)
