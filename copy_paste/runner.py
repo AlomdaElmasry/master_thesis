@@ -21,16 +21,6 @@ class CopyPasteRunner(skeltorch.Runner):
         # Decompose iteration data
         (it_data_masked, it_data_masks), it_data_gt, it_data_info = it_data
 
-        # Plot sample
-        plt_masked = it_data_masked[0, :, 0].permute(1, 2, 0).numpy()
-        plt_mask = it_data_masks[0, :, 0].squeeze(0).numpy()
-        plt_gt = it_data_gt[0, :, 0].permute(1, 2, 0).numpy()
-
-        for i in range(it_data_masks.size(2)):
-            plt_mask = it_data_masks[0, :, i].squeeze(0).numpy()
-            plt.imshow(plt_mask)
-            plt.show()
-
         # Take the frame in the middle as target
         target_frame = it_data_masked.size(2) // 2
 

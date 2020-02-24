@@ -26,7 +26,7 @@ class CopyPasteData(skeltorch.Data):
             split='train',
             logger=self.logger,
             n_frames=5,
-            masks_dataset=None,
+            masks_dataset=masks_dataset,
             gt_transforms=self.frame_transforms,
             mask_transforms=self.mask_transforms,
             device=device
