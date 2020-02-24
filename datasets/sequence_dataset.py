@@ -7,16 +7,18 @@ import torchvision
 
 
 class SequencesDataset(torch.utils.data.Dataset):
+    logger = None
     sequences_gts = None
     sequences_masks = None
     channels_mean = None
 
-    def __init__(self, dataset_name, dataset_folder, split, n_frames=-1, masks_dataset=None,
+    def __init__(self, dataset_name, dataset_folder, split, logger, n_frames=-1, masks_dataset=None,
                  gt_transforms=torchvision.transforms.Compose([]), mask_transforms=torchvision.transforms.Compose([]),
                  device='cpu'):
         self.dataset_name = dataset_name
         self.dataset_folder = dataset_folder
         self.split = split
+        self.logger = logger
         self.n_frames = n_frames
         self.masks_dataset = masks_dataset
         self.gt_transforms = gt_transforms
@@ -28,7 +30,8 @@ class SequencesDataset(torch.utils.data.Dataset):
         self.channels_mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
 
     def _validate_arguments(self):
-        assert os.path.exists(self.dataset_folder)
+        if not os.path.exists(self.dataset_folder):
+            raise ValueError('Dataset folder {} does not exist.'.format(self.dataset_folder))
         assert self.dataset_name in ['davis-2017', 'youtube-vos']
         assert self.split in ['train', 'validation', 'test']
         assert self.n_frames == -1 or self.n_frames % 2 == 1
