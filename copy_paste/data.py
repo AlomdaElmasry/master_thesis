@@ -22,7 +22,7 @@ class CopyPasteData(skeltorch.Data):
         self.datasets['train'] = SequencesDataset(
             dataset_name=self.configuration.get('data', 'train_dataset'),
             dataset_folder=os.path.join(data_path, self.dataset_paths[self.configuration.get('data', 'train_dataset')]),
-            split='validation',
+            split='train',
             image_size=tuple(self.configuration.get('data', 'train_size')),
             frames_n=self.configuration.get('data', 'frames_n'),
             frames_spacing=self.configuration.get('data', 'frames_spacing'),

@@ -43,7 +43,12 @@ class CopyPasteRunner(skeltorch.Runner):
         # Compute loss and return
         return self.compute_loss(y[:, :, t], y_hat, y_hat_comp, x[:, :, t], x_rt, visibility_maps, m[:, :, t], c_mask)
 
-    def train_after_epoch_tasks(self, device):
+    def train_iteration_log(self, e_train_losses, log_period, device):
+        super().train_iteration_log(e_train_losses, log_period, device)
+        if self.counters['train_it'] % (log_period * 10) == 0:
+            self._generate_random_images_tbx(device)
+
+    def _generate_random_images_tbx(self, device):
         # Create provisional DataLoader with the randomly selected samples and select 5 items
         loader = torch.utils.data.DataLoader(self.experiment.data.datasets['train'], shuffle=True, batch_size=5)
         (x, m), y, _ = next(iter(loader))
@@ -68,7 +73,6 @@ class CopyPasteRunner(skeltorch.Runner):
         self.experiment.tbx.add_images('y', y[:, :, t], global_step=self.counters['epoch'])
         self.experiment.tbx.add_images('y-hat', y_hat, global_step=self.counters['epoch'])
         self.experiment.tbx.add_images('y-hat-comp', y_hat_comp, global_step=self.counters['epoch'])
-        self.experiment.tbx.flush()
 
     def compute_loss(self, y, y_hat, y_hat_comp, x_t, x_rt, v, m, c_mask):
         # Loss 1: Alignment Loss
