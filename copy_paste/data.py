@@ -17,7 +17,6 @@ class CopyPasteData(skeltorch.Data):
             dataset_name=self.configuration.get('data', 'masks_dataset'),
             dataset_folder=os.path.join(data_path, self.dataset_paths[self.configuration.get('data', 'masks_dataset')]),
             split='train',
-            device=device,
             emulator=utils.MovementSimulator()
         )
         self.datasets['train'] = SequencesDataset(
