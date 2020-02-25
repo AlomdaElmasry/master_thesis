@@ -25,7 +25,7 @@ class SequencesDataset(torch.utils.data.Dataset):
     channels_mean = None
 
     def __init__(self, dataset_name, dataset_folder, split, image_size, frames_n, frames_spacing,
-                 dilatation_filter_size, dilatation_iterations, logger, masks_dataset=None, device=torch.device('cpu')):
+                 dilatation_filter_size, dilatation_iterations, logger, masks_dataset=None):
         self.dataset_name = dataset_name
         self.dataset_folder = dataset_folder
         self.split = split
@@ -36,11 +36,10 @@ class SequencesDataset(torch.utils.data.Dataset):
         self.dilatation_iterations = dilatation_iterations
         self.logger = logger
         self.masks_dataset = masks_dataset
-        self.device = device
         self._validate_arguments()
         self._load_paths()
         self._create_index()
-        self.channels_mean = torch.as_tensor([0.485, 0.456, 0.406], dtype=torch.float32, device=self.device)
+        self.channels_mean = torch.as_tensor([0.485, 0.456, 0.406], dtype=torch.float32)
 
     def _validate_arguments(self):
         if not os.path.exists(self.dataset_folder):
@@ -123,10 +122,6 @@ class SequencesDataset(torch.utils.data.Dataset):
                 frame_mask = torch.from_numpy((np.array(Image.open(self.sequences_masks[sequence_index][f])
                                                         .convert('RGB')) / 255).astype(np.float32)).permute(2, 0, 1)
                 masks[:, i] = self._transform_mask(frame_mask)
-
-        # Move everything to the appropriate device
-        gts = gts.to(self.device)
-        masks = masks.to(self.device)
 
         # Compute masked data
         masked_sequences = (1 - masks) * gts + (masks.permute(3, 2, 1, 0) * self.channels_mean).permute(3, 2, 1, 0)

@@ -20,9 +20,14 @@ class CopyPasteRunner(skeltorch.Runner):
     def init_optimizer(self, device):
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=1e-4)
 
-    def train_step(self, it_data):
+    def train_step(self, it_data, device):
         # Decompose iteration data
         (x, m), y, _ = it_data
+
+        # Move data to the correct device
+        x = x.to(device)
+        m = m.to(device)
+        y = y.to(device)
 
         # Get target and reference frames
         t = x.size(2) // 2
@@ -38,10 +43,15 @@ class CopyPasteRunner(skeltorch.Runner):
         # Compute loss and return
         return self.compute_loss(y[:, :, t], y_hat, y_hat_comp, x[:, :, t], x_rt, visibility_maps, m[:, :, t], c_mask)
 
-    def train_after_epoch_tasks(self):
+    def train_after_epoch_tasks(self, device):
         # Create provisional DataLoader with the randomly selected samples and select 5 items
         loader = torch.utils.data.DataLoader(self.experiment.data.datasets['train'], shuffle=True, batch_size=5)
         (x, m), y, _ = next(iter(loader))
+
+        # Move data to the correct device
+        x = x.to(device)
+        m = m.to(device)
+        y = y.to(device)
 
         # Get target and reference frames
         t = x.size(2) // 2
