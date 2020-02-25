@@ -4,23 +4,118 @@ import torch.optim
 import numpy as np
 from PIL import Image
 import os.path
-import matplotlib.pyplot as plt
 import utils
+import torch.nn.functional as F
+import matplotlib.pyplot as plt
+from vgg_16.model import get_pretrained_model
+import random
+import torch.utils.data
 
 
 class CopyPasteRunner(skeltorch.Runner):
+    model_vgg = None
 
     def init_model(self):
-        self.model = CPNet().to(self.execution.device)
+        self.model = CPNet()
+        self.model_vgg = get_pretrained_model()
 
     def init_optimizer(self):
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=1e-4)
 
-    def step_train(self, it_data: any, it_target: any, it_info: any):
-        pass
+    def train_step(self, it_data):
+        # Decompose iteration data
+        (it_data_masked, it_data_masks), it_data_gt, it_data_info = it_data
 
-    def step_validation(self, it_data: any, it_target: any, it_info: any):
-        pass
+        # Get target and reference frames
+        target_frame = it_data_masked.size(2) // 2
+        reference_frames = list(range(it_data_masked.size(2)))
+        reference_frames.pop(target_frame)
+
+        # Propagate through the model
+        y_hat, y_hat_comp, c_mask, (aligned_frames, aligned_masks) = self.model(
+            it_data_masked, it_data_masks, it_data_gt, target_frame, reference_frames
+        )
+
+        # Get visibility map of aligned frames and target frame
+        visibility_maps = (1 - it_data_masks[:, :, target_frame].unsqueeze(2)) * aligned_masks
+
+        # Compute loss and return
+        return self.compute_loss(y=it_data_gt[:, :, target_frame], y_hat=y_hat, y_hat_comp=y_hat_comp,
+                                 x_t=it_data_masked[:, :, target_frame], x_rt=aligned_frames, c_mask=c_mask,
+                                 m=it_data_masks[:, :, target_frame], v=visibility_maps)
+
+    def train_after_epoch_tasks(self):
+        # Create provisional DataLoader with the randomly selected samples and select 5 items
+        loader = torch.utils.data.DataLoader(self.experiment.data.datasets['train'], shuffle=True, batch_size=5)
+
+        # Get the data
+        (it_data_masked, it_data_masks), it_data_gt, it_data_info = next(iter(loader))
+
+        # Get target and reference frames
+        target_frame = it_data_masked.size(2) // 2
+        reference_frames = list(range(it_data_masked.size(2)))
+        reference_frames.pop(target_frame)
+
+        # Propagate the data through the model
+        with torch.no_grad():
+            y_hat, y_hat_comp, _, _ = self.model(
+                it_data_masked, it_data_masks, it_data_gt, target_frame, reference_frames
+            )
+
+        # Log each image of the batch in TensorBoard
+        self.experiment.tbx.add_images('y-hat', y_hat, global_step=self.counters['epoch'])
+        self.experiment.tbx.add_images('y-hat-comp', y_hat_comp, global_step=self.counters['epoch'])
+        self.experiment.tbx.flush()
+
+    def compute_loss(self, y, y_hat, y_hat_comp, x_t, x_rt, v, m, c_mask):
+        # Loss 1: Alignment Loss
+        alignment_input = x_rt * v
+        alignment_target = x_t.unsqueeze(2).repeat(1, 1, x_rt.size(2), 1, 1) * v
+        loss_alignment = F.l1_loss(alignment_input, alignment_target, reduction='sum') / torch.sum(v)
+
+        # Loss 2: Visible Hole
+        vh_input = m * c_mask * y_hat
+        vh_target = m * c_mask * y
+        loss_vh = F.l1_loss(vh_input, vh_target)
+
+        # Loss 3: Non-Visible Hole
+        nvh_input = m * (1 - c_mask) * y_hat
+        nvh_target = m * (1 - c_mask) * y
+        loss_nvh = F.l1_loss(nvh_input, nvh_target)
+
+        # Loss 4: Non-Hole
+        nh_input = (1 - m) * c_mask * y_hat
+        nh_target = (1 - m) * c_mask * y
+        loss_nh = F.l1_loss(nh_input, nh_target)
+
+        # Verify that the VGG model is in the same device
+        if self.model_vgg.device != self.model.device:
+            self.model_vgg = self.model_vgg.to(self.model.device)
+
+        # Loss 5: Perceptual
+        loss_perceptual = 0
+        with torch.no_grad():
+            _, vgg_y = self.model_vgg(y)
+            _, vgg_y_hat_comp = self.model_vgg(y_hat_comp)
+            for p in range(len(vgg_y)):
+                loss_perceptual += F.l1_loss(vgg_y_hat_comp[p], vgg_y[p])
+            loss_perceptual /= len(vgg_y)
+
+        # Loss 6: Style
+        loss_style = 0
+        for p in range(len(vgg_y)):
+            B, C, H, W = vgg_y[p].size()
+            G_y = torch.mm(vgg_y[p].view(B * C, H * W), vgg_y[p].view(B * C, H * W).t())
+            G_y_comp = torch.mm(vgg_y_hat_comp[p].view(B * C, H * W), vgg_y_hat_comp[p].view(B * C, H * W).t())
+            loss_style += F.l1_loss(G_y_comp / (B * C * H * W), G_y / (B * C * H * W))
+        loss_style /= len(vgg_y)
+
+        # Loss 7: Smoothing Checkerboard Effect
+        loss_smoothing = 0
+
+        # Return combination of the losses
+        return 2 * loss_alignment + 10 * loss_vh + 20 * loss_nvh + 6 * loss_nh + 0.01 * loss_perceptual + \
+               24 * loss_style + 0.1 * loss_smoothing
 
     def test(self):
         # Set model to evaluation mode
@@ -60,11 +155,13 @@ class CopyPasteRunner(skeltorch.Runner):
                 # Iterate over all the frames of the video
                 for f in index:
                     # Obtain a list containing the references frames of the current target frame
-                    ridx = CopyPasteRunner.get_reference_frame_indexes(f, it_data[0].size(2))
+                    reference_frames = CopyPasteRunner.get_reference_frame_indexes(f, it_data[0].size(2))
 
                     # Replace input_frames and input_masks with previous predictions to improve quality
                     with torch.no_grad():
-                        input_frames[:, :, f] = self.model(input_frames, input_masks, it_target, f, ridx)
+                        input_frames[:, :, f], _, _, _ = self.model(
+                            input_frames, input_masks, it_target, f, reference_frames
+                        )
                         input_masks[:, :, f] = 0
 
                     # Obtain an estimation of the inpainted frame f

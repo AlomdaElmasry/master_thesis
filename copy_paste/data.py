@@ -1,83 +1,66 @@
 import skeltorch
-from datasets.framed_dataset import FramedDataset
-from datasets.masked_dataset import MaskedDataset
-from datasets.transforms import Resize, Dilatate, Binarize
+from datasets.sequence_dataset import SequencesDataset
+from datasets.masks_dataset import MasksDataset
 import os.path
 import torch.utils.data
-import torchvision
-import cv2
 
 
 class CopyPasteData(skeltorch.Data):
-    datasets: dict
-    loaders: dict
-    frame_transforms: torchvision.transforms.Compose
-    mask_transforms: torchvision.transforms.Compose
+    dataset_paths = {'davis-2017': 'DAVIS-2017', 'youtube-vos': 'YouTubeVOS', 'coco': 'CoCo'}
 
-    def create(self):
+    def create(self, data_path):
         pass
 
-    def load(self, data_file_path: str):
-        super().load(data_file_path)
-        self.load_transforms()
-        self.load_datasets()
-        self.load_loaders()
-
-    def load_transforms(self):
-        self.frame_transforms = torchvision.transforms.Compose([Resize(size=(240, 480), method=cv2.INTER_LINEAR)])
-        self.mask_transforms = torchvision.transforms.Compose([Binarize(),
-                                                               Resize(size=(240, 480), method=cv2.INTER_NEAREST),
-                                                               Dilatate(filter_size=(3, 3), iterations=4)])
-
-    def _get_dataset_path(self, dataset_name):
-        if dataset_name == 'davis-2017':
-            return os.path.join(self.execution.args['data_path'], 'DAVIS-2017')
-        elif dataset_name == 'youtube-vos':
-            return os.path.join(self.execution.args['data_path'], 'YouTubeVOS')
-        else:
-            return None
-
-    def load_datasets(self):
-        dataset_name = self.configuration.get('data', 'dataset')
-        dataset_folder = self._get_dataset_path(dataset_name)
-        n_frames = -1 if self.execution.command in ['test', 'test_alignment'] else 5
-        train_dataset = FramedDataset(
-            dataset_name=dataset_name,
-            dataset_folder=dataset_folder,
-            split='train',
-            n_frames=n_frames,
-            gt_transforms=self.frame_transforms,
-            mask_transforms=self.mask_transforms,
-            device=self.execution.device
+    def load_datasets(self, data_path, device):
+        masks_dataset = MasksDataset(
+            dataset_folder=os.path.join(data_path, self.dataset_paths[self.configuration.get('data', 'masks_dataset')]),
+            device=device
         )
-        validation_dataset = FramedDataset(
-            dataset_name=dataset_name,
-            dataset_folder=dataset_folder,
+        self.datasets['train'] = SequencesDataset(
+            dataset_name=self.configuration.get('data', 'train_dataset'),
+            dataset_folder=os.path.join(data_path, self.dataset_paths[self.configuration.get('data', 'train_dataset')]),
             split='train',
-            n_frames=n_frames,
-            gt_transforms=self.frame_transforms,
-            mask_transforms=self.mask_transforms,
-            device=self.execution.device
+            image_size=tuple(self.configuration.get('data', 'train_size')),
+            frames_n=self.configuration.get('data', 'frames_n'),
+            frames_spacing=self.configuration.get('data', 'frames_spacing'),
+            dilatation_filter_size=tuple(self.configuration.get('data', 'dilatation_filter_size')),
+            dilatation_iterations=self.configuration.get('data', 'dilatation_iterations'),
+            logger=self.logger,
+            masks_dataset=masks_dataset,
+            device=device
         )
-        test_dataset = FramedDataset(
-            dataset_name=dataset_name,
-            dataset_folder=dataset_folder,
+        self.datasets['validation'] = SequencesDataset(
+            dataset_name=self.configuration.get('data', 'train_dataset'),
+            dataset_folder=os.path.join(data_path, self.dataset_paths[self.configuration.get('data', 'train_dataset')]),
+            split='validation',
+            image_size=tuple(self.configuration.get('data', 'train_size')),
+            frames_n=self.configuration.get('data', 'frames_n'),
+            frames_spacing=self.configuration.get('data', 'frames_spacing'),
+            dilatation_filter_size=tuple(self.configuration.get('data', 'dilatation_filter_size')),
+            dilatation_iterations=self.configuration.get('data', 'dilatation_iterations'),
+            logger=self.logger,
+            masks_dataset=masks_dataset,
+            device=device
+        )
+        self.datasets['test'] = SequencesDataset(
+            dataset_name=self.configuration.get('data', 'test_dataset'),
+            dataset_folder=os.path.join(data_path, self.dataset_paths[self.configuration.get('data', 'test_dataset')]),
             split='train',
-            n_frames=n_frames,
-            gt_transforms=self.frame_transforms,
-            mask_transforms=self.mask_transforms,
-            device=self.execution.device
+            image_size=tuple(self.configuration.get('data', 'test_size')),
+            frames_n=-1,
+            frames_spacing=None,
+            dilatation_filter_size=tuple(self.configuration.get('data', 'dilatation_filter_size')),
+            dilatation_iterations=self.configuration.get('data', 'dilatation_iterations'),
+            logger=self.logger,
+            masks_dataset=None,
+            device=device
         )
-        self.datasets = {
-            'train': MaskedDataset(train_dataset, None),
-            'validation': MaskedDataset(validation_dataset, None),
-            'test': MaskedDataset(test_dataset, None)
-        }
 
-    def load_loaders(self):
-        batch_size = 1 if self.execution.command in ['test', 'test_alignment'] else 8
-        self.loaders = {
-            'train': torch.utils.data.DataLoader(self.datasets['train'], batch_size=batch_size),
-            'validation': torch.utils.data.DataLoader(self.datasets['validation'], batch_size=batch_size),
-            'test': torch.utils.data.DataLoader(self.datasets['test'], batch_size=batch_size)
-        }
+    def load_loaders(self, data_path, device):
+        self.loaders['train'] = torch.utils.data.DataLoader(
+            self.datasets['train'], shuffle=True, batch_size=self.configuration.get('training', 'batch_size')
+        )
+        self.loaders['validation'] = torch.utils.data.DataLoader(
+            self.datasets['validation'], shuffle=True, batch_size=self.configuration.get('training', 'batch_size')
+        )
+        self.loaders['test'] = torch.utils.data.DataLoader(self.datasets['test'], batch_size=1)

@@ -6,13 +6,18 @@ import torch.nn.functional as F
 import math
 import numpy as np
 import utils
+import random
 
 
-class COCOMasks(torch.utils.data.Dataset):
+class MasksDataset(torch.utils.data.Dataset):
+    dataset_folder = None
+    device = None
 
-    def __init__(self, data_folder, json_filename='instances_train2017.json'):
+    def __init__(self, dataset_folder, device=torch.device('cpu')):
+        self.dataset_folder = dataset_folder
+        self.device = device
         self.emulator = utils.MovementSimulator()
-        self.json_path = os.path.join(data_folder, json_filename)
+        self.json_path = os.path.join(dataset_folder, 'instances_train2017.json')
         self.coco = pycocotools.coco.COCO(self.json_path)
         self.masks_ids = self.coco.getAnnIds(iscrowd=False)
 
@@ -37,13 +42,21 @@ class COCOMasks(torch.utils.data.Dataset):
         # Step 3: cut if required and return
         return frame[0, :, :size[0], :size[1]]
 
+    def _resize_frame_simple(self, frame, size):
+        return F.interpolate(frame.unsqueeze(0), size=size).squeeze(0)
+
     def __getitem__(self, item):
         raise NotImplementedError
 
-    def get_item(self, item, size, n):
-        mask = torch.from_numpy(self.coco.annToMask(self.coco.loadAnns(self.masks_ids[item])[0]).astype(np.float))
-        frame = self._resize_frame(mask.unsqueeze(0), size)
-        return self.emulator.simulate_movement(frame, n - 1)
+    def get_random_item(self, size, n):
+        if True:
+            item = self._get_random_item()
+            mask = torch.from_numpy(self.coco.annToMask(self.coco.loadAnns(self.masks_ids[item])[0]).astype(np.float32))
+            frames = self.emulator.simulate_movement(self._resize_frame_simple(mask.unsqueeze(0), size), n)
+            return torch.as_tensor((frames > 0.5), dtype=torch.float32, device=self.device)
 
     def __len__(self):
         return len(self.masks_ids)
+
+    def _get_random_item(self):
+        return random.randint(0, len(self.masks_ids))

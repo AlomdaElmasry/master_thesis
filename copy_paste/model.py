@@ -4,6 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
 
+
 class Conv2d(nn.Module):
     def __init__(self, in_ch, out_ch, kernel_size=3, stride=1, padding=1, D=1, activation=nn.ReLU()):
         super(Conv2d, self).__init__()
@@ -261,8 +262,10 @@ class CPNet(nn.Module):
 
     def align_encode(self, frames, holes):
 
+        # Get important parameters
         batch_size, _, num_frames, height, width = frames.size()
-        # padding
+
+        # Add padding to everything
         (frames, holes), pad = pad_divide_by([frames, holes], 8, (frames.size()[3], frames.size()[4]))
 
         feat_ = []
@@ -294,45 +297,62 @@ class CPNet(nn.Module):
             theta_rt = self.A_Regressor(rfeats[:, :, target_index], rfeats[:, :, r])
             grid_rt = F.affine_grid(theta_rt, (B, C, H, W))
 
-            # Align Frame, Mask and GT
+            # Align Masked Frame
             aligned_r_.append(F.grid_sample(frames[:, :, r], grid_rt))
 
+            # Align Mask
             aligned_v = F.grid_sample(1 - masks[:, :, r], grid_rt)
             aligned_v = (aligned_v > 0.5).float()
             rvmap_.append(aligned_v)
 
+            # Align GT
             aligned_gts.append(F.grid_sample(gts[:, :, r], grid_rt))
 
         # Return stacked GTs
         return torch.stack(aligned_r_, dim=2), torch.stack(rvmap_, dim=2), torch.stack(aligned_gts, dim=2)
 
     def copy_and_paste(self, target_frame, target_mask, aligned_frames, aligned_masks):
-        # Get Copy and Paste features
+        # Get important parameters
+        B, C, H, W = target_frame.size()  # B C H W
+
+        # Get c_features of everything
         cfeats = [self.Encoder(target_frame, target_mask)]
         for f in range(aligned_frames.size(2)):
             cfeats.append(self.Encoder(aligned_frames[:, :, f], aligned_masks[:, :, f]))
         cfeats = torch.stack(cfeats, dim=2)
+
+        # Apply Content-Matching Module
         p_in, c_mask = self.CM_Module(cfeats, 1 - target_mask, aligned_masks)
-        return self.Decoder(p_in)
+
+        # Upscale c_mask to match the size of the mask
+        c_mask = (F.upsample(c_mask, size=(H, W), mode='bilinear', align_corners=False)).detach()
+
+        # Return both inpainted frame y_hat and c_mask
+        return self.Decoder(p_in), c_mask
 
     def forward(self, frames, masks, gts, target_index, reference_indexes):
 
         # Get frame, mask an GT associated to the target index
-        target_frame = frames[:, :, target_index]
-        target_mask = masks[:, :, target_index]
-        target_gt = gts[:, :, target_index]
+        x_t = frames[:, :, target_index]
+        m_t = masks[:, :, target_index]
+        y_t = gts[:, :, target_index]
 
         # Step 1: Align Auxiliar Frames
         aligned_frames, aligned_masks, _ = self.align(frames, masks, gts, target_index, reference_indexes)
 
         # Step 2: Copy and Paste
-        predicted_target = self.copy_and_paste(
-            target_frame=target_frame,
-            target_mask=target_mask,
+        y_hat, c_mask = self.copy_and_paste(
+            target_frame=x_t,
+            target_mask=m_t,
             aligned_frames=aligned_frames,
             aligned_masks=aligned_masks
         )
 
+        # Clip the output to be between [0, 1]
+        y_hat = torch.clamp(y_hat, 0, 1)
+
         # Combine prediction with GT of the frame. Limit the output range [0, 1].
-        inpainted_frame = predicted_target * target_mask + target_gt * (1. - target_mask)
-        return torch.clamp(inpainted_frame, 0, 1)
+        y_hat_comp = y_hat * m_t + y_t * (1 - m_t)
+
+        # Return y_hat_comp, y_hat, c_mask, (aligned_frames, aligned_masks)
+        return y_hat, y_hat_comp, c_mask, (aligned_frames, aligned_masks)
