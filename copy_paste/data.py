@@ -3,6 +3,7 @@ import utils
 from datasets.sequence_dataset import SequencesDataset
 from datasets.masks_dataset import MasksDataset
 import os.path
+import random
 import torch.utils.data
 
 
@@ -57,15 +58,24 @@ class CopyPasteData(skeltorch.Data):
         )
 
     def load_loaders(self, data_path, num_workers):
+        self.regenerate_loaders(num_workers)
+
+    def regenerate_loaders(self, num_workers):
+        train_max_items = self.configuration.get('training', 'train_max_iterations') * \
+                          self.configuration.get('training', 'batch_size')
+        validation_max_items = self.configuration.get('training', 'validation_max_iterations') * \
+                               self.configuration.get('training', 'batch_size')
+        train_indexes = random.sample(list(range(len(self.datasets['train']))), train_max_items)
+        validation_indexes = random.sample(list(range(len(self.datasets['validation']))), validation_max_items)
         self.loaders['train'] = torch.utils.data.DataLoader(
-            self.datasets['train'],
-            shuffle=True,
+            dataset=self.datasets['train'],
+            sampler=torch.utils.data.SubsetRandomSampler(indices=train_indexes),
             batch_size=self.configuration.get('training', 'batch_size'),
             num_workers=num_workers
         )
         self.loaders['validation'] = torch.utils.data.DataLoader(
             dataset=self.datasets['validation'],
-            shuffle=True,
+            sampler=torch.utils.data.SubsetRandomSampler(indices=validation_indexes),
             batch_size=self.configuration.get('training', 'batch_size'),
             num_workers=num_workers
         )

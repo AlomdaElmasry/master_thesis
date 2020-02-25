@@ -43,12 +43,10 @@ class CopyPasteRunner(skeltorch.Runner):
         # Compute loss and return
         return self.compute_loss(y[:, :, t], y_hat, y_hat_comp, x[:, :, t], x_rt, visibility_maps, m[:, :, t], c_mask)
 
-    def train_iteration_log(self, e_train_losses, log_period, device):
-        super().train_iteration_log(e_train_losses, log_period, device)
-        if self.counters['train_it'] % (log_period * 10) == 0:
-            self._generate_random_images_tbx(device)
+    def train_after_epoch_tasks(self, device):
+        # Tasks of Skeltorch
+        super().train_after_epoch_tasks(device)
 
-    def _generate_random_images_tbx(self, device):
         # Create provisional DataLoader with the randomly selected samples and select 5 items
         loader = torch.utils.data.DataLoader(self.experiment.data.datasets['train'], shuffle=True, batch_size=5)
         (x, m), y, _ = next(iter(loader))
