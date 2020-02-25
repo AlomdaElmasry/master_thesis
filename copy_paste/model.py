@@ -69,7 +69,7 @@ class A_Encoder(nn.Module):
     def forward(self, in_f, in_v):
         f = (in_f - self.mean) / self.std
         x = torch.cat([f, in_v], dim=1)
-        x = F.upsample(x, size=(224, 224), mode='bilinear', align_corners=False)
+        x = F.interpolate(x, size=(224, 224), mode='bilinear')
         x = self.conv12(x)
         x = self.conv2(x)
         x = self.conv23(x)
@@ -175,10 +175,10 @@ class Decoder(nn.Module):
         x = self.conv3c(x)
         x = self.conv3b(x)
         x = self.conv3a(x)
-        x = F.upsample(x, scale_factor=2, mode='nearest')  # 2
+        x = F.interpolate(x, scale_factor=2, mode='nearest')  # 2
         x = self.conv32(x)
         x = self.conv2(x)
-        x = F.upsample(x, scale_factor=2, mode='nearest')  # 2
+        x = F.interpolate(x, scale_factor=2, mode='nearest')  # 2
         x = self.conv21(x)
 
         p = (x * self.std) + self.mean
@@ -214,9 +214,9 @@ class CM_Module(nn.Module):
         # gs: cosine similarity
         # c_m: c_match
         gs_, vmap_ = [], []
-        tvmap_t = (F.upsample(tvmap, size=(H, W), mode='bilinear', align_corners=False) > 0.5).float()
+        tvmap_t = (F.interpolate(tvmap, size=(H, W), mode='bilinear') > 0.5).float()
         for r in range(T):
-            rvmap_t = (F.upsample(rvmaps[:, :, r], size=(H, W), mode='bilinear', align_corners=False) > 0.5).float()
+            rvmap_t = (F.interpolate(rvmaps[:, :, r], size=(H, W), mode='bilinear') > 0.5).float()
             # vmap: visibility map
             vmap = tvmap_t * rvmap_t
             gs = (vmap * t_feat * r_feats[:, :, r]).sum(-1).sum(-1).sum(-1)
@@ -325,7 +325,7 @@ class CPNet(nn.Module):
         p_in, c_mask = self.CM_Module(cfeats, 1 - target_mask, aligned_masks)
 
         # Upscale c_mask to match the size of the mask
-        c_mask = (F.upsample(c_mask, size=(H, W), mode='bilinear', align_corners=False)).detach()
+        c_mask = (F.interpolate(c_mask, size=(H, W), mode='bilinear')).detach()
 
         # Return both inpainted frame y_hat and c_mask
         return self.Decoder(p_in), c_mask

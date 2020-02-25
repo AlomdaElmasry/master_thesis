@@ -1,4 +1,5 @@
 import skeltorch
+import utils
 from datasets.sequence_dataset import SequencesDataset
 from datasets.masks_dataset import MasksDataset
 import os.path
@@ -6,15 +7,18 @@ import torch.utils.data
 
 
 class CopyPasteData(skeltorch.Data):
-    dataset_paths = {'davis-2017': 'DAVIS-2017', 'youtube-vos': 'YouTubeVOS', 'coco': 'CoCo'}
+    dataset_paths = {'davis-2017': 'DAVIS-2017', 'got-10k': 'GOT10k', 'youtube-vos': 'YouTubeVOS', 'coco': 'CoCo'}
 
     def create(self, data_path):
         pass
 
     def load_datasets(self, data_path, device):
         masks_dataset = MasksDataset(
+            dataset_name=self.configuration.get('data', 'masks_dataset'),
             dataset_folder=os.path.join(data_path, self.dataset_paths[self.configuration.get('data', 'masks_dataset')]),
-            device=device
+            split='train',
+            device=device,
+            emulator=utils.MovementSimulator()
         )
         self.datasets['train'] = SequencesDataset(
             dataset_name=self.configuration.get('data', 'train_dataset'),
@@ -45,7 +49,7 @@ class CopyPasteData(skeltorch.Data):
         self.datasets['test'] = SequencesDataset(
             dataset_name=self.configuration.get('data', 'test_dataset'),
             dataset_folder=os.path.join(data_path, self.dataset_paths[self.configuration.get('data', 'test_dataset')]),
-            split='train',
+            split='test',
             image_size=tuple(self.configuration.get('data', 'test_size')),
             frames_n=-1,
             frames_spacing=None,

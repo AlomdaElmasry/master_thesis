@@ -1,28 +1,72 @@
 import cv2
 import numpy as np
 import random
+import torch
+import torch.nn.functional as F
 
 
 class ImageTransforms:
 
     @staticmethod
-    def resize(image, size, method=cv2.INTER_LINEAR):
-        image = cv2.resize(image, dsize=(size[1], size[0]), interpolation=method)
-        return np.expand_dims(image, 2) if len(image.shape) == 2 else image
+    def resize(image, size, mode='bilinear'):
+        """Resize an image using the the algorithm given in ``mode``.
+
+        Args:
+            image (torch.FloatTensor): tensor of size (C, H, W) containing the image quantized from [0, 1].
+            size (tuple): tuple containing the desired size in the form (H, W).
+            mode (str): mode used to resize the image. Same format as in ``torch.nn.functional.interpolate()``.
+
+        Returns:
+            torch.FloatTensor: resized image.
+        """
+        return F.interpolate(image.unsqueeze(0), size, mode=mode).squeeze(0)
 
     @staticmethod
     def crop(image, size, crop_position=None):
+        """Crop a patch from the image.
+
+        Args:
+            image (torch.FloatTensor): tensor of size (C, H, W) containing the image.
+            size (tuple): tuple containing the desired size in the form (H, W).
+            crop_position (tuple): coordinates of the top-left pixel from where to cut the patch. If not set, it is
+            generated randomly.
+
+        Returns:
+            torch.FloatTensor: patch of the image.
+        """
         if crop_position is None:
-            crop_position = (random.randint(0, image.shape[0] - size[0]), random.randint(0, image.shape[1] - size[1]))
-        return image[crop_position[0]:crop_position[0] + size[0], crop_position[1]:crop_position[1] + size[1], :], \
+            crop_position = (random.randint(0, image.size(1) - size[0]), random.randint(0, image.size(2) - size[1]))
+        return image[:, crop_position[0]:crop_position[0] + size[0], crop_position[1]:crop_position[1] + size[1]], \
                crop_position
 
     @staticmethod
     def binarize(image, threshold=0.5):
-        return (image > threshold).astype(np.uint8)
+        """Binarizes an image using ``threshold``.
+
+        Args:
+            image (torch.FloatTensor): tensor of size (C, H, W) containing the image.
+            threshold (float): value used to binarize the image.
+
+        Returns:
+            torch.FloatTensor: binary image containing only 0's and 1s.
+        """
+        return (torch.sum(image, dim=0) > threshold).type(torch.float32)
 
     @staticmethod
     def dilatate(image, filter_size, iterations):
-        image = cv2.dilate(image, cv2.getStructuringElement(cv2.MORPH_CROSS, filter_size), iterations=iterations) \
-            .astype(np.float32)
-        return np.expand_dims(image, 2) if len(image.shape) == 2 else image
+        """Dilatates an image with a filter of size ``filter_size``.
+
+        Args:
+            image (torch.FloatTensor): tensor of size (C, H, W) containing the image.
+            filter_size (tuple): size of the filter in the form (H,W).
+            iterations (integer): number of times to apply the filter.
+
+        Returns:
+            torch.FloatTensor: dilatated image.
+        """
+        image = cv2.dilate(
+            image.permute(1, 2, 0).numpy(),
+            cv2.getStructuringElement(cv2.MORPH_CROSS, filter_size),
+            iterations=iterations
+        ).astype(np.float32)
+        return torch.from_numpy(image).permute(2, 0, 1)

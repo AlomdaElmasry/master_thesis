@@ -1,6 +1,7 @@
 from skimage.transform import AffineTransform, warp
 import numpy as np
 import torch
+import matplotlib.pyplot as plt
 
 
 class MovementSimulator:
@@ -17,10 +18,19 @@ class MovementSimulator:
         return AffineTransform(translation=(tx, ty), scale=(sx, sy), rotation=rot).inverse
 
     def simulate_movement(self, frame, n):
-        frames = torch.zeros((1, n, frame.size(1), frame.size(2)), dtype=torch.float32)
+        """Simulates a moving sequence of ``n` frames using ``frame`` as starting point.
+
+        Args:
+            frame (torch.FloatTensor): tensor of size (C,H,W) containing the first frame.
+            n (int): number of frames of the sequence.
+
+        Returns:
+            torch.FloatTensor: tensor of size (C,F,H,W) containing the moving sequence.
+        """
+        frames = torch.zeros((frame.size(0), n, frame.size(1), frame.size(2)), dtype=torch.float32)
         frames[:, 0] = frame
         for i in range(1, n):
             frames[:, i] = torch.from_numpy(
-                warp(frames[:, i - 1].numpy().squeeze(0), self._create_random_transformation())
-            )
+                warp(frames[:, i - 1].permute(1, 2, 0).numpy(), self._create_random_transformation())
+            ).permute(2, 0, 1)
         return frames

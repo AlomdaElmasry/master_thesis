@@ -6,63 +6,56 @@ from PIL import Image
 import os.path
 import utils
 import torch.nn.functional as F
-import matplotlib.pyplot as plt
 from vgg_16.model import get_pretrained_model
-import random
 import torch.utils.data
 
 
 class CopyPasteRunner(skeltorch.Runner):
     model_vgg = None
 
-    def init_model(self):
-        self.model = CPNet()
-        self.model_vgg = get_pretrained_model()
+    def init_model(self, device):
+        self.model = CPNet().to(device)
+        self.model_vgg = get_pretrained_model().to(device)
 
-    def init_optimizer(self):
+    def init_optimizer(self, device):
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=1e-4)
 
     def train_step(self, it_data):
         # Decompose iteration data
-        (it_data_masked, it_data_masks), it_data_gt, it_data_info = it_data
+        (x, m), y, _ = it_data
 
         # Get target and reference frames
-        target_frame = it_data_masked.size(2) // 2
-        reference_frames = list(range(it_data_masked.size(2)))
-        reference_frames.pop(target_frame)
+        t = x.size(2) // 2
+        r_list = list(range(x.size(2)))
+        r_list.pop(t)
 
         # Propagate through the model
-        y_hat, y_hat_comp, c_mask, (aligned_frames, aligned_masks) = self.model(
-            it_data_masked, it_data_masks, it_data_gt, target_frame, reference_frames
-        )
+        y_hat, y_hat_comp, c_mask, (x_rt, m_rt) = self.model(x, m, y, t, r_list)
 
         # Get visibility map of aligned frames and target frame
-        visibility_maps = (1 - it_data_masks[:, :, target_frame].unsqueeze(2)) * aligned_masks
+        visibility_maps = (1 - m[:, :, t].unsqueeze(2)) * m_rt
 
         # Compute loss and return
-        return self.compute_loss(y=it_data_gt[:, :, target_frame], y_hat=y_hat, y_hat_comp=y_hat_comp,
-                                 x_t=it_data_masked[:, :, target_frame], x_rt=aligned_frames, c_mask=c_mask,
-                                 m=it_data_masks[:, :, target_frame], v=visibility_maps)
+        return self.compute_loss(y[:, :, t], y_hat, y_hat_comp, x[:, :, t], x_rt, visibility_maps, m[:, :, t], c_mask)
 
     def train_after_epoch_tasks(self):
         # Create provisional DataLoader with the randomly selected samples and select 5 items
         loader = torch.utils.data.DataLoader(self.experiment.data.datasets['train'], shuffle=True, batch_size=5)
-
-        # Get the data
-        (it_data_masked, it_data_masks), it_data_gt, it_data_info = next(iter(loader))
+        (x, m), y, _ = next(iter(loader))
 
         # Get target and reference frames
-        target_frame = it_data_masked.size(2) // 2
-        reference_frames = list(range(it_data_masked.size(2)))
-        reference_frames.pop(target_frame)
+        t = x.size(2) // 2
+        r_list = list(range(x.size(2)))
+        r_list.pop(t)
 
         # Propagate the data through the model
         with torch.no_grad():
-            y_hat, y_hat_comp, _, _ = self.model(
-                it_data_masked, it_data_masks, it_data_gt, target_frame, reference_frames
-            )
+            y_hat, y_hat_comp, _, _ = self.model(x, m, y, t, r_list)
 
         # Log each image of the batch in TensorBoard
+        self.experiment.tbx.add_images('x-t', x[:, :, t], global_step=self.counters['epoch'])
+        self.experiment.tbx.add_images('m-t', m[:, :, t], global_step=self.counters['epoch'])
+        self.experiment.tbx.add_images('y', y[:, :, t], global_step=self.counters['epoch'])
         self.experiment.tbx.add_images('y-hat', y_hat, global_step=self.counters['epoch'])
         self.experiment.tbx.add_images('y-hat-comp', y_hat_comp, global_step=self.counters['epoch'])
         self.experiment.tbx.flush()
@@ -87,10 +80,6 @@ class CopyPasteRunner(skeltorch.Runner):
         nh_input = (1 - m) * c_mask * y_hat
         nh_target = (1 - m) * c_mask * y
         loss_nh = F.l1_loss(nh_input, nh_target)
-
-        # Verify that the VGG model is in the same device
-        if self.model_vgg.device != self.model.device:
-            self.model_vgg = self.model_vgg.to(self.model.device)
 
         # Loss 5: Perceptual
         loss_perceptual = 0

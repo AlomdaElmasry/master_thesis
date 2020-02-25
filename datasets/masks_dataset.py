@@ -6,57 +6,80 @@ import torch.nn.functional as F
 import math
 import numpy as np
 import utils
+import glob
+from PIL import Image
 import random
 
 
 class MasksDataset(torch.utils.data.Dataset):
+    dataset_name = None
     dataset_folder = None
+    split = None
+    emulator = None
     device = None
 
-    def __init__(self, dataset_folder, device=torch.device('cpu')):
+    def __init__(self, dataset_name, dataset_folder, split, emulator=None, device=torch.device('cpu')):
+        self.dataset_name = dataset_name
         self.dataset_folder = dataset_folder
+        self.split = split
+        self.emulator = emulator
         self.device = device
-        self.emulator = utils.MovementSimulator()
-        self.json_path = os.path.join(dataset_folder, 'instances_train2017.json')
-        self.coco = pycocotools.coco.COCO(self.json_path)
-        self.masks_ids = self.coco.getAnnIds(iscrowd=False)
+        self._load_paths()
 
-    def _resize_frame(self, frame, size):
-        """ Fits the image size of the dataset. Given an input of size (C,H,W):
-            1. Resizes the larger dimension to match the desired size.
-        """
-        # Get dimensions and create dim=0 representing the batch
-        _, H, W = frame.size()
-        frame = frame.unsqueeze(0)
+    def _validate_arguments(self):
+        if not os.path.exists(self.dataset_folder):
+            raise ValueError('Dataset folder {} does not exist.'.format(self.dataset_folder))
+        assert self.dataset_name in ['coco', 'youtube-vos']
+        assert self.split in ['train', 'validation', 'test']
+        assert not (self.dataset_name == 'coco' and self.emulator is None)
 
-        # Step 1: resize the larger dimension
-        new_H = size[0] if H > W else int(H * size[1] / W)
-        new_W = size[1] if W > H else int(W * size[0] / H)
-        frame = F.interpolate(frame, size=(new_H, new_W))
+    def _load_paths(self):
+        if self.dataset_name == 'coco':
+            self._load_paths_coco()
+        elif self.dataset_name == 'youtube-vos':
+            self._load_paths_youtube_vos()
 
-        # Step 2: pad with zeros if required
-        H_pad = size[0] - frame.size(2) if size[0] > frame.size(2) else 0
-        W_pad = size[1] - frame.size(3) if size[1] > frame.size(3) else 0
-        frame = F.pad(frame, (math.ceil(W_pad / 2), math.ceil(W_pad / 2), math.ceil(H_pad / 2), math.ceil(H_pad / 2)))
+    def _load_paths_coco(self):
+        self.coco = pycocotools.coco.COCO(os.path.join(self.dataset_folder, 'instances_train2017.json'))
+        self.sequences_masks = self.coco.getAnnIds(iscrowd=False)
 
-        # Step 3: cut if required and return
-        return frame[0, :, :size[0], :size[1]]
-
-    def _resize_frame_simple(self, frame, size):
-        return F.interpolate(frame.unsqueeze(0), size=size).squeeze(0)
+    def _load_paths_youtube_vos(self):
+        split_folder = 'train' if self.split == 'train' else 'valid' if self.split == 'validation' else 'test'
+        annotations_folder = os.path.join(self.dataset_folder, split_folder, 'Annotations')
+        self.sequences_names = os.listdir(annotations_folder)
+        self.sequences_masks = [
+            sorted(glob.glob(os.path.join(annotations_folder, sequence_name, '*.png')))
+            for sequence_name in self.sequences_names
+        ]
 
     def __getitem__(self, item):
         raise NotImplementedError
 
-    def get_random_item(self, size, n):
-        if True:
-            item = self._get_random_item()
-            mask = torch.from_numpy(self.coco.annToMask(self.coco.loadAnns(self.masks_ids[item])[0]).astype(np.float32))
-            frames = self.emulator.simulate_movement(self._resize_frame_simple(mask.unsqueeze(0), size), n)
-            return torch.as_tensor((frames > 0.5), dtype=torch.float32, device=self.device)
+    def get_random_item(self, n):
+        if self.dataset_name == 'coco':
+            return self._get_random_frames_coco(n)
+        elif self.dataset_name == 'youtube-vos':
+            return self._get_random_frames_youtube_vos(n)
+
+    def _get_random_frames_coco(self, n):
+        item = random.randint(0, len(self.sequences_masks))
+        mask = torch.from_numpy((np.array(
+            Image.fromarray(self.coco.annToMask(self.coco.loadAnns(self.sequences_masks[item])[0])).convert('RGB')
+        ).astype(np.float32))).permute(2, 0, 1)
+        return self.emulator.simulate_movement(mask, n).to(self.device)
+
+    def _get_random_frames_youtube_vos(self, n):
+        item = random.randint(0, len(self.sequences_masks))
+        if len(self.sequences_masks[item]) < n:
+            return self._get_random_frames_youtube_vos(n)
+        else:
+            random_start = random.randint(0, len(self.sequences_masks[item]) - n)
+            frames = []
+            for f in range(random_start, random_start + n):
+                frames.append(torch.from_numpy(
+                    (np.array(Image.open(self.sequences_masks[item][f]).convert('RGB')) / 255).astype(np.float32)
+                ).permute(2, 0, 1))
+            return torch.stack(frames, dim=1).to(self.device)
 
     def __len__(self):
-        return len(self.masks_ids)
-
-    def _get_random_item(self):
-        return random.randint(0, len(self.masks_ids))
+        return len(self.sequences_masks)
