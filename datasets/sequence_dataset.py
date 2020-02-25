@@ -99,13 +99,11 @@ class SequencesDataset(torch.utils.data.Dataset):
             frames_indexes = np.clip(frames_indexes, 0, len(self.sequences_gts[sequence_index]) - 1)
 
         # Create torch.Tensor for the GTs
-        gts = torch.zeros((3, len(frames_indexes), self.image_size[0], self.image_size[1]), dtype=torch.float32,
-                          device=self.device)
+        gts = torch.zeros((3, len(frames_indexes), self.image_size[0], self.image_size[1]), dtype=torch.float32)
 
         # Get the mask from the mask generator or create torch.Tensor to be filled
         if self.masks_dataset is None:
-            masks = torch.zeros((1, len(frames_indexes), self.image_size[0], self.image_size[1]), dtype=torch.float32,
-                                device=self.device)
+            masks = torch.zeros((1, len(frames_indexes), self.image_size[0], self.image_size[1]), dtype=torch.float32)
         else:
             masks = self.masks_dataset.get_random_item(len(frames_indexes))
             masks = torch.stack([self._transform_mask(masks[:, m]) for m in range(masks.size(1))], dim=0).unsqueeze(0)
@@ -130,7 +128,8 @@ class SequencesDataset(torch.utils.data.Dataset):
         masked_sequences = (1 - masks) * gts + (masks.permute(3, 2, 1, 0) * self.channels_mean).permute(3, 2, 1, 0)
 
         # Return framed sequence as (C,F,H,W)
-        return (masked_sequences, masks), gts, self.sequences_names[sequence_index]
+        return (masked_sequences.to(self.device), masks.to(self.device)), gts.to(self.device), \
+               self.sequences_names[sequence_index]
 
     def __len__(self):
         return len(self.sequences_gts) if self.frames_n == -1 else self.sequences_limits[-1]
