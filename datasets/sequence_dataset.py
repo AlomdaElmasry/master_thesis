@@ -124,12 +124,15 @@ class SequencesDataset(torch.utils.data.Dataset):
                                                         .convert('RGB')) / 255).astype(np.float32)).permute(2, 0, 1)
                 masks[:, i] = self._transform_mask(frame_mask)
 
+        # Move everything to the appropriate device
+        gts = gts.to(self.device)
+        masks = masks.to(self.device)
+
         # Compute masked data
         masked_sequences = (1 - masks) * gts + (masks.permute(3, 2, 1, 0) * self.channels_mean).permute(3, 2, 1, 0)
 
         # Return framed sequence as (C,F,H,W)
-        return (masked_sequences.to(self.device), masks.to(self.device)), gts.to(self.device), \
-               self.sequences_names[sequence_index]
+        return (masked_sequences, masks), gts, self.sequences_names[sequence_index]
 
     def __len__(self):
         return len(self.sequences_gts) if self.frames_n == -1 else self.sequences_limits[-1]

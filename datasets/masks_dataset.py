@@ -16,14 +16,12 @@ class MasksDataset(torch.utils.data.Dataset):
     dataset_folder = None
     split = None
     emulator = None
-    device = None
 
-    def __init__(self, dataset_name, dataset_folder, split, emulator=None, device=torch.device('cpu')):
+    def __init__(self, dataset_name, dataset_folder, split, emulator=None):
         self.dataset_name = dataset_name
         self.dataset_folder = dataset_folder
         self.split = split
         self.emulator = emulator
-        self.device = device
         self._load_paths()
 
     def _validate_arguments(self):
@@ -66,7 +64,7 @@ class MasksDataset(torch.utils.data.Dataset):
         mask = torch.from_numpy((np.array(
             Image.fromarray(self.coco.annToMask(self.coco.loadAnns(self.sequences_masks[item])[0])).convert('RGB')
         ).astype(np.float32))).permute(2, 0, 1)
-        return self.emulator.simulate_movement(mask, n).to(self.device)
+        return self.emulator.simulate_movement(mask, n)
 
     def _get_random_frames_youtube_vos(self, n):
         item = random.randint(0, len(self.sequences_masks))
@@ -79,7 +77,7 @@ class MasksDataset(torch.utils.data.Dataset):
                 frames.append(torch.from_numpy(
                     (np.array(Image.open(self.sequences_masks[item][f]).convert('RGB')) / 255).astype(np.float32)
                 ).permute(2, 0, 1))
-            return torch.stack(frames, dim=1).to(self.device)
+            return torch.stack(frames, dim=1)
 
     def __len__(self):
         return len(self.sequences_masks)
