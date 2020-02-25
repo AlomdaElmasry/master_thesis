@@ -11,7 +11,7 @@
     "dilatation_iterations": 4
   },
   "training": {
-    "batch_size": 8,
+    "batch_size": 1,
     "train_max_iterations": 1000,
     "validation_max_iterations": 100,
     "lr": 1e-4

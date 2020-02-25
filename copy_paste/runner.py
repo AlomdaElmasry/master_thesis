@@ -44,8 +44,11 @@ class CopyPasteRunner(skeltorch.Runner):
         return self.compute_loss(y[:, :, t], y_hat, y_hat_comp, x[:, :, t], x_rt, visibility_maps, m[:, :, t], c_mask)
 
     def train_after_epoch_tasks(self, device):
-        # Tasks of Skeltorch
         super().train_after_epoch_tasks(device)
+        self.experiment.data.regenerate_loaders(self.experiment.data.loaders['train'].num_workers)
+        self._generate_random_samples(device)
+
+    def _generate_random_samples(self, device):
 
         # Create provisional DataLoader with the randomly selected samples and select 5 items
         loader = torch.utils.data.DataLoader(self.experiment.data.datasets['train'], shuffle=True, batch_size=5)
@@ -93,14 +96,16 @@ class CopyPasteRunner(skeltorch.Runner):
         nh_target = (1 - m) * c_mask * y
         loss_nh = F.l1_loss(nh_input, nh_target)
 
-        # Loss 5: Perceptual
-        loss_perceptual = 0
+        # User VGG-16 to compute features of both the estimation and the target
         with torch.no_grad():
             _, vgg_y = self.model_vgg(y)
             _, vgg_y_hat_comp = self.model_vgg(y_hat_comp)
-            for p in range(len(vgg_y)):
-                loss_perceptual += F.l1_loss(vgg_y_hat_comp[p], vgg_y[p])
-            loss_perceptual /= len(vgg_y)
+
+        # Loss 5: Perceptual
+        loss_perceptual = 0
+        for p in range(len(vgg_y)):
+            loss_perceptual += F.l1_loss(vgg_y_hat_comp[p], vgg_y[p])
+        loss_perceptual /= len(vgg_y)
 
         # Loss 6: Style
         loss_style = 0
