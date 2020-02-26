@@ -135,6 +135,9 @@ class CopyPasteRunner(skeltorch.Runner):
             (x, m), y, info = it_data
             batch_size, n_channels, n_frames, img_height, img_width = x.size()
 
+            # Move y to CUDA
+            y = y.cuda()
+
             # Create a matrix to store inpainted frames. Size (B, 2, C, F, H, W), where the 2 is due to double direction
             frames_inpainted = np.zeros((batch_size, 2, n_channels, n_frames, img_height, img_width), dtype=np.float32)
 
