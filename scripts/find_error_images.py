@@ -11,7 +11,7 @@ import concurrent.futures
 parser = argparse.ArgumentParser(description='Cleans invalid images')
 parser.add_argument('--data-path', required=True, help='Path where the images are stored')
 parser.add_argument('--formats', nargs='+', default=['jpg', 'jpeg', 'png'], help='Image formats to search in the path')
-parser.add_argument('--max-workers', default=10, help='Number of workers to use')
+parser.add_argument('--max-workers', type=int, default=10, help='Number of workers to use')
 args = parser.parse_args()
 
 # Generate the list of images to verify
@@ -35,6 +35,6 @@ def verify_image(image_path, bar, i):
         print('Image {} not valid. Removed.'.format(image_path))
 
 
-with concurrent.futures.ThreadPoolExecutor(max_workers=args.max_workers) as exec:
+with concurrent.futures.ThreadPoolExecutor(max_workers=args.max_workers) as executor:
     for i in range(len(images_paths)):
         exec.submit(verify_image, images_paths[i], bar, i)
