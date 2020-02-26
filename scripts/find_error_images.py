@@ -37,4 +37,4 @@ def verify_image(image_path, bar, i):
 
 with concurrent.futures.ThreadPoolExecutor(max_workers=args.max_workers) as executor:
     for i in range(len(images_paths)):
-        exec.submit(verify_image, images_paths[i], bar, i)
+        executor.submit(verify_image, images_paths[i], bar, i)
