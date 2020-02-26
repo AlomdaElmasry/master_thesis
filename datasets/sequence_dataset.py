@@ -18,7 +18,6 @@ class SequencesDataset(torch.utils.data.Dataset):
     dilatation_iterations = None
     logger = None
     masks_dataset = None
-    device = None
 
     sequences_gts = None
     sequences_masks = None
