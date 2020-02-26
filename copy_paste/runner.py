@@ -8,6 +8,7 @@ import utils
 import torch.nn.functional as F
 from vgg_16.model import get_pretrained_model
 import torch.utils.data
+import matplotlib.pyplot as plt
 
 
 class CopyPasteRunner(skeltorch.Runner):
@@ -123,55 +124,46 @@ class CopyPasteRunner(skeltorch.Runner):
         return 2 * loss_alignment + 10 * loss_vh + 20 * loss_nvh + 6 * loss_nh + 0.01 * loss_perceptual + \
                24 * loss_style + 0.1 * loss_smoothing
 
-    def test(self):
-        # Set model to evaluation mode
+    def test(self, epoch, save_as_video, device):
+        # Initialize the model and set it to eval() mode
+        self.init_model(device)
         self.model.eval()
 
-        # Iterate through the data of the loader
-        #    it_data[0] is (B, 3, F, H, W) and contains masked frames
-        #    it_data[1] is (B, 1, F, H, W) and contains masks
-        #    it_target contains ground truth frames
-        #    it_info contains the index of the video
-        for it_data, it_target, it_info in self.experiment.data.loaders['test']:
-
-            # Get relevant sizes of the iteration
-            B, C, F, H, W = it_data[0].size()
+        # Iterate over the data of the loader
+        for it_data in self.experiment.data.loaders['test']:
+            # Decompose iteration data and get relevant sizes
+            (x, m), y, info = it_data
+            batch_size, n_channels, n_frames, img_height, img_width = x.size()
 
             # Create a matrix to store inpainted frames. Size (B, 2, C, F, H, W), where the 2 is due to double direction
-            frames_inpainted = np.zeros((B, 2, C, F, H, W), dtype=np.float32)
+            frames_inpainted = np.zeros((batch_size, 2, n_channels, n_frames, img_height, img_width), dtype=np.float32)
 
             # Create a list containing the indexes of the frames
-            index = [f for f in range(it_data[0].size(2))]
-
-            # Move data to cpu for memory purposes
-            it_data[0] = it_data[0].cpu()
-            it_data[1] = it_data[1].cpu()
+            index = [f for f in range(n_frames)]
 
             # Use the model twice: forward (0) and backward (1)
-            for t in range(2):
+            for d in range(2):
                 # Create two aux variables to store input frames and masks in current direction
                 # Move to current device for memory purposes
-                input_frames = it_data[0].clone().to(self.execution.device)
-                input_masks = it_data[1].clone().to(self.execution.device)
+                x_copy = x.clone().to(device)
+                m_copy = m.clone().to(device)
 
                 # Reverse the indexes in backward pass
-                if t == 1:
+                if d == 1:
                     index.reverse()
 
                 # Iterate over all the frames of the video
-                for f in index:
+                for t in index:
                     # Obtain a list containing the references frames of the current target frame
-                    reference_frames = CopyPasteRunner.get_reference_frame_indexes(f, it_data[0].size(2))
+                    r_list = CopyPasteRunner.get_reference_frame_indexes(t, n_frames)
 
                     # Replace input_frames and input_masks with previous predictions to improve quality
                     with torch.no_grad():
-                        input_frames[:, :, f], _, _, _ = self.model(
-                            input_frames, input_masks, it_target, f, reference_frames
-                        )
-                        input_masks[:, :, f] = 0
+                        x_copy[:, :, t], _, _, _ = self.model(x_copy, m_copy, y, t, r_list)
+                        m_copy[:, :, t] = 0
 
                     # Obtain an estimation of the inpainted frame f
-                    frames_inpainted[:, t, :, f] = input_frames[:, :, f].detach().cpu().numpy()
+                    frames_inpainted[:, d, :, t] = x_copy[:, :, t].detach().cpu().numpy()
 
             # Create forward and backward factors and combine them.
             # Transpose frames_inpainted to be (B,F,H,W,C)
@@ -184,79 +176,86 @@ class CopyPasteRunner(skeltorch.Runner):
             frames_inpainted = (frames_inpainted * 255.).astype(np.uint8)
 
             # Iterate over batch items and create the result for each one
-            for b in range(frames_inpainted.shape[0]):
+            for b in range(batch_size):
 
                 # Save the result as frames or videos depending on the request
-                if self.execution.args['save_as_video']:
+                if save_as_video:
                     frames_to_video = utils.FramesToVideo(0, 10, None)
                     frames_to_video.add_sequence(frames_inpainted[b])
-                    frames_to_video.save(self.execution.args['data_output'], it_info[b])
+                    frames_to_video.save(os.path.join(
+                        self.experiment.paths['results'], 'test', 'epoch-{}'.format(self.counters['epoch'])), info[b][0]
+                    )
                 else:
-                    frames_path = os.path.join(self.execution.args['data_output'], it_info[b])
+                    frames_path = os.path.join(
+                        self.experiment.paths['results'], 'test', 'epoch-{}'.format(self.counters['epoch']), info[b][0]
+                    )
                     if not os.path.exists(frames_path):
                         os.makedirs(os.path.join(frames_path))
-                    for f in range(frames_inpainted.shape[1]):
-                        pil_img = Image.fromarray(frames_inpainted[b, f])
-                        pil_img.save(os.path.join(frames_path, '{}.jpg'.format(f)))
+                    for t in range(frames_inpainted.shape[1]):
+                        pil_img = Image.fromarray(frames_inpainted[b, t])
+                        pil_img.save(os.path.join(frames_path, '{}.jpg'.format(t)))
 
                 # Log progress
-                self.logger.info('Test generated as {} for video {}'.format(
-                    'video' if self.execution.args['save_as_video'] else 'frames', it_info[b]
+                self.logger.info('Epoch {} | Test generated as {} for sequence {}'.format(
+                    self.counters['epoch'], 'video' if save_as_video else 'frames', info[b]
                 ))
 
-    def test_alignment(self):
-        # Set model to evaluation mode
+    def test_alignment(self, epoch, save_as_video, device):
+        # Initialize the model and set it to eval() mode
+        self.init_model(device)
         self.model.eval()
 
-        # Iterate through the data of the loader
-        #    it_data is a tuple containing masked frames (pos=0) and masks (pos=1)
-        #    it_target contains the ground truth frames
-        #    it_info contains the index of the video
-        for it_data, it_target, it_info in self.experiment.data.loaders['test']:
+        # Iterate over the data of the loader
+        for it_data in self.experiment.data.loaders['test']:
+            (x, m), y, info = it_data
+            batch_size, n_channels, n_frames, img_height, img_width = x.size()
 
             # Set a frame index and obtain its reference frames
-            target_index = 0
-            reference_indexes = CopyPasteRunner.get_reference_frame_indexes(target_index, it_data[0].size(2))
+            t = 0
+            r_list = CopyPasteRunner.get_reference_frame_indexes(t, n_frames)
 
             # Obtained aligned frames (provisional)
-            _, _, aligned_gts = self.model.align(it_data[0], it_data[1], it_target, target_index, reference_indexes)
+            _, _, y_rt = self.model.align(x, m, y, t, r_list)
 
             # Create a numpy array of size (B,F,H,W,C)
-            aligned_gts = (aligned_gts.detach().cpu().permute(0, 2, 3, 4, 1).numpy() * 255).astype(np.uint8)
+            y_rt = (y_rt.detach().cpu().permute(0, 2, 3, 4, 1).numpy() * 255).astype(np.uint8)
 
             # Iterate over batch items and create the result for each one
-            for b in range(aligned_gts.shape[0]):
-
-                # Save the result as overlay frames or videos depending on the request
-                if self.execution.args['save_as_video']:
+            for b in range(batch_size):
+                if save_as_video:
                     frames_to_video = utils.FramesToVideo(0, 10, None)
-                    frames_to_video.add_sequence(aligned_gts[b])
-                    frames_to_video.save(self.execution.args['data_output'], it_info[b])
+                    frames_to_video.add_sequence(y_rt[b])
+                    frames_to_video.save(os.path.join(self.experiment.paths['results'], 'test_alignment', 'epoch-{}'
+                                                      .format(self.counters['epoch'])), info[b][0])
                 else:
-                    overlap_frames = utils.OverlapFrames(target_index, 50, 10)
-                    overlap_frames.add_sequence(aligned_gts[b])
-                    overlap_frames.save(self.execution.args['data_output'], it_info[b])
+                    overlap_frames = utils.OverlapFrames(t, 50, 10)
+                    overlap_frames.add_sequence(y_rt[b])
+                    overlap_frames.save(os.path.join(self.experiment.paths['results'], 'test_alignment', 'epoch-{}'
+                                                     .format(self.counters['epoch'])), info[b][0])
 
                 # Log progress
-                self.logger.info('Alignment test generated as {} for video {}'.format(
-                    'video' if self.execution.args['save_as_video'] else 'image overlay', it_info[b]
+                self.logger.info('Epoch {} | Alignment test generated as {} for sequence {}'.format(
+                    self.counters['epoch'], 'video' if save_as_video else 'frames', info[b][0]
                 ))
 
+    def test_inpainting(self, epoch, save_as_video, device):
+        a = 1
+
     @staticmethod
-    def get_reference_frame_indexes(target_frame, num_frames, num_length=120):
+    def get_reference_frame_indexes(t, n_frames, r_list_max_length=120):
         # Set start and end frames
-        start = target_frame - num_length
-        end = target_frame + num_length
+        start = t - r_list_max_length
+        end = t + r_list_max_length
 
         # Adjust frames in case they are not in the limit
-        if target_frame - num_length < 0:
-            end = (target_frame + num_length) - (target_frame - num_length)
-            end = num_frames - 1 if end > num_frames else end
+        if t - r_list_max_length < 0:
+            end = (t + r_list_max_length) - (t - r_list_max_length)
+            end = n_frames - 1 if end > n_frames else end
             start = 0
-        elif target_frame + num_length > num_frames:
-            start = (target_frame - num_length) - (target_frame + num_length - num_frames)
+        elif t + r_list_max_length > n_frames:
+            start = (t - r_list_max_length) - (t + r_list_max_length - n_frames)
             start = 0 if start < 0 else start
-            end = num_frames - 1
+            end = n_frames - 1
 
         # Return list of reference_frames every n=2 frames
-        return [i for i in range(start, end, 2) if i != target_frame]
+        return [i for i in range(start, end, 2) if i != t]

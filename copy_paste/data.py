@@ -1,7 +1,7 @@
 import skeltorch
 import utils
-from datasets.sequence_dataset import SequencesDataset
-from datasets.masks_dataset import MasksDataset
+from datasets.content_provider import ContentProvider
+from datasets.masked_sequence_dataset import MaskedSequenceDataset
 import os.path
 import random
 import torch.utils.data
@@ -14,48 +14,71 @@ class CopyPasteData(skeltorch.Data):
         pass
 
     def load_datasets(self, data_path):
-        masks_dataset = MasksDataset(
-            dataset_name=self.configuration.get('data', 'masks_dataset'),
-            dataset_folder=os.path.join(data_path, self.dataset_paths[self.configuration.get('data', 'masks_dataset')]),
-            split='train',
-            emulator=utils.MovementSimulator()
-        )
-        self.datasets['train'] = SequencesDataset(
-            dataset_name=self.configuration.get('data', 'train_dataset'),
-            dataset_folder=os.path.join(data_path, self.dataset_paths[self.configuration.get('data', 'train_dataset')]),
-            split='train',
+        train_gts_dataset, validation_gts_dataset, test_gts_dataset = self._load_datasets_gts(data_path)
+        train_masks_dataset, validation_masks_dataset, test_masks_dataset = self._load_datasets_masks(data_path)
+        self.datasets['train'] = MaskedSequenceDataset(
+            gts_dataset=train_gts_dataset,
+            masks_dataset=train_masks_dataset,
             image_size=tuple(self.configuration.get('data', 'train_size')),
             frames_n=self.configuration.get('data', 'frames_n'),
-            frames_spacing=self.configuration.get('data', 'frames_spacing'),
-            dilatation_filter_size=tuple(self.configuration.get('data', 'dilatation_filter_size')),
-            dilatation_iterations=self.configuration.get('data', 'dilatation_iterations'),
-            logger=self.logger,
-            masks_dataset=masks_dataset
+            frames_spacing=self.configuration.get('data', 'frames_spacing')
         )
-        self.datasets['validation'] = SequencesDataset(
-            dataset_name=self.configuration.get('data', 'train_dataset'),
-            dataset_folder=os.path.join(data_path, self.dataset_paths[self.configuration.get('data', 'train_dataset')]),
-            split='validation',
+        self.datasets['validation'] = MaskedSequenceDataset(
+            gts_dataset=validation_gts_dataset,
+            masks_dataset=validation_masks_dataset,
             image_size=tuple(self.configuration.get('data', 'train_size')),
             frames_n=self.configuration.get('data', 'frames_n'),
-            frames_spacing=self.configuration.get('data', 'frames_spacing'),
-            dilatation_filter_size=tuple(self.configuration.get('data', 'dilatation_filter_size')),
-            dilatation_iterations=self.configuration.get('data', 'dilatation_iterations'),
-            logger=self.logger,
-            masks_dataset=masks_dataset
+            frames_spacing=self.configuration.get('data', 'frames_spacing')
         )
-        self.datasets['test'] = SequencesDataset(
-            dataset_name=self.configuration.get('data', 'test_dataset'),
-            dataset_folder=os.path.join(data_path, self.dataset_paths[self.configuration.get('data', 'test_dataset')]),
-            split='test',
+        self.datasets['test'] = MaskedSequenceDataset(
+            gts_dataset=test_gts_dataset,
+            masks_dataset=test_gts_dataset,
             image_size=tuple(self.configuration.get('data', 'test_size')),
             frames_n=-1,
             frames_spacing=None,
-            dilatation_filter_size=tuple(self.configuration.get('data', 'dilatation_filter_size')),
-            dilatation_iterations=self.configuration.get('data', 'dilatation_iterations'),
-            logger=self.logger,
-            masks_dataset=None
+            force_resize=True
         )
+
+    def _load_datasets_gts(self, data_path):
+        train_gts_dataset = ContentProvider(
+            dataset_name=self.configuration.get('data', 'train_dataset'),
+            data_folder=data_path,
+            split='train',
+            movement_simulator=None,
+            return_mask=False
+        )
+        validation_gts_dataset = ContentProvider(
+            dataset_name=self.configuration.get('data', 'train_dataset'),
+            data_folder=data_path,
+            split='validation',
+            movement_simulator=None,
+            return_mask=False
+        )
+        test_gts_dataset = ContentProvider(
+            dataset_name=self.configuration.get('data', 'test_dataset'),
+            data_folder=data_path,
+            split='validation',
+            movement_simulator=None
+        )
+        return train_gts_dataset, validation_gts_dataset, test_gts_dataset
+
+    def _load_datasets_masks(self, data_path):
+        train_masks_dataset = ContentProvider(
+            dataset_name=self.configuration.get('data', 'masks_dataset'),
+            data_folder=data_path,
+            split='train',
+            movement_simulator=None,
+            return_gt=False
+        )
+        validation_masks_dataset = ContentProvider(
+            dataset_name=self.configuration.get('data', 'masks_dataset'),
+            data_folder=data_path,
+            split='validation',
+            movement_simulator=None,
+            return_gt=False
+        )
+        test_masks_dataset = None
+        return train_masks_dataset, validation_masks_dataset, test_masks_dataset
 
     def load_loaders(self, data_path, num_workers):
         self.regenerate_loaders(num_workers)

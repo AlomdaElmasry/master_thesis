@@ -12,21 +12,21 @@ class ImageTransforms:
         """Resize an image using the the algorithm given in ``mode``.
 
         Args:
-            image (torch.FloatTensor): tensor of size (C, H, W) containing the image quantized from [0, 1].
+            image (torch.FloatTensor): tensor of size (C,F,H,W) containing the image quantized from [0, 1].
             size (tuple): tuple containing the desired size in the form (H, W).
             mode (str): mode used to resize the image. Same format as in ``torch.nn.functional.interpolate()``.
 
         Returns:
             torch.FloatTensor: resized image.
         """
-        return F.interpolate(image.unsqueeze(0), size, mode=mode).squeeze(0)
+        return F.interpolate(image.transpose(0, 1), size, mode=mode).transpose(0, 1)
 
     @staticmethod
     def crop(image, size, crop_position=None):
         """Crop a patch from the image.
 
         Args:
-            image (torch.FloatTensor): tensor of size (C, H, W) containing the image.
+            image (torch.FloatTensor): tensor of size (C, F, H, W) containing the image.
             size (tuple): tuple containing the desired size in the form (H, W).
             crop_position (tuple): coordinates of the top-left pixel from where to cut the patch. If not set, it is
             generated randomly.
@@ -35,8 +35,8 @@ class ImageTransforms:
             torch.FloatTensor: patch of the image.
         """
         if crop_position is None:
-            crop_position = (random.randint(0, image.size(1) - size[0]), random.randint(0, image.size(2) - size[1]))
-        return image[:, crop_position[0]:crop_position[0] + size[0], crop_position[1]:crop_position[1] + size[1]], \
+            crop_position = (random.randint(0, image.size(2) - size[0]), random.randint(0, image.size(3) - size[1]))
+        return image[:, :, crop_position[0]:crop_position[0] + size[0], crop_position[1]:crop_position[1] + size[1]], \
                crop_position
 
     @staticmethod
@@ -57,7 +57,7 @@ class ImageTransforms:
         """Dilatates an image with a filter of size ``filter_size``.
 
         Args:
-            image (torch.FloatTensor): tensor of size (C, H, W) containing the image.
+            image (torch.FloatTensor): tensor of size (C,F,H,W) containing the image.
             filter_size (tuple): size of the filter in the form (H,W).
             iterations (integer): number of times to apply the filter.
 
