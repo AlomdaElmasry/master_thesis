@@ -59,7 +59,8 @@ class ContentProvider(torch.utils.data.Dataset):
     def _get_item_mask(self, sequence_index, frame_index_bis):
         mask_np = cv2.imread(self.items_masks_paths[sequence_index][frame_index_bis], cv2.IMREAD_COLOR) / 255
         #mask_np = np.array(Image.open(self.items_masks_paths[sequence_index][frame_index_bis]).convert('L')) / 255
-        return (torch.from_numpy(mask_np.astype(np.float32)).unsqueeze(0).repeat(3, 1, 1) > 0).float()
+        #return (torch.from_numpy(mask_np.astype(np.float32)).unsqueeze(0).repeat(3, 1, 1) > 0).float()
+        return torch.from_numpy(mask_np.astype(np.float32)).permute(2, 0, 1)
 
     def get_items(self, frames_indexes):
         y, m = [], []
