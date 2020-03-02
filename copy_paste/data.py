@@ -93,7 +93,7 @@ class CopyPasteData(skeltorch.Data):
 
         # Load in RAM indexes
         self.datasets['train'].load_items_in_ram(train_indexes)
-        #self.datasets['validation'].load_items_in_ram(validation_indexes)
+        # self.datasets['validation'].load_items_in_ram(validation_indexes)
 
         self.loaders['train'] = torch.utils.data.DataLoader(
             dataset=self.datasets['train'],
