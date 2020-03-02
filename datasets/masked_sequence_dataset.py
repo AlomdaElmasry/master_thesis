@@ -22,6 +22,7 @@ class MaskedSequenceDataset(torch.utils.data.Dataset):
         self.fill_color = torch.as_tensor([0.485, 0.456, 0.406], dtype=torch.float32)
 
     def __getitem__(self, item):
+        a = 1
         # Check if the element is loaded in RAM
         if item in self.ram_items.keys():
             print('loading from RAM {}'.format(item))
