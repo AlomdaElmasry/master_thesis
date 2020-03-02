@@ -1,8 +1,6 @@
 import skeltorch
-import utils
 from datasets.content_provider import ContentProvider
 from datasets.masked_sequence_dataset import MaskedSequenceDataset
-import os.path
 import random
 import torch.utils.data
 
@@ -90,6 +88,11 @@ class CopyPasteData(skeltorch.Data):
                                self.experiment.configuration.get('training', 'batch_size')
         train_indexes = random.sample(list(range(len(self.datasets['train']))), train_max_items)
         validation_indexes = random.sample(list(range(len(self.datasets['validation']))), validation_max_items)
+
+        # Load in RAM indexes
+        self.datasets['train'].load_items_in_ram(train_indexes)
+        #self.datasets['validation'].load_items_in_ram(validation_indexes)
+
         self.loaders['train'] = torch.utils.data.DataLoader(
             dataset=self.datasets['train'],
             sampler=torch.utils.data.SubsetRandomSampler(indices=train_indexes),

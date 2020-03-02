@@ -9,7 +9,6 @@ import torch.nn.functional as F
 from vgg_16.model import get_pretrained_model
 import torch.utils.data
 import matplotlib.pyplot as plt
-import time
 
 
 class CopyPasteRunner(skeltorch.Runner):
@@ -24,11 +23,6 @@ class CopyPasteRunner(skeltorch.Runner):
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=1e-4)
 
     def train_step(self, it_data, device):
-        start_train_step = time.time()
-
-        if self.after_it_time is not None:
-            print('Backprop with data: {}'.format(start_train_step- self.after_it_time))
-
         # Decompose iteration data
         (x, m), y, _ = it_data
 
@@ -49,14 +43,7 @@ class CopyPasteRunner(skeltorch.Runner):
         visibility_maps = (1 - m[:, :, t].unsqueeze(2)) * m_rt
 
         # Compute loss and return
-        loss = self.compute_loss(y[:, :, t], y_hat, y_hat_comp, x[:, :, t], x_rt, visibility_maps, m[:, :, t], c_mask)
-
-        end_loss_forward = time.time()
-
-        print('forward: {}'.format(end_loss_forward - start_train_step))
-
-
-        return loss
+        return self.compute_loss(y[:, :, t], y_hat, y_hat_comp, x[:, :, t], x_rt, visibility_maps, m[:, :, t], c_mask)
 
     def train_after_epoch_tasks(self, device):
         super().train_after_epoch_tasks(device)
@@ -65,7 +52,6 @@ class CopyPasteRunner(skeltorch.Runner):
 
     def train_iteration_log(self, e_train_losses, log_period, device):
         super().train_iteration_log(e_train_losses, log_period, device)
-        self.after_it_time = time.time()
 
     def _generate_random_samples(self, device):
 
