@@ -94,16 +94,19 @@ class CopyPasteData(skeltorch.Data):
             dataset=self.datasets['train'],
             sampler=torch.utils.data.SubsetRandomSampler(indices=train_indexes),
             batch_size=self.experiment.configuration.get('training', 'batch_size'),
-            num_workers=num_workers
+            num_workers=num_workers,
+            pin_memory=True
         )
         self.loaders['validation'] = torch.utils.data.DataLoader(
             dataset=self.datasets['validation'],
             sampler=torch.utils.data.SubsetRandomSampler(indices=validation_indexes),
             batch_size=self.experiment.configuration.get('training', 'batch_size'),
-            num_workers=num_workers
+            num_workers=num_workers,
+            pin_memory=True
         )
         self.loaders['test'] = torch.utils.data.DataLoader(
             dataset=self.datasets['test'],
             batch_size=1,
-            num_workers=num_workers
+            num_workers=num_workers,
+            pin_memory=True
         )
