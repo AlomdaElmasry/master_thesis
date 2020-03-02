@@ -14,6 +14,7 @@ import time
 
 class CopyPasteRunner(skeltorch.Runner):
     model_vgg = None
+    after_it_time = None
 
     def init_model(self, device):
         self.model = CPNet().to(device)
@@ -24,6 +25,10 @@ class CopyPasteRunner(skeltorch.Runner):
 
     def train_step(self, it_data, device):
         start_train_step = time.time()
+
+        if self.after_it_time is not None:
+            print('Backprop: {}'.format(self.after_it_time - start_train_step))
+
         # Decompose iteration data
         (x, m), y, _ = it_data
 
@@ -50,16 +55,16 @@ class CopyPasteRunner(skeltorch.Runner):
 
         end_loss_forward = time.time()
 
-        print('Forward: {}'.format(end_forward - start_train_step))
-        print('Loss Forward: {}'.format(end_loss_forward - end_forward))
-
-
         return loss
 
     def train_after_epoch_tasks(self, device):
         super().train_after_epoch_tasks(device)
         self.experiment.data.regenerate_loaders(self.experiment.data.loaders['train'].num_workers)
         self._generate_random_samples(device)
+
+    def train_iteration_log(self, e_train_losses, log_period, device):
+        super().train_iteration_log(e_train_losses, log_period, device)
+        self.after_it_time = time.time()
 
     def _generate_random_samples(self, device):
 
