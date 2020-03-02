@@ -32,7 +32,6 @@ class DatasetPaths:
     @staticmethod
     def get_got10k(dataset_folder, split):
         split_folder = 'train' if split == 'train' else 'val' if split == 'validation' else 'test'
-        gts_folder = os.path.join(dataset_folder, split_folder)
         with open(os.path.join(dataset_folder, split_folder, 'list.txt')) as items_file:
             items_names = items_file.read().splitlines()
         items_gts_paths = [sorted(glob.glob(
