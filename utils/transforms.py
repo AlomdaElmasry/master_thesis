@@ -19,7 +19,7 @@ class ImageTransforms:
         Returns:
             torch.FloatTensor: resized image.
         """
-        return F.interpolate(image.transpose(0, 1), size, mode=mode).transpose(0, 1)
+        return F.interpolate(image.transpose(0, 1), size, mode=mode, align_corners=False).transpose(0, 1)
 
     @staticmethod
     def crop(image, size, crop_position=None):

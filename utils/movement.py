@@ -1,7 +1,5 @@
 from skimage.transform import AffineTransform, warp
-import numpy as np
 import torch
-import matplotlib.pyplot as plt
 import torch.nn.functional as F
 import numpy as np
 
@@ -58,7 +56,7 @@ class MovementSimulator:
         affine_matrices_stacked = torch.zeros(affine_matrices.size(), dtype=torch.float32)
         affine_matrices_stacked[0] = affine_matrices[0]
         for i in range(1, affine_matrices.size(0)):
-            affine_matrices_stacked[i] = torch.matmul(affine_matrices_stacked[i-1], affine_matrices[i])
+            affine_matrices_stacked[i] = torch.matmul(affine_matrices_stacked[i - 1], affine_matrices[i])
         return affine_matrices_stacked
 
     @staticmethod
