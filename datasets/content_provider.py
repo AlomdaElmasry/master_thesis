@@ -3,7 +3,8 @@ import numpy as np
 from PIL import Image
 from utils.paths import DatasetPaths
 import random
-
+import jpeg4py as jpeg
+import cv2
 
 class ContentProvider(torch.utils.data.Dataset):
     dataset_name = None
@@ -32,6 +33,7 @@ class ContentProvider(torch.utils.data.Dataset):
     def _validate(self):
         assert self.dataset_name in ['davis-2017', 'youtube-vos', 'got-10k']
         assert self.split in ['train', 'validation', 'test']
+        assert not (self.dataset_name == 'youtube-vos' and self.return_mask and self.split != 'train')
 
     def __getitem__(self, frame_index):
         """Returns the frame with index ``frame_item``.
@@ -50,11 +52,13 @@ class ContentProvider(torch.utils.data.Dataset):
         return y, m, self.items_names[sequence_index]
 
     def _get_item_background(self, sequence_index, frame_index_bis):
-        bg_np = np.array(Image.open(self.items_gts_paths[sequence_index][frame_index_bis]).convert('RGB')) / 255
+        bg_np = cv2.imread(self.items_gts_paths[sequence_index][frame_index_bis], cv2.IMREAD_COLOR) / 255
+        # bg_np = np.array(Image.open(self.items_gts_paths[sequence_index][frame_index_bis]).convert('RGB')) / 255
         return torch.from_numpy(bg_np.astype(np.float32)).permute(2, 0, 1)
 
     def _get_item_mask(self, sequence_index, frame_index_bis):
-        mask_np = np.array(Image.open(self.items_masks_paths[sequence_index][frame_index_bis]).convert('L')) / 255
+        mask_np = cv2.imread(self.items_masks_paths[sequence_index][frame_index_bis], cv2.IMREAD_COLOR) / 255
+        #mask_np = np.array(Image.open(self.items_masks_paths[sequence_index][frame_index_bis]).convert('L')) / 255
         return (torch.from_numpy(mask_np.astype(np.float32)).unsqueeze(0).repeat(3, 1, 1) > 0).float()
 
     def get_items(self, frames_indexes):

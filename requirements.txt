@@ -11,3 +11,4 @@ jsonschema
 torchvision
 progressbar2
 skeltorch
+jpeg4py
