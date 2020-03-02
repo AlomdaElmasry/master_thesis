@@ -98,7 +98,7 @@ class ContentProvider(torch.utils.data.Dataset):
             return self._get_patch_simulated(frame_index, frames_n)
 
     def get_patch_random(self, frames_n, frames_spacing):
-        return self.get_patch(random.randint(0, self.__len__()), frames_n, frames_spacing)
+        return self.get_patch(random.randint(0, self.__len__() - 1), frames_n, frames_spacing)
 
     def _get_patch_contiguous(self, frame_index, frames_n, frames_spacing):
         sequence_item = next(x[0] for x in enumerate(self.items_limits) if x[1] > frame_index)
