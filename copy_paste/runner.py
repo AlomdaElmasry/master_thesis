@@ -9,6 +9,7 @@ import torch.nn.functional as F
 from vgg_16.model import get_pretrained_model
 import torch.utils.data
 import matplotlib.pyplot as plt
+import time
 
 
 class CopyPasteRunner(skeltorch.Runner):
@@ -22,6 +23,7 @@ class CopyPasteRunner(skeltorch.Runner):
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=1e-4)
 
     def train_step(self, it_data, device):
+        start_train_step = time.time()
         # Decompose iteration data
         (x, m), y, _ = it_data
 
@@ -38,11 +40,21 @@ class CopyPasteRunner(skeltorch.Runner):
         # Propagate through the model
         y_hat, y_hat_comp, c_mask, (x_rt, m_rt) = self.model(x, m, y, t, r_list)
 
+        end_forward = time.time()
+
         # Get visibility map of aligned frames and target frame
         visibility_maps = (1 - m[:, :, t].unsqueeze(2)) * m_rt
 
         # Compute loss and return
-        return self.compute_loss(y[:, :, t], y_hat, y_hat_comp, x[:, :, t], x_rt, visibility_maps, m[:, :, t], c_mask)
+        loss = self.compute_loss(y[:, :, t], y_hat, y_hat_comp, x[:, :, t], x_rt, visibility_maps, m[:, :, t], c_mask)
+
+        end_loss_forward = time.time()
+
+        print('Forward: {}'.format(end_forward - start_train_step))
+        print('Loss Forward: {}'.format(end_loss_forward - end_forward))
+
+
+        return loss
 
     def train_after_epoch_tasks(self, device):
         super().train_after_epoch_tasks(device)
