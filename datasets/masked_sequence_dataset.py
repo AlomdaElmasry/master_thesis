@@ -24,10 +24,10 @@ class MaskedSequenceDataset(torch.utils.data.Dataset):
     def __getitem__(self, item):
         # Check if the element is loaded in RAM
         if item in self.ram_items.keys():
-            print('ey')
+            print('loading from RAM {}'.format(item))
             return self.ram_items[item]
         else:
-            print('obtaining element')
+            print('obtaining element {}'.format(item))
 
         # Get the data associated to the GT
         y, m, info = self.gts_dataset.get_sequence(item) if self.frames_n == -1 \
@@ -61,5 +61,4 @@ class MaskedSequenceDataset(torch.utils.data.Dataset):
     def load_items_in_ram(self, items):
         self.ram_items = {}
         for item in items:
-            print('Item loaded in RAM {}'.format(item))
             self.ram_items[item] = self.__getitem__(item)
