@@ -125,9 +125,13 @@ class CopyPasteRunner(skeltorch.Runner):
                24 * loss_style + 0.1 * loss_smoothing
 
     def test(self, epoch, save_as_video, device):
-        # Initialize the model and set it to eval() mode
+        # Initialize the model, optimizer and set it to eval() mode
         self.init_model(device)
+        self.init_optimizer(device)
         self.model.eval()
+
+        # Restore checkpoint
+        self.load_states(epoch, device)
 
         # Iterate over the data of the loader
         for it_data in self.experiment.data.loaders['test']:
@@ -136,7 +140,7 @@ class CopyPasteRunner(skeltorch.Runner):
             batch_size, n_channels, n_frames, img_height, img_width = x.size()
 
             # Move y to CUDA
-            y = y.cuda()
+            y = y.to(device)
 
             # Create a matrix to store inpainted frames. Size (B, 2, C, F, H, W), where the 2 is due to double direction
             frames_inpainted = np.zeros((batch_size, 2, n_channels, n_frames, img_height, img_width), dtype=np.float32)
@@ -162,8 +166,13 @@ class CopyPasteRunner(skeltorch.Runner):
 
                     # Replace input_frames and input_masks with previous predictions to improve quality
                     with torch.no_grad():
-                        x_copy[:, :, t], _, _, _ = self.model(x_copy, m_copy, y, t, r_list)
+                        _, x_copy[:, :, t], _, _ = self.model(x_copy, m_copy, y, t, r_list)
                         m_copy[:, :, t] = 0
+
+                        a = x_copy[0, :, t].detach().permute(1, 2, 0).numpy()
+                        plt.imshow(a)
+                        plt.show()
+                        exit()
 
                     # Obtain an estimation of the inpainted frame f
                     frames_inpainted[:, d, :, t] = x_copy[:, :, t].detach().cpu().numpy()
@@ -204,9 +213,13 @@ class CopyPasteRunner(skeltorch.Runner):
                 ))
 
     def test_alignment(self, epoch, save_as_video, device):
-        # Initialize the model and set it to eval() mode
+        # Initialize the model, optimizer and set it to eval() mode
         self.init_model(device)
+        self.init_optimizer(device)
         self.model.eval()
+
+        # Restore checkpoint
+        self.load_states(epoch, device)
 
         # Iterate over the data of the loader
         for it_data in self.experiment.data.loaders['test']:
