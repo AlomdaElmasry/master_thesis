@@ -27,7 +27,7 @@ class CopyPasteRunner(skeltorch.Runner):
         start_train_step = time.time()
 
         if self.after_it_time is not None:
-            print('Backprop: {}'.format(self.after_it_time - start_train_step))
+            print('Backprop with data: {}'.format(start_train_step- self.after_it_time))
 
         # Decompose iteration data
         (x, m), y, _ = it_data
@@ -45,8 +45,6 @@ class CopyPasteRunner(skeltorch.Runner):
         # Propagate through the model
         y_hat, y_hat_comp, c_mask, (x_rt, m_rt) = self.model(x, m, y, t, r_list)
 
-        end_forward = time.time()
-
         # Get visibility map of aligned frames and target frame
         visibility_maps = (1 - m[:, :, t].unsqueeze(2)) * m_rt
 
@@ -54,6 +52,9 @@ class CopyPasteRunner(skeltorch.Runner):
         loss = self.compute_loss(y[:, :, t], y_hat, y_hat_comp, x[:, :, t], x_rt, visibility_maps, m[:, :, t], c_mask)
 
         end_loss_forward = time.time()
+
+        print('forward: {}'.format(end_loss_forward - start_train_step))
+
 
         return loss
 
