@@ -73,9 +73,9 @@ class ContentProvider(torch.utils.data.Dataset):
             # Check mask
             if self.return_mask and m is None:
                 m = torch.zeros((mask.shape[0], len(frames_indexes), mask.shape[1], mask.shape[2]), dtype=torch.float32)
-                m[:, i] = gt
+                m[:, i] = mask
             elif self.return_mask:
-                m[:, i] = gt
+                m[:, i] = mask
         return y, m
 
     def __len__(self):
