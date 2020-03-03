@@ -6,6 +6,7 @@ import jpeg4py as jpeg
 import cv2
 import matplotlib.pyplot as plt
 
+
 class ContentProvider(torch.utils.data.Dataset):
     dataset_name = None
     dataset_folder = None

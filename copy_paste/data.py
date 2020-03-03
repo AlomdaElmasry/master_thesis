@@ -84,10 +84,8 @@ class CopyPasteData(skeltorch.Data):
     def regenerate_loaders(self, num_workers):
         train_max_items = self.experiment.configuration.get('training', 'train_max_iterations') * \
                           self.experiment.configuration.get('training', 'batch_size')
-
         validation_max_items = self.experiment.configuration.get('training', 'validation_max_iterations') * \
                                self.experiment.configuration.get('training', 'batch_size')
-
         train_indexes = random.sample(list(range(len(self.datasets['train']))), train_max_items)
         validation_indexes = random.sample(list(range(len(self.datasets['validation']))), validation_max_items)
         self.loaders['train'] = torch.utils.data.DataLoader(
