@@ -34,5 +34,5 @@ loader = torch.utils.data.DataLoader(
     num_workers=4
 )
 
-for i, data in enumerate(loader):
+for i, d in enumerate(loader):
     print(i)
