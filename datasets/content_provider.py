@@ -54,20 +54,28 @@ class ContentProvider(torch.utils.data.Dataset):
 
     def _get_item_background(self, sequence_index, frame_index_bis):
         bg_np = jpeg.JPEG(self.items_gts_paths[sequence_index][frame_index_bis]).decode() / 255
-        return torch.from_numpy(bg_np.astype(np.float32)).permute(2, 0, 1)
+        return torch.from_numpy(bg_np).permute(2, 0, 1)
 
     def _get_item_mask(self, sequence_index, frame_index_bis):
         mask_np = cv2.imread(self.items_masks_paths[sequence_index][frame_index_bis], cv2.IMREAD_COLOR) / 255
-        return torch.from_numpy(mask_np.astype(np.float32)).permute(2, 0, 1)
+        return torch.from_numpy(mask_np).permute(2, 0, 1)
 
     def get_items(self, frames_indexes):
-        y, m = [], []
-        for frame_index in frames_indexes:
-            gt, mask, _ = self.__getitem__(frame_index)
-            y.append(gt)
-            m.append(mask)
-        y = torch.stack(y, dim=1) if self.return_gt else None
-        m = torch.stack(m, dim=1) if self.return_mask else None
+        y, m = None, None
+        for i in range(len(frames_indexes)):
+            gt, mask, _ = self.__getitem__(frames_indexes[i])
+            # Check GT
+            if self.return_gt and y is None:
+                y = torch.zeros((gt.shape[0], len(frames_indexes), gt.shape[1], gt.shape[2]), dtype=torch.float32)
+                y[:, i] = gt
+            elif self.return_gt:
+                y[:, i] = gt
+            # Check mask
+            if self.return_mask and m is None:
+                m = torch.zeros((mask.shape[0], len(frames_indexes), mask.shape[1], mask.shape[2]), dtype=torch.float32)
+                m[:, i] = gt
+            elif self.return_mask:
+                m[:, i] = gt
         return y, m
 
     def __len__(self):
