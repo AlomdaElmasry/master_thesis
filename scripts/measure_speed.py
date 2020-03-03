@@ -6,10 +6,10 @@ import jpeg4py as jpeg
 import time
 import cv2
 
-got10k_folder = '/Users/DavidAlvarezDLT/Data/GOT10k'
-items_in_folder = os.listdir(os.path.join(got10k_folder, 'train'))
+got10k_folder = '/Users/DavidAlvarezDLT/Data/DAVIS-2017/JPEGImages'
+items_in_folder = os.listdir(os.path.join(got10k_folder, '480p'))
 random_sel = random.randint(0, len(items_in_folder) - 1)
-images_paths = glob.glob(os.path.join(got10k_folder, 'train', items_in_folder[random_sel], '*.jpg'))
+images_paths = glob.glob(os.path.join(got10k_folder, '480p', items_in_folder[random_sel], '*.jpg'))
 
 print('Loading {} images from {}'.format(len(images_paths), items_in_folder[random_sel]))
 

@@ -3,6 +3,7 @@ from PIL import Image
 from pathlib import Path
 import os
 import numpy as np
+import cv2
 import progressbar
 import shutil
 from utils.transforms import ImageTransforms
@@ -35,18 +36,16 @@ def verify_sequence(sequence_path, bar, i):
             images_paths += glob.glob(os.path.join(sequence_path, '*.{}'.format(ext)))
         image_size = None
         for image_path in images_paths:
-            image = torch.from_numpy(
-                (np.array(Image.open(image_path).convert('RGB')) / 255).astype(np.float32)
-            ).permute(2, 0, 1)
-            if image_size is not None and image.size() != image_size:
+            image = cv2.imread(image_path, cv2.IMREAD_COLOR) / 255
+            if image_size is not None and image.shape != image_size:
                 print('Sequence {} not correct'.format(sequence_path))
                 raise ValueError
             elif image_size is None:
-                image_size = image.size()
+                image_size = image.shape
         if bar.value < i:
             bar.update(i)
     except Exception:
-        shutil.rmtree(sequence_path)
+        pass #shutil.rmtree(sequence_path)
 
 
 with concurrent.futures.ThreadPoolExecutor(max_workers=args.max_workers) as executor:
