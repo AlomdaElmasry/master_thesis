@@ -28,29 +28,33 @@ class DatasetPaths:
         ]
         return items_names, items_gts_paths, items_masks_paths
 
-
     @staticmethod
     def get_got10k(dataset_folder, split):
         split_folder = 'train' if split == 'train' else 'val' if split == 'validation' else 'test'
-        with open(os.path.join(dataset_folder, split_folder, 'list.txt')) as items_file:
-            items_names = items_file.read().splitlines()
-        items_gts_paths = [sorted(glob.glob(
-            os.path.join(dataset_folder, split_folder, item_name, '*.jpg'))) for item_name in items_names
-        ]
+        items_file = open(os.path.join(dataset_folder, split_folder, 'list.txt'))
+        items_names = items_file.read().splitlines()
+        items_gts_paths = []
+        for item_name in items_names:
+            if os.path.exists(os.path.join(dataset_folder, split_folder, item_name)):
+                items_gts_paths.append(
+                    sorted(glob.glob(os.path.join(dataset_folder, split_folder, item_name, '*.jpg')))
+                )
         items_masks_paths = None
         return items_names, items_gts_paths, items_masks_paths
-
 
     @staticmethod
     def get_youtube_vos(dataset_folder, split):
         split_folder = 'train' if split == 'train' else 'valid' if split == 'validation' else 'test'
         items_names = os.listdir(os.path.join(dataset_folder, split_folder, 'JPEGImages'))
-        items_gts_paths = [
-            sorted(glob.glob(os.path.join(dataset_folder, split_folder, 'JPEGImages', sequence_name, '*.jpg')))
-            for sequence_name in items_names
-        ]
-        items_masks_paths = [
-            sorted(glob.glob(os.path.join(dataset_folder, split_folder, 'Annotations', sequence_name, '*.png')))
-            for sequence_name in items_names
-        ]
+        items_gts_paths = []
+        items_masks_paths = []
+        for item_name in items_names:
+            if os.path.exists(os.path.join(dataset_folder, split_folder, 'JPEGImages', item_name)) and \
+                    os.path.exists(os.path.join(dataset_folder, split_folder, 'Annotations', item_name)):
+                items_gts_paths.append(
+                    sorted(glob.glob(os.path.join(dataset_folder, split_folder, 'JPEGImages', item_name, '*.jpg')))
+                )
+                items_masks_paths.append(
+                    sorted(glob.glob(os.path.join(dataset_folder, split_folder, 'Annotations', item_name, '*.png')))
+                )
         return items_names, items_gts_paths, items_masks_paths

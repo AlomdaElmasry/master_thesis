@@ -37,7 +37,7 @@ def verify_sequence(sequence_path, bar, i):
             images_paths += glob.glob(os.path.join(sequence_path, '*.{}'.format(ext)))
         image_size = None
         for image_path in images_paths:
-            #mage = cv2.imread(image_path, cv2.IMREAD_COLOR) / 255
+            #image = cv2.imread(image_path, cv2.IMREAD_COLOR) / 255
             image = jpeg.JPEG(image_path).decode()
             if image_size is not None and image.shape != image_size:
                 print('Sequence {} not correct'.format(sequence_path))
@@ -47,9 +47,10 @@ def verify_sequence(sequence_path, bar, i):
         if bar.value < i:
             bar.update(i)
     except Exception:
-        pass #shutil.rmtree(sequence_path)
+        shutil.rmtree(sequence_path)
 
 
 with concurrent.futures.ThreadPoolExecutor(max_workers=args.max_workers) as executor:
     for i in range(len(images_sequences)):
         executor.submit(verify_sequence, images_sequences[i], bar, i)
+        #verify_sequence(images_sequences[i], bar, i)

@@ -33,5 +33,7 @@ loader = torch.utils.data.DataLoader(
     batch_size=8
 )
 
-for i, d in enumerate(loader):
+print(len(train_masks_dataset))
+for i in range(len(train_masks_dataset)):
+    a = train_masks_dataset.__getitem__(i)
     print(i)
