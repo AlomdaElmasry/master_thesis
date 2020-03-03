@@ -10,6 +10,7 @@ from utils.transforms import ImageTransforms
 import argparse
 import concurrent.futures
 import glob
+import jpeg4py as jpeg
 
 parser = argparse.ArgumentParser(description='Cleans invalid images')
 parser.add_argument('--data-path', required=True, help='Path where the images are stored')
@@ -36,7 +37,8 @@ def verify_sequence(sequence_path, bar, i):
             images_paths += glob.glob(os.path.join(sequence_path, '*.{}'.format(ext)))
         image_size = None
         for image_path in images_paths:
-            image = cv2.imread(image_path, cv2.IMREAD_COLOR) / 255
+            #mage = cv2.imread(image_path, cv2.IMREAD_COLOR) / 255
+            image = jpeg.JPEG(image_path).decode()
             if image_size is not None and image.shape != image_size:
                 print('Sequence {} not correct'.format(sequence_path))
                 raise ValueError
