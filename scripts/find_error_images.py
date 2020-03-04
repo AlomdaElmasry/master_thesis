@@ -12,6 +12,7 @@ parser.add_argument('--data-path', required=True, help='Path where the images ar
 parser.add_argument('--formats', nargs='+', default=['jpg', 'jpeg', 'png'], help='Image formats to search in the path')
 parser.add_argument('--remove-sequence', action='store_false', help='Whether or not to remove entire sequence')
 parser.add_argument('--max-workers', type=int, default=10, help='Number of workers to use')
+parser.add_argument('--min-index', type=int, default=-1, help='Min index to continue the script from')
 args = parser.parse_args()
 
 
@@ -57,11 +58,13 @@ def verify_sequence(sequence_path, bar, i, remove_sequence=False):
 executor = concurrent.futures.ThreadPoolExecutor(max_workers=args.max_workers)
 
 # Generate a list of sequences
-folder_paths = [root for root, _, _ in os.walk(args.data_path)]
+folder_paths = sorted([root for root, _, _ in os.walk(args.data_path)])
 
 # Create progress bar
 bar = progressbar.ProgressBar(max_value=len(folder_paths))
 
 # Walk through the folders of args.data_path
 for i, folder_path in enumerate(folder_paths):
+    if args.min_index != -1 and i < args.min_index:
+        continue
     executor.submit(verify_sequence, folder_path, bar, i, args.remove_sequence)
