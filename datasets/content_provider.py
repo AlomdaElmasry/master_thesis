@@ -53,12 +53,22 @@ class ContentProvider(torch.utils.data.Dataset):
         return y, m, self.items_names[sequence_index]
 
     def _get_item_background(self, sequence_index, frame_index_bis):
-        bg_np = jpeg.JPEG(self.items_gts_paths[sequence_index][frame_index_bis]).decode() / 255
-        return torch.from_numpy(bg_np).permute(2, 0, 1)
+        try:
+            bg_np = jpeg.JPEG(self.items_gts_paths[sequence_index][frame_index_bis]).decode() / 255
+            return torch.from_numpy(bg_np).permute(2, 0, 1)
+        except Exception as e:
+            print('Exception with file {} - {}'.format(self.items_gts_paths[sequence_index][frame_index_bis], str(e)))
+            random_frame_index_bix = random.randint(0, len(self.items_gts_paths[sequence_index]) - 1)
+            return self._get_item_background(sequence_index, random_frame_index_bix)
 
     def _get_item_mask(self, sequence_index, frame_index_bis):
-        mask_np = cv2.imread(self.items_masks_paths[sequence_index][frame_index_bis], cv2.IMREAD_COLOR) / 255
-        return torch.from_numpy(mask_np).permute(2, 0, 1)
+        try:
+            mask_np = cv2.imread(self.items_masks_paths[sequence_index][frame_index_bis], cv2.IMREAD_COLOR) / 255
+            return torch.from_numpy(mask_np).permute(2, 0, 1)
+        except Exception as e:
+            print('Exception with file {} - {}'.format(self.items_masks_paths[sequence_index][frame_index_bis], str(e)))
+            random_frame_index_bix = random.randint(0, len(self.items_masks_paths[sequence_index]) - 1)
+            return self._get_item_mask(sequence_index, random_frame_index_bix)
 
     def get_items(self, frames_indexes):
         y, m = None, None

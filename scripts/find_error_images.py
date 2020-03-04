@@ -70,4 +70,5 @@ bar = progressbar.ProgressBar(max_value=len(folder_paths))
 for i, folder_path in enumerate(folder_paths):
     if args.min_index != -1 and i < args.min_index:
         continue
-    executor.submit(verify_sequence, folder_path, bar, i, args.remove_sequence)
+    #executor.submit(verify_sequence, folder_path, bar, i, args.remove_sequence)
+    verify_sequence(folder_path, bar, i, True)
