@@ -38,6 +38,8 @@ def verify_sequence(sequence_path, bar, i, remove_sequence=False):
             # Verify that the image size is the same in all images inside a folder
             if image_size is not None and image.shape != image_size:
                 raise ValueError('Image size is not the same')
+            elif image_size is None:
+                image_size = image.shape
         except Exception as e:
             print('Incorrect image {} - {}'.format(image_path, str(e)))
             if remove_sequence:
