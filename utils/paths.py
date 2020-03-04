@@ -32,7 +32,7 @@ class DatasetPaths:
     def get_got10k(dataset_folder, split):
         split_folder = 'train' if split == 'train' else 'val' if split == 'validation' else 'test'
         items_file = open(os.path.join(dataset_folder, split_folder, 'list.txt'))
-        items_names = items_file.read().splitlines()
+        items_names = sorted(items_file.read().splitlines())
         items_gts_paths = []
         for item_name in items_names:
             if os.path.exists(os.path.join(dataset_folder, split_folder, item_name)):
@@ -45,7 +45,7 @@ class DatasetPaths:
     @staticmethod
     def get_youtube_vos(dataset_folder, split):
         split_folder = 'train' if split == 'train' else 'valid' if split == 'validation' else 'test'
-        items_names = os.listdir(os.path.join(dataset_folder, split_folder, 'JPEGImages'))
+        items_names = sorted(os.listdir(os.path.join(dataset_folder, split_folder, 'JPEGImages')))
         items_gts_paths = []
         items_masks_paths = []
         for item_name in items_names:
