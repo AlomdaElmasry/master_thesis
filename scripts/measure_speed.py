@@ -7,6 +7,7 @@ import time
 import cv2
 import cProfile
 from datasets.content_provider import ContentProvider
+from datasets.masked_sequence_dataset import MaskedSequenceDataset
 import cProfile, pstats, io
 from pstats import SortKey
 
@@ -19,21 +20,30 @@ images_paths = glob.glob(os.path.join(got10k_folder, '480p', items_in_folder[ran
 data_folder = '/Users/DavidAlvarezDLT/Data'
 split = 'train'
 
+img_path = '/Users/DavidAlvarezDLT/Data/GOT10k/train/GOT-10k_Val_000050/00000048.jpg'
+# background_dataset = ContentProvider('got-10k', data_folder, split, None, return_mask=False)
+# mask_dataset = ContentProvider('youtube-vos', data_folder, split, None, return_gt=False)
+# mix_dataset = MaskedSequenceDataset(background_dataset, mask_dataset, (256, 256), 5, 2, force_resize=False)
+#
+# pr = cProfile.Profile()
+# pr.enable()
+# mix_dataset.__getitem__(0)
+# pr.disable()
+# s = io.StringIO()
+# sortby = SortKey.CUMULATIVE
+# ps = pstats.Stats(pr, stream=s).sort_stats(sortby)
+# ps.print_stats()
+# print(s.getvalue())
 
-background_dataset = ContentProvider('got-10k', data_folder, split, None, return_mask=False)
-background_dataset.get_patch_random(5, 2)
+start = time.time()
+img_read = cv2.imread(img_path)
+end = time.time()
+img_enc, _ = cv2.imencode('.jpg', img_read)
+end2 = time.time()
+print('{}'.format(end-start))
 
-pr = cProfile.Profile()
-pr.enable()
-background_dataset.get_patch_random(5, 2)
-pr.disable()
-s = io.StringIO()
-sortby = SortKey.CUMULATIVE
-ps = pstats.Stats(pr, stream=s).sort_stats(sortby)
-ps.print_stats()
-print(s.getvalue())
-
-
+print('{}'.format(end2-end))
+a = 1
 
 # path = '/Users/DavidAlvarezDLT/Desktop/00000.jpg'
 # start_time = time.time()

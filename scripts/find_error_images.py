@@ -1,12 +1,7 @@
-import torch
-from PIL import Image
-from pathlib import Path
 import os
-import numpy as np
 import cv2
 import progressbar
 import shutil
-from utils.transforms import ImageTransforms
 import argparse
 import concurrent.futures
 import glob
@@ -15,42 +10,56 @@ import jpeg4py as jpeg
 parser = argparse.ArgumentParser(description='Cleans invalid images')
 parser.add_argument('--data-path', required=True, help='Path where the images are stored')
 parser.add_argument('--formats', nargs='+', default=['jpg', 'jpeg', 'png'], help='Image formats to search in the path')
+parser.add_argument('--remove-sequence', action='store_false', help='Whether or not to remove entire sequence')
 parser.add_argument('--max-workers', type=int, default=10, help='Number of workers to use')
 args = parser.parse_args()
 
-# Generate the list of images to verify
-# images_paths = []
-# for ext in args.formats:
-#     images_paths += list(Path(args.data_path).rglob('*.{}'.format(ext)))
+
+def verify_sequence(sequence_path, bar, i, remove_sequence=False):
+    # Create a list of paths of the images inside sequence_path
+    images_paths = []
+    for ext in args.formats:
+        images_paths += glob.glob(os.path.join(sequence_path, '*.{}'.format(ext)))
+
+    # Initialize the size of the images contained in sequence_path
+    image_size = None
+
+    # Iterate over every image to check that there are no loading errors
+    for image_path in images_paths:
+        try:
+            # Get the file extension to decide which tool to use
+            image_extension = os.path.splitext(image_path)[-1].replace('.', '')
+            if image_extension in ['jpg', 'jpeg']:
+                image = jpeg.JPEG(image_path).decode()
+            elif image_extension in ['png']:
+                image = cv2.imread(image_path, cv2.IMREAD_COLOR)
+            else:
+                raise ValueError('Format not known.')
+            # Verify that the image size is the same in all images inside a folder
+            if image_size is not None and image.shape != image_size:
+                raise ValueError('Image size is not the same')
+        except Exception as e:
+            print('Incorrect image {} - {}'.format(image_path, str(e)))
+            if remove_sequence:
+                shutil.rmtree(sequence_path)
+                break
+            else:
+                os.remove(image_path)
+
+    # Update bar counter
+    if bar.value < i:
+        bar.update(i)
+
+
+# Create ThreadPool for parallel execution
+executor = concurrent.futures.ThreadPoolExecutor(max_workers=args.max_workers)
 
 # Generate a list of sequences
-images_sequences = glob.glob(os.path.join(args.data_path, '*'))
+folder_paths = [root for root, _, _ in os.walk(args.data_path)]
 
 # Create progress bar
-bar = progressbar.ProgressBar(max_value=len(images_sequences))
+bar = progressbar.ProgressBar(max_value=len(folder_paths))
 
-
-def verify_sequence(sequence_path, bar, i):
-    try:
-        images_paths = []
-        for ext in args.formats:
-            images_paths += glob.glob(os.path.join(sequence_path, '*.{}'.format(ext)))
-        image_size = None
-        for image_path in images_paths:
-            #image = cv2.imread(image_path, cv2.IMREAD_COLOR) / 255
-            image = jpeg.JPEG(image_path).decode()
-            if image_size is not None and image.shape != image_size:
-                print('Sequence {} not correct'.format(sequence_path))
-                raise ValueError
-            elif image_size is None:
-                image_size = image.shape
-        if bar.value < i:
-            bar.update(i)
-    except Exception:
-        shutil.rmtree(sequence_path)
-
-
-with concurrent.futures.ThreadPoolExecutor(max_workers=args.max_workers) as executor:
-    for i in range(len(images_sequences)):
-        executor.submit(verify_sequence, images_sequences[i], bar, i)
-        #verify_sequence(images_sequences[i], bar, i)
+# Walk through the folders of args.data_path
+for i, folder_path in enumerate(folder_paths):
+    executor.submit(verify_sequence, folder_path, bar, i, args.remove_sequence)
