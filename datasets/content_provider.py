@@ -29,8 +29,12 @@ class ContentProvider(torch.utils.data.Dataset):
         self.return_gt = return_gt
         self.return_mask = return_mask
         self.items_names, self.items_gts_paths, self.items_masks_paths = \
-            DatasetPaths.get_items(dataset_name, data_folder, split)
-        self.items_limits = np.cumsum([len(item_gts_paths) for item_gts_paths in self.items_gts_paths])
+            DatasetPaths.get_items(dataset_name, data_folder, split, return_gt, return_mask)
+        self.items_limits = np.cumsum([
+            len(item_paths) for item_paths in (
+                self.items_gts_paths if self.items_gts_paths is not None else self.items_masks_paths
+            )]
+        )
         self._validate()
 
     def _validate(self):

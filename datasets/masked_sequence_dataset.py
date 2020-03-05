@@ -38,7 +38,8 @@ class MaskedSequenceDataset(torch.utils.data.Dataset):
             y, _ = utils.transforms.ImageTransforms.crop(y, self.image_size)
 
         # Apply Mask transformations
-        m = utils.transforms.ImageTransforms.resize(m, self.image_size)
+        if self.image_size != (m.size(2), m.size(3)):
+            m = utils.transforms.ImageTransforms.resize(m, self.image_size)
         m = (torch.sum(m, dim=0, keepdim=True) > 0).float()
         # m = utils.transforms.ImageTransforms.dilatate(m, (3, 3), 4)
 
