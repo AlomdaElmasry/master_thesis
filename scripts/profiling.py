@@ -1,8 +1,9 @@
 import argparse
+import cProfile
 from datasets.content_provider import ContentProvider
 from datasets.masked_sequence_dataset import MaskedSequenceDataset
-import torch.utils.data
-import matplotlib.pyplot as plt
+import io
+import pstats
 
 parser = argparse.ArgumentParser(description='Creates a video from a set of static frames')
 parser.add_argument('--data-path', required=True, help='Path where the images are stored')
@@ -16,16 +17,17 @@ parser.add_argument('--frames-spacing', default=2, type=int, help='Frame spacing
 args = parser.parse_args()
 
 # Load data sets
-gts_dataset = ContentProvider(args.gts_dataset, args.data_path, args.gts_split, None, return_mask=False)
-masks_dataset = ContentProvider(args.masks_dataset, args.data_path, args.masks_split, None, return_gt=False)
+gts_dataset = ContentProvider(args.gts_dataset, args.data_path, args.gts_split, None, None, return_mask=False)
+masks_dataset = ContentProvider(args.masks_dataset, args.data_path, args.masks_split, None, None, return_gt=False)
 dataset = MaskedSequenceDataset(gts_dataset, masks_dataset, (args.image_size, args.image_size), args.frames_n,
                                 args.frames_spacing)
-loader = torch.utils.data.DataLoader(dataset, batch_size=8, shuffle=True)
 
-# Iterate over the data sets
-for i, data in enumerate(loader):
-    (x, m), y, info = data
-    for i in range(x.size(2)):
-        plt.imshow(x[0, :, i].permute(1, 2, 0))
-        plt.show()
-    exit()
+# Enable profiling
+pr = cProfile.Profile()
+pr.enable()
+item = dataset[10]
+pr.disable()
+s = io.StringIO()
+ps = pstats.Stats(pr, stream=s).sort_stats(pstats.SortKey.CUMULATIVE)
+ps.print_stats()
+print(s.getvalue())
