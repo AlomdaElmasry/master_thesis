@@ -3,20 +3,13 @@ from datasets.content_provider import ContentProvider
 from datasets.masked_sequence_dataset import MaskedSequenceDataset
 import random
 import torch.utils.data
-import utils.paths
-import jpeg4py as jpeg
 
 
 class CopyPasteData(skeltorch.Data):
     dataset_paths = {'davis-2017': 'DAVIS-2017', 'got-10k': 'GOT10k', 'youtube-vos': 'YouTubeVOS', 'coco': 'CoCo'}
 
     def create(self, data_path):
-        train_items_names, train_items_gts_paths, train_items_masks_paths = utils.paths.DatasetPaths.get_items(
-            self.experiment.configuration.get('data', 'train_dataset'), data_path, 'train'
-        )
-        train_items_sizes = []
-        for i in range(len(train_items_names)):
-            train_items_sizes.append(jpeg.JPEG(train_items_gts_paths[i][0]).decode().shape)
+        pass
 
     def load_datasets(self, data_path):
         train_gts_dataset, validation_gts_dataset, test_gts_dataset = self._load_datasets_gts(data_path)
