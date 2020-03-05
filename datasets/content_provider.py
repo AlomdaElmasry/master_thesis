@@ -12,6 +12,7 @@ class ContentProvider(torch.utils.data.Dataset):
     dataset_folder = None
     split = None
     movement_simulator = None
+    logger = None
     return_gt = None
     return_mask = None
     items_names = None
@@ -19,11 +20,12 @@ class ContentProvider(torch.utils.data.Dataset):
     items_masks_paths = None
     items_limits = None
 
-    def __init__(self, dataset_name, data_folder, split, movement_simulator, return_gt=True, return_mask=True):
+    def __init__(self, dataset_name, data_folder, split, movement_simulator, logger, return_gt=True, return_mask=True):
         self.dataset_name = dataset_name
         self.data_folder = data_folder
         self.split = split
         self.movement_simulator = movement_simulator
+        self.logger = logger
         self.return_gt = return_gt
         self.return_mask = return_mask
         self.items_names, self.items_gts_paths, self.items_masks_paths = \
@@ -57,7 +59,9 @@ class ContentProvider(torch.utils.data.Dataset):
             bg_np = jpeg.JPEG(self.items_gts_paths[sequence_index][frame_index_bis]).decode() / 255
             return torch.from_numpy(bg_np).permute(2, 0, 1)
         except Exception as e:
-            print('Exception with file {} - {}'.format(self.items_gts_paths[sequence_index][frame_index_bis], str(e)))
+            self.logger.warning(
+                'Exception with file {} - {}'.format(self.items_gts_paths[sequence_index][frame_index_bis], str(e))
+            )
             random_frame_index_bix = random.randint(0, len(self.items_gts_paths[sequence_index]) - 1)
             return self._get_item_background(sequence_index, random_frame_index_bix)
 
