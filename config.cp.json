@@ -5,15 +5,15 @@
     "masks_dataset": "youtube-vos",
     "train_size": [256, 256],
     "test_size": [240, 480],
-    "frames_n": 7,
+    "frames_n": 5,
     "frames_spacing": 2,
     "dilatation_filter_size": [3, 3],
     "dilatation_iterations": 4
   },
   "training": {
     "batch_size": 4,
-    "train_max_iterations": 5,
-    "validation_max_iterations": 2,
+    "train_max_iterations": 1000,
+    "validation_max_iterations": 50,
     "lr": 1e-4
   }
 }
