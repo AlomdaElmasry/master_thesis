@@ -43,44 +43,9 @@ class CopyPasteRunner(skeltorch.Runner):
         visibility_maps = (1 - m[:, :, t].unsqueeze(2)) * m_rt
 
         # Compute loss and return
-        return self.compute_loss(y[:, :, t], y_hat, y_hat_comp, x[:, :, t], x_rt, visibility_maps, m[:, :, t], c_mask)
+        return self._compute_loss(y[:, :, t], y_hat, y_hat_comp, x[:, :, t], x_rt, visibility_maps, m[:, :, t], c_mask)
 
-    def train_after_epoch_tasks(self, device):
-        super().train_after_epoch_tasks(device)
-        self.experiment.data.regenerate_loaders(self.experiment.data.loaders['train'].num_workers)
-        self._generate_random_samples(device)
-
-    def train_iteration_log(self, e_train_losses, log_period, device):
-        super().train_iteration_log(e_train_losses, log_period, device)
-
-    def _generate_random_samples(self, device):
-
-        # Create provisional DataLoader with the randomly selected samples and select 5 items
-        loader = torch.utils.data.DataLoader(self.experiment.data.datasets['train'], shuffle=True, batch_size=5)
-        (x, m), y, _ = next(iter(loader))
-
-        # Move data to the correct device
-        x = x.to(device)
-        m = m.to(device)
-        y = y.to(device)
-
-        # Get target and reference frames
-        t = x.size(2) // 2
-        r_list = list(range(x.size(2)))
-        r_list.pop(t)
-
-        # Propagate the data through the model
-        with torch.no_grad():
-            y_hat, y_hat_comp, _, _ = self.model(x, m, y, t, r_list)
-
-        # Log each image of the batch in TensorBoard
-        self.experiment.tbx.add_images('x-t', x[:, :, t], global_step=self.counters['epoch'])
-        self.experiment.tbx.add_images('m-t', m[:, :, t], global_step=self.counters['epoch'])
-        self.experiment.tbx.add_images('y', y[:, :, t], global_step=self.counters['epoch'])
-        self.experiment.tbx.add_images('y-hat', y_hat, global_step=self.counters['epoch'])
-        self.experiment.tbx.add_images('y-hat-comp', y_hat_comp, global_step=self.counters['epoch'])
-
-    def compute_loss(self, y, y_hat, y_hat_comp, x_t, x_rt, v, m, c_mask):
+    def _compute_loss(self, y, y_hat, y_hat_comp, x_t, x_rt, v, m, c_mask):
         # Loss 1: Alignment Loss
         alignment_input = x_rt * v
         alignment_target = x_t.unsqueeze(2).repeat(1, 1, x_rt.size(2), 1, 1) * v
@@ -128,16 +93,52 @@ class CopyPasteRunner(skeltorch.Runner):
         return 2 * loss_alignment + 10 * loss_vh + 20 * loss_nvh + 6 * loss_nh + 0.01 * loss_perceptual + \
                24 * loss_style + 0.1 * loss_smoothing
 
-    def test(self, epoch, save_as_video, device):
-        # Initialize the model, optimizer and set it to eval() mode
-        self.init_model(device)
-        self.init_optimizer(device)
-        self.model.eval()
+    def train_iteration_log(self, e_train_losses, log_period, device):
+        super().train_iteration_log(e_train_losses, log_period, device)
 
+    def train_after_epoch_tasks(self, device):
+        super().train_after_epoch_tasks(device)
+        self.experiment.data.regenerate_loaders(self.experiment.data.loaders['train'].num_workers)
+        self._generate_random_samples(device)
+
+    def _generate_random_samples(self, device):
+        # Create provisional DataLoader with the randomly selected samples and select 5 items
+        batch_size = self.experiment.configuration.get('training', 'batch_size')
+        loader = torch.utils.data.DataLoader(
+            self.experiment.data.datasets['train'], shuffle=True, batch_size=batch_size
+        )
+        (x, m), y, _ = next(iter(loader))
+
+        # Move data to the correct device
+        x = x.to(device)
+        m = m.to(device)
+        y = y.to(device)
+
+        # Get target and reference frames
+        t = x.size(2) // 2
+        r_list = list(range(x.size(2)))
+        r_list.pop(t)
+
+        # Propagate the data through the model
+        with torch.no_grad():
+            y_hat, y_hat_comp, _, _ = self.model(x, m, y, t, r_list)
+
+        # Expand 1->3 dimensions of the masks
+        m = m.repeat(1, 3, 1, 1, 1)
+
+        # Save group image for each sample
+        for b in range(x.size(0)):
+            tensor_list = [y[b, :, t], x[b, :, t], m[b, :, t], y_hat[b, :], y_hat_comp[b, :]]
+            self.experiment.tbx.add_images(
+                'samples/epoch-{}'.format(self.counters['epoch']), tensor_list, global_step=b+1, dataformats='CHW'
+            )
+
+    def test(self, epoch, save_as_video, device):
         # Restore checkpoint
         self.load_states(epoch, device)
 
         # Iterate over the data of the loader
+        self.model.eval()
         for it_data in self.experiment.data.loaders['test']:
             # Decompose iteration data and get relevant sizes
             (x, m), y, info = it_data
