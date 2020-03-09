@@ -218,15 +218,11 @@ class CopyPasteRunner(skeltorch.Runner):
                 ))
 
     def test_alignment(self, epoch, save_as_video, device):
-        # Initialize the model, optimizer and set it to eval() mode
-        self.init_model(device)
-        self.init_optimizer(device)
-        self.model.eval()
-
         # Restore checkpoint
         self.load_states(epoch, device)
 
         # Iterate over the data of the loader
+        self.model.eval()
         for it_data in self.experiment.data.loaders['test']:
             (x, m), y, info = it_data
             batch_size, n_channels, n_frames, img_height, img_width = x.size()

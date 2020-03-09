@@ -12,7 +12,6 @@ parser.add_argument('--max-width', type=int, default=910, help='Number of worker
 parser.add_argument('--max-height', type=int, default=480, help='Number of workers to use')
 parser.add_argument('--keep-ratio', type=bool, default=True, help='Number of workers to use')
 parser.add_argument('--max-workers', type=int, default=10, help='Number of workers to use')
-
 args = parser.parse_args()
 
 

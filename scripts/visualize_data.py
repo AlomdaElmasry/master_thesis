@@ -16,8 +16,8 @@ parser.add_argument('--frames-spacing', default=2, type=int, help='Frame spacing
 args = parser.parse_args()
 
 # Load data sets
-gts_dataset = ContentProvider(args.gts_dataset, args.data_path, args.gts_split, None, return_mask=False)
-masks_dataset = ContentProvider(args.masks_dataset, args.data_path, args.masks_split, None, return_gt=False)
+gts_dataset = ContentProvider(args.gts_dataset, args.data_path, args.gts_split, None, None, return_mask=False)
+masks_dataset = ContentProvider(args.masks_dataset, args.data_path, args.masks_split, None, None, return_gt=False)
 dataset = MaskedSequenceDataset(gts_dataset, masks_dataset, (args.image_size, args.image_size), args.frames_n,
                                 args.frames_spacing)
 loader = torch.utils.data.DataLoader(dataset, batch_size=8, shuffle=True)

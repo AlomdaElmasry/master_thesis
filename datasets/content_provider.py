@@ -4,7 +4,6 @@ from utils.paths import DatasetPaths
 import random
 import jpeg4py as jpeg
 import cv2
-import matplotlib.pyplot as plt
 
 
 class ContentProvider(torch.utils.data.Dataset):
@@ -80,20 +79,19 @@ class ContentProvider(torch.utils.data.Dataset):
 
     def get_items(self, frames_indexes):
         y, m = None, None
-        for i in range(len(frames_indexes)):
-            gt, mask, _ = self.__getitem__(frames_indexes[i])
-            # Check GT
-            if self.return_gt and y is None:
-                y = torch.zeros((gt.shape[0], len(frames_indexes), gt.shape[1], gt.shape[2]), dtype=torch.float32)
-                y[:, i] = gt
-            elif self.return_gt:
-                y[:, i] = gt
-            # Check mask
-            if self.return_mask and m is None:
-                m = torch.zeros((mask.shape[0], len(frames_indexes), mask.shape[1], mask.shape[2]), dtype=torch.float32)
-                m[:, i] = mask
-            elif self.return_mask:
-                m[:, i] = mask
+        y0, m0, _ = self.__getitem__(frames_indexes[0])
+        if self.return_gt:
+            y = torch.zeros((y0.size(0), len(frames_indexes), y0.size(1), y0.size(2)), dtype=torch.float32)
+            y[:, 0] = y0
+        if self.return_mask:
+            m = torch.zeros((m0.size(0), len(frames_indexes), m0.size(1), m0.size(2)), dtype=torch.float32)
+            m[:, 0] = m0
+        for i in range(1, len(frames_indexes)):
+            yi, mi, _ = self.__getitem__(frames_indexes[i])
+            if self.return_gt:
+                y[:, i] = yi
+            if self.return_mask:
+                m[:, i] = mi
         return y, m
 
     def __len__(self):
