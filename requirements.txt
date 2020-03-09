@@ -1,3 +1,4 @@
+progressbar
 torch
 numpy
 Pillow
