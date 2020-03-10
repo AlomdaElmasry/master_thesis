@@ -2,6 +2,7 @@ import ssl
 import torch
 import torch.nn as nn
 import torchvision.models
+import torchvision.models.utils
 from torchvision.models.vgg import cfgs, make_layers, model_urls
 
 ssl._create_default_https_context = ssl._create_unverified_context
@@ -15,7 +16,6 @@ class VGGFeatures(torchvision.models.VGG):
             x = layer(x)
             if isinstance(layer, nn.MaxPool2d):
                 pool_feats.append(x.detach())
-        # x = self.features(x)
         x = self.avgpool(x)
         x = torch.flatten(x, 1)
         x = self.classifier(x)

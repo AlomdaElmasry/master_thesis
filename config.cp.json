@@ -1,8 +1,8 @@
 {
   "data": {
-    "train_dataset": "davis-2017",
+    "train_dataset": "got-10k",
     "test_dataset": "davis-2017",
-    "masks_dataset": "coco",
+    "masks_dataset": "youtube-vos",
     "train_size": [256, 256],
     "test_size": [240, 480],
     "frames_n": 5,
@@ -11,7 +11,9 @@
     "dilatation_iterations": 4
   },
   "training": {
-    "batch_size": 1,
+    "batch_size": 4,
+    "train_max_iterations": 1000,
+    "validation_max_iterations": 50,
     "lr": 1e-4
   }
 }
