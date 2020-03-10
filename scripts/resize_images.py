@@ -11,6 +11,8 @@ parser.add_argument('--destination-path', required=True, help='Destination path 
 parser.add_argument('--max-width', type=int, default=910, help='Number of workers to use')
 parser.add_argument('--max-height', type=int, default=480, help='Number of workers to use')
 parser.add_argument('--keep-ratio', type=bool, default=True, help='Number of workers to use')
+parser.add_argument('--formats', nargs='+', default=['jpg', 'jpeg', 'png'], help='Image formats to search in the path')
+parser.add_argument('--save-bw', action='store_false', help='Store images in black and white')
 parser.add_argument('--max-workers', type=int, default=10, help='Number of workers to use')
 args = parser.parse_args()
 
@@ -27,7 +29,7 @@ def handle_folder(folder_path, args, bar, i):
             new_file_path = file_path.replace(folder_path, new_folder_path)
             file_extension = os.path.splitext(folder_item)[-1].replace('.', '')
             saving_flags = [int(cv2.IMWRITE_JPEG_QUALITY), 50] if file_extension == 'jpg' else []
-            if file_extension in ['jpg', 'png']:
+            if file_extension in args.formats:
                 image = cv2.imread(os.path.join(folder_path, folder_item))
                 if image.shape[0] > args.max_height or image.shape[1] > args.max_width:
                     new_height = args.max_height if image.shape[0] >= image.shape[1] else \
@@ -37,6 +39,8 @@ def handle_folder(folder_path, args, bar, i):
                     new_height = new_height if args.keep_ratio else args.max_height
                     new_width = new_width if args.keep_ratio else args.max_width
                     image = cv2.resize(image, (new_width, new_height))
+                if args.save_bw:
+                    image = (cv2.cvtColor(image, cv2.COLOR_RGB2GRAY) > 0) * 255
                 cv2.imwrite(new_file_path, image, saving_flags)
             else:
                 shutil.copy(file_path, new_file_path)
