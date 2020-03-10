@@ -60,7 +60,7 @@ class ContentProvider(torch.utils.data.Dataset):
     def _get_item_background(self, sequence_index, frame_index_bis):
         try:
             bg_np = jpeg.JPEG(self.items_gts_paths[sequence_index][frame_index_bis]).decode() / 255
-            return torch.from_numpy(bg_np).permute(2, 0, 1)
+            return torch.from_numpy(bg_np).permute(2, 0, 1).float()
         except Exception as e:
             self.logger.warning(
                 'Exception with file {} - {}'.format(self.items_gts_paths[sequence_index][frame_index_bis], str(e))
@@ -144,7 +144,11 @@ class ContentProvider(torch.utils.data.Dataset):
         y, m, info = self.__getitem__(frame_index)
         transformation_matrices = None
         if y is not None:
-            y, transformation_matrices = self.movement_simulator.simulate_movement(y, frames_n, transformation_matrices)
+            y, transformation_matrices = self.movement_simulator.simulate_movement(
+                y, frames_n, transformation_matrices
+            )
         if m is not None:
-            m, transformation_matrices = self.movement_simulator.simulate_movement(m, frames_n, transformation_matrices)
+            m, transformation_matrices = self.movement_simulator.simulate_movement(
+                m, frames_n, transformation_matrices
+            )
         return y, m, (info, transformation_matrices)

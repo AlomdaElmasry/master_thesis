@@ -3,6 +3,7 @@ from datasets.content_provider import ContentProvider
 from datasets.masked_sequence_dataset import MaskedSequenceDataset
 import random
 import torch.utils.data
+import utils.movement
 
 
 class CopyPasteData(skeltorch.Data):
@@ -12,28 +13,36 @@ class CopyPasteData(skeltorch.Data):
         pass
 
     def load_datasets(self, data_path):
-        train_gts_dataset, validation_gts_dataset, test_gts_dataset = self._load_datasets_gts(data_path)
-        train_masks_dataset, validation_masks_dataset, test_masks_dataset = self._load_datasets_masks(data_path)
+        gts_datasets = self._load_datasets_gts(data_path)
+        masks_datasets = self._load_datasets_masks(data_path)
         self.datasets['train'] = MaskedSequenceDataset(
-            gts_dataset=train_gts_dataset,
-            masks_dataset=train_masks_dataset,
+            gts_dataset=gts_datasets[0],
+            masks_dataset=masks_datasets[0],
             image_size=tuple(self.experiment.configuration.get('data', 'train_size')),
             frames_n=self.experiment.configuration.get('data', 'frames_n'),
             frames_spacing=self.experiment.configuration.get('data', 'frames_spacing')
         )
         self.datasets['validation'] = MaskedSequenceDataset(
-            gts_dataset=validation_gts_dataset,
-            masks_dataset=validation_masks_dataset,
+            gts_dataset=gts_datasets[1],
+            masks_dataset=masks_datasets[1],
             image_size=tuple(self.experiment.configuration.get('data', 'train_size')),
             frames_n=self.experiment.configuration.get('data', 'frames_n'),
             frames_spacing=self.experiment.configuration.get('data', 'frames_spacing')
         )
         self.datasets['test'] = MaskedSequenceDataset(
-            gts_dataset=test_gts_dataset,
-            masks_dataset=test_gts_dataset,
+            gts_dataset=gts_datasets[2],
+            masks_dataset=masks_datasets[2],
             image_size=tuple(self.experiment.configuration.get('data', 'test_size')),
             frames_n=-1,
             frames_spacing=None,
+            force_resize=True
+        )
+        self.datasets['test_inpainting'] = MaskedSequenceDataset(
+            gts_dataset=gts_datasets[3],
+            masks_dataset=masks_datasets[0],
+            image_size=(480, 912),
+            frames_n=9,
+            frames_spacing=2,
             force_resize=True
         )
 
@@ -61,7 +70,15 @@ class CopyPasteData(skeltorch.Data):
             movement_simulator=None,
             logger=self.logger,
         )
-        return train_gts_dataset, validation_gts_dataset, test_gts_dataset
+        test_inpainting_gts_dataset = ContentProvider(
+            dataset_name=self.experiment.configuration.get('data', 'train_dataset'),
+            data_folder=data_path,
+            split='validation',
+            movement_simulator=utils.movement.MovementSimulator(),
+            logger=self.logger,
+            return_mask=False
+        )
+        return train_gts_dataset, validation_gts_dataset, test_gts_dataset, test_inpainting_gts_dataset
 
     def _load_datasets_masks(self, data_path):
         train_masks_dataset = ContentProvider(
@@ -109,6 +126,12 @@ class CopyPasteData(skeltorch.Data):
         )
         self.loaders['test'] = torch.utils.data.DataLoader(
             dataset=self.datasets['test'],
+            batch_size=1,
+            num_workers=num_workers,
+            pin_memory=True
+        )
+        self.loaders['test_inpainting'] = torch.utils.data.DataLoader(
+            dataset=self.datasets['test_inpainting'],
             batch_size=1,
             num_workers=num_workers,
             pin_memory=True

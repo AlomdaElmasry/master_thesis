@@ -45,6 +45,14 @@ class CopyPasteRunner(skeltorch.Runner):
         # Compute loss and return
         return self._compute_loss(y[:, :, t], y_hat, y_hat_comp, x[:, :, t], x_rt, visibility_maps, m[:, :, t], c_mask)
 
+    def train_iteration_log(self, e_train_losses, log_period, device):
+        super().train_iteration_log(e_train_losses, log_period, device)
+
+    def train_after_epoch_tasks(self, device):
+        super().train_after_epoch_tasks(device)
+        self.experiment.data.regenerate_loaders(self.experiment.data.loaders['train'].num_workers)
+        self._generate_random_samples(device)
+
     def _compute_loss(self, y, y_hat, y_hat_comp, x_t, x_rt, v, m, c_mask):
         # Loss 1: Alignment Loss
         alignment_input = x_rt * v
@@ -80,10 +88,10 @@ class CopyPasteRunner(skeltorch.Runner):
         # Loss 6: Style
         loss_style = 0
         for p in range(len(vgg_y)):
-            B, C, H, W = vgg_y[p].size()
-            G_y = torch.mm(vgg_y[p].view(B * C, H * W), vgg_y[p].view(B * C, H * W).t())
-            G_y_comp = torch.mm(vgg_y_hat_comp[p].view(B * C, H * W), vgg_y_hat_comp[p].view(B * C, H * W).t())
-            loss_style += F.l1_loss(G_y_comp / (B * C * H * W), G_y / (B * C * H * W))
+            b, c, h, w = vgg_y[p].size()
+            g_y = torch.mm(vgg_y[p].view(b * c, h * w), vgg_y[p].view(b * c, h * w).t())
+            g_y_comp = torch.mm(vgg_y_hat_comp[p].view(b * c, h * w), vgg_y_hat_comp[p].view(b * c, h * w).t())
+            loss_style += F.l1_loss(g_y_comp / (b * c * h * w), g_y / (b * c * h * w))
         loss_style /= len(vgg_y)
 
         # Loss 7: Smoothing Checkerboard Effect
@@ -93,20 +101,9 @@ class CopyPasteRunner(skeltorch.Runner):
         return 2 * loss_alignment + 10 * loss_vh + 20 * loss_nvh + 6 * loss_nh + 0.01 * loss_perceptual + \
                24 * loss_style + 0.1 * loss_smoothing
 
-    def train_iteration_log(self, e_train_losses, log_period, device):
-        super().train_iteration_log(e_train_losses, log_period, device)
-
-    def train_after_epoch_tasks(self, device):
-        super().train_after_epoch_tasks(device)
-        self.experiment.data.regenerate_loaders(self.experiment.data.loaders['train'].num_workers)
-        self._generate_random_samples(device)
-
     def _generate_random_samples(self, device):
-        # Create provisional DataLoader with the randomly selected samples and select 5 items
-        batch_size = self.experiment.configuration.get('training', 'batch_size')
-        loader = torch.utils.data.DataLoader(
-            self.experiment.data.datasets['train'], shuffle=True, batch_size=batch_size
-        )
+        b = self.experiment.configuration.get('training', 'batch_size')
+        loader = torch.utils.data.DataLoader(self.experiment.data.datasets['train'], shuffle=True, batch_size=b)
         (x, m), y, _ = next(iter(loader))
 
         # Move data to the correct device
@@ -130,136 +127,151 @@ class CopyPasteRunner(skeltorch.Runner):
         for b in range(x.size(0)):
             tensor_list = [y[b, :, t], x[b, :, t], m[b, :, t], y_hat[b, :], y_hat_comp[b, :]]
             self.experiment.tbx.add_images(
-                'samples/epoch-{}'.format(self.counters['epoch']), tensor_list, global_step=b+1, dataformats='CHW'
+                'samples/epoch-{}'.format(self.counters['epoch']), tensor_list, global_step=b + 1, dataformats='CHW'
             )
 
     def test(self, epoch, save_as_video, device):
-        # Restore checkpoint
         self.load_states(epoch, device)
-
-        # Iterate over the data of the loader
         self.model.eval()
         for it_data in self.experiment.data.loaders['test']:
-            # Decompose iteration data and get relevant sizes
             (x, m), y, info = it_data
-            batch_size, n_channels, n_frames, img_height, img_width = x.size()
-
-            # Move y to CUDA
-            y = y.to(device)
+            b, c, n, h, w = x.size()
 
             # Create a matrix to store inpainted frames. Size (B, 2, C, F, H, W), where the 2 is due to double direction
-            frames_inpainted = np.zeros((batch_size, 2, n_channels, n_frames, img_height, img_width), dtype=np.float32)
-
-            # Create a list containing the indexes of the frames
-            index = [f for f in range(n_frames)]
+            y = y.to(device)
+            y_hat_comp = np.zeros((b, 2, c, n, h, w), dtype=np.float32)
 
             # Use the model twice: forward (0) and backward (1)
             for d in range(2):
-                # Create two aux variables to store input frames and masks in current direction
-                # Move to current device for memory purposes
                 x_copy = x.clone().to(device)
                 m_copy = m.clone().to(device)
 
-                # Reverse the indexes in backward pass
-                if d == 1:
-                    index.reverse()
-
                 # Iterate over all the frames of the video
-                for t in index:
-                    # Obtain a list containing the references frames of the current target frame
-                    r_list = CopyPasteRunner.get_reference_frame_indexes(t, n_frames)
+                for t in (list(range(n)) if d == 0 else reversed(list(range(n)))):
+                    r_list = CopyPasteRunner.get_reference_frame_indexes(t, n)
 
                     # Replace input_frames and input_masks with previous predictions to improve quality
                     with torch.no_grad():
                         _, x_copy[:, :, t], _, _ = self.model(x_copy, m_copy, y, t, r_list)
                         m_copy[:, :, t] = 0
+                        y_hat_comp[:, d, :, t] = x_copy[:, :, t].detach().cpu().numpy()
 
-                        a = x_copy[0, :, t].detach().permute(1, 2, 0).numpy()
-                        plt.imshow(a)
-                        plt.show()
-                        exit()
+            # Combine forward and backward predictions
+            forward_factor = np.arange(start=0, stop=y_hat_comp.shape[3]) / n
+            backward_factor = (n - np.arange(start=0, stop=y_hat_comp.shape[3])) / n
+            y_hat_comp = (
+                    y_hat_comp[:, 0].transpose(0, 1, 3, 4, 2) * forward_factor * 255 +
+                    y_hat_comp[:, 1].transpose(0, 1, 3, 4, 2) * backward_factor * 255
+            ).transpose(0, 4, 2, 3, 1).astype(np.uint8)
 
-                    # Obtain an estimation of the inpainted frame f
-                    frames_inpainted[:, d, :, t] = x_copy[:, :, t].detach().cpu().numpy()
-
-            # Create forward and backward factors and combine them.
-            # Transpose frames_inpainted to be (B,F,H,W,C)
-            # Change scale from float64 [0,1] to uint8 [0,255]
-            forward_factor = np.arange(start=0, stop=frames_inpainted.shape[3]) / len(index)
-            backward_factor = (len(index) - np.arange(start=0, stop=frames_inpainted.shape[3])) / len(index)
-            frames_inpainted = (frames_inpainted[:, 0].transpose(0, 1, 3, 4, 2) * forward_factor +
-                                frames_inpainted[:, 1].transpose(0, 1, 3, 4, 2) * backward_factor
-                                ).transpose(0, 4, 2, 3, 1)
-            frames_inpainted = (frames_inpainted * 255.).astype(np.uint8)
-
-            # Iterate over batch items and create the result for each one
-            for b in range(batch_size):
-
-                # Save the result as frames or videos depending on the request
-                if save_as_video:
-                    frames_to_video = utils.FramesToVideo(0, 10, None)
-                    frames_to_video.add_sequence(frames_inpainted[b])
-                    frames_to_video.save(os.path.join(
-                        self.experiment.paths['results'], 'test', 'epoch-{}'.format(self.counters['epoch'])), info[b][0]
-                    )
-                else:
-                    frames_path = os.path.join(
-                        self.experiment.paths['results'], 'test', 'epoch-{}'.format(self.counters['epoch']), info[b][0]
-                    )
-                    if not os.path.exists(frames_path):
-                        os.makedirs(os.path.join(frames_path))
-                    for t in range(frames_inpainted.shape[1]):
-                        pil_img = Image.fromarray(frames_inpainted[b, t])
-                        pil_img.save(os.path.join(frames_path, '{}.jpg'.format(t)))
-
-                # Log progress
-                self.logger.info('Epoch {} | Test generated as {} for sequence {}'.format(
-                    self.counters['epoch'], 'video' if save_as_video else 'frames', info[b]
-                ))
+            # Save the samples of the batch
+            self.save_samples(y_hat_comp, 'test', info[0], save_as_video)
 
     def test_alignment(self, epoch, save_as_video, device):
-        # Restore checkpoint
         self.load_states(epoch, device)
-
-        # Iterate over the data of the loader
         self.model.eval()
         for it_data in self.experiment.data.loaders['test']:
             (x, m), y, info = it_data
-            batch_size, n_channels, n_frames, img_height, img_width = x.size()
+            b, c, n, h, w = x.size()
 
-            # Set a frame index and obtain its reference frames
+            # Force t=0 and obtain predicted aligned frames
             t = 0
-            r_list = CopyPasteRunner.get_reference_frame_indexes(t, n_frames)
-
-            # Obtained aligned frames (provisional)
-            _, _, y_rt = self.model.align(x, m, y, t, r_list)
+            r_list = CopyPasteRunner.get_reference_frame_indexes(t, n)
+            _, _, y_aligned = self.model.align(x, m, y, t, r_list)
 
             # Create a numpy array of size (B,F,H,W,C)
-            y_rt = (y_rt.detach().cpu().permute(0, 2, 3, 4, 1).numpy() * 255).astype(np.uint8)
+            y_aligned = (y_aligned.detach().cpu().permute(0, 2, 3, 4, 1).numpy() * 255).astype(np.uint8)
 
-            # Iterate over batch items and create the result for each one
-            for b in range(batch_size):
-                if save_as_video:
-                    frames_to_video = utils.FramesToVideo(0, 10, None)
-                    frames_to_video.add_sequence(y_rt[b])
-                    frames_to_video.save(os.path.join(self.experiment.paths['results'], 'test_alignment', 'epoch-{}'
-                                                      .format(self.counters['epoch'])), info[b][0])
-                else:
-                    overlap_frames = utils.OverlapFrames(t, 50, 10)
-                    overlap_frames.add_sequence(y_rt[b])
-                    overlap_frames.save(os.path.join(self.experiment.paths['results'], 'test_alignment', 'epoch-{}'
-                                                     .format(self.counters['epoch'])), info[b][0])
-
-                # Log progress
-                self.logger.info('Epoch {} | Alignment test generated as {} for sequence {}'.format(
-                    self.counters['epoch'], 'video' if save_as_video else 'frames', info[b][0]
-                ))
+            # Save the samples of the batch
+            self.save_samples(y_aligned, 'test_alignment', info[0], save_as_video)
 
     def test_inpainting(self, epoch, save_as_video, device):
-        a = 1
+        self.load_states(epoch, device)
+        self.model.eval()
+        for it_data in self.experiment.data.loaders['test_inpainting']:
+            (x, m), y, (info, affine_matrices) = it_data
+            b, c, n, h, w = x.size()
+
+            # Compute inverse transformations
+            inverse_affine_matrices = [torch.inverse(affine_matrices[0, i]) for i in range(n)]
+            inverse_theta_matrices = torch.stack([
+                utils.MovementSimulator.affine2theta(iam, h, w) for iam in inverse_affine_matrices
+            ])
+            inverse_grid = F.affine_grid(inverse_theta_matrices, [n, c, h, w])
+
+            # Compute the aligned version of everything
+            x_aligned = F.grid_sample(x[0].transpose(0, 1), inverse_grid).transpose(0, 1).unsqueeze(0)
+            m_aligned = F.grid_sample(m[0].transpose(0, 1), inverse_grid).transpose(0, 1).unsqueeze(0)
+
+            # Create a matrix to store inpainted frames. Size (B, 2, C, F, H, W), where the 2 is due to double direction
+            y = y.to(device)
+            y_hat_comp = np.zeros((b, 2, c, n, h, w), dtype=np.float32)
+
+            # Use the model twice: forward (0) and backward (1)
+            for d in range(2):
+                x_copy = x.clone().to(device)
+                m_copy = m.clone().to(device)
+
+                # Iterate over all the frames of the video
+                for t in (list(range(n)) if d == 0 else reversed(list(range(n)))):
+                    with torch.no_grad():
+                        _, x_copy[:, :, t], _ = self.model.copy_and_paste(
+                            x_copy[:, :, t], m_copy[:, :, t], y[:, :, t], x_aligned, m_aligned
+                        )
+                        m_copy[:, :, t] = 0
+                        y_hat_comp[:, d, :, t] = x_copy[:, :, t].detach().cpu().numpy()
+                        print(t)
+
+            # Combine forward and backward predictions
+            forward_factor = np.arange(start=0, stop=y_hat_comp.shape[3]) / len(index)
+            backward_factor = (len(index) - np.arange(start=0, stop=y_hat_comp.shape[3])) / len(index)
+            y_hat_comp = (
+                    y_hat_comp[:, 0].transpose(0, 1, 3, 4, 2) * forward_factor * 255 +
+                    y_hat_comp[:, 1].transpose(0, 1, 3, 4, 2) * backward_factor * 255
+            ).transpose(0, 4, 2, 3, 1).astype(np.uint8)
+
+            # Save the samples of the batch
+            self.save_samples(y_aligned, 'test_inpainting', info[0], save_as_video)
+
+    def save_samples(self, y_hat_comp, folder_name, file_name, save_as_video=True):
+        """Saves a set of samples.
+
+        Args:
+            y_hat_comp (np.Array): array of size (B,F,H,W,C) containing the frames to save.
+            folder_name (str): name of the folder where the results should be stored inside.
+            file_name (list[str]): list containing the names of the sequences to be stored.
+            save_as_video (bool): whether to store the sequence as a video.
+        """
+        for b in range(y_hat_comp.shape[0]):
+            # Define path where the sequences will be stored
+            b_path = os.path.join(
+                self.experiment.paths['results'], folder_name, 'epoch-{}'.format(self.counters['epoch'])
+            )
+            if not os.path.exists(b_path):
+                os.makedirs(b_path)
+
+            # Save sequence as video
+            if save_as_video:
+                frames_to_video = utils.FramesToVideo(0, 10, None)
+                frames_to_video.add_sequence(y_hat_comp[b])
+                frames_to_video.save(b_path, file_name[b])
+
+            # Save sequence as frames
+            else:
+                for t in range(y_hat_comp.shape[1]):
+                    bt_path = os.path.join(b_path, file_name[b])
+                    if not os.path.exists(bt_path):
+                        os.makedirs(bt_path)
+                    pil_img = Image.fromarray(y_hat_comp[b, t])
+                    pil_img.save(os.path.join(bt_path, '{}.jpg'.format(t)))
+
+            # Log progress
+            self.logger.info('Epoch {} | Test generated as {} for sequence {}'.format(
+                self.counters['epoch'], 'video' if save_as_video else 'frames', file_name[b]
+            ))
 
     @staticmethod
-    def get_reference_frame_indexes(t, n_frames, r_list_max_length=120):
+    def get_reference_frame_indexes(t, n_frames, p=2, r_list_max_length=120):
         # Set start and end frames
         start = t - r_list_max_length
         end = t + r_list_max_length
@@ -275,4 +287,4 @@ class CopyPasteRunner(skeltorch.Runner):
             end = n_frames - 1
 
         # Return list of reference_frames every n=2 frames
-        return [i for i in range(start, end, 2) if i != t]
+        return [i for i in range(start, end, p) if i != t]

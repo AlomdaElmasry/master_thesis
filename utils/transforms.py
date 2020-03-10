@@ -34,6 +34,7 @@ class ImageTransforms:
         Returns:
             torch.FloatTensor: patch of the image.
         """
+        crop_position = (100, 250)
         if crop_position is None:
             crop_position = (random.randint(0, image.size(2) - size[0]), random.randint(0, image.size(3) - size[1]))
         return image[:, :, crop_position[0]:crop_position[0] + size[0], crop_position[1]:crop_position[1] + size[1]], \

@@ -27,7 +27,7 @@ class MaskedSequenceDataset(torch.utils.data.Dataset):
             else self.gts_dataset.get_patch(item, self.frames_n, self.frames_spacing)
 
         # If self.gts_dataset and self.masks_dataset are not the same, obtain new mask
-        if self.gts_dataset != self.masks_dataset:
+        if self.masks_dataset is not None:
             masks_n = self.frames_n if self.frames_n != -1 else y.size(1)
             _, m, _ = self.masks_dataset.get_patch_random(masks_n, self.frames_spacing)
 
@@ -45,8 +45,6 @@ class MaskedSequenceDataset(torch.utils.data.Dataset):
 
         # Compute x
         x = (1 - m) * y + (m.permute(3, 2, 1, 0) * self.fill_color).permute(3, 2, 1, 0)
-
-        # Return (x,m), y, info
         return (x, m), y, info
 
     def __len__(self):
