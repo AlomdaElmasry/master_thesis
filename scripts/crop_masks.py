@@ -9,13 +9,16 @@ import shutil
 parser = argparse.ArgumentParser(description='Crops mask to the visual')
 parser.add_argument('--data-path', required=True, help='Path where the images are stored')
 parser.add_argument('--destination-path', required=True, help='Whether or not to remove entire sequence')
-parser.add_argument('--compression-level', type=int, default=9, help='Compression level of PNG images')
+parser.add_argument('--compression-level', type=int, default=1, help='Compression level of PNG images')
 parser.add_argument('--max-workers', type=int, default=10, help='Number of workers to use')
 args = parser.parse_args()
 
 
 def crop_image(image):
-    return image[np.ix_(image.any(1), image.any(0))]
+    image = image[np.ix_(image.any(1), image.any(0))]
+    pad_size = ((max(image.shape) - min(image.shape) + 1) // 2, (max(image.shape) - min(image.shape)) // 2)
+    pad_tuple = (pad_size, (0, 0)) if image.shape[1] > image.shape[0] else ((0, 0), pad_size)
+    return np.pad(image, pad_tuple)
 
 
 def crop_sequence(sequence_path, args, bar, i):
