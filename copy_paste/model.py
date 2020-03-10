@@ -175,10 +175,10 @@ class Decoder(nn.Module):
         x = self.conv3c(x)
         x = self.conv3b(x)
         x = self.conv3a(x)
-        x = F.interpolate(x, scale_factor=2, mode='nearest', align_corners=False)  # 2
+        x = F.interpolate(x, scale_factor=2, mode='nearest')  # 2
         x = self.conv32(x)
         x = self.conv2(x)
-        x = F.interpolate(x, scale_factor=2, mode='nearest', align_corners=False)  # 2
+        x = F.interpolate(x, scale_factor=2, mode='nearest')  # 2
         x = self.conv21(x)
 
         p = (x * self.std) + self.mean
