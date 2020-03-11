@@ -351,8 +351,8 @@ class CopyPasteRunner(skeltorch.Runner):
 
         # User VGG-16 to compute features of both the estimation and the target
         with torch.no_grad():
-            _, vgg_y = self.model_vgg(y_t)
-            _, vgg_y_hat_comp = self.model_vgg(y_hat_comp)
+            _, vgg_y = self.model_vgg(y_t.contiguous())
+            _, vgg_y_hat_comp = self.model_vgg(y_hat_comp.contiguous())
 
         # Loss 5: Perceptual
         loss_perceptual = 0
