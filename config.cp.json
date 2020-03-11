@@ -1,8 +1,11 @@
 {
   "data": {
-    "train_dataset": "got-10k",
+    "train_gts_dataset": "got-10k",
+    "train_masks_dataset": "youtube-vos",
+    "validation_gts_dataset": "got-10k",
+    "validation_masks_dataset": "youtube-vos",
     "test_dataset": "davis-2017",
-    "masks_dataset": "youtube-vos",
+    "validation_split": 0.2,
     "train_size": [256, 256],
     "test_size": [240, 480],
     "frames_n": 5,
@@ -12,8 +15,8 @@
   },
   "training": {
     "batch_size": 4,
-    "train_max_iterations": 1000,
-    "validation_max_iterations": 50,
+    "train_max_iterations": 10,
+    "validation_max_iterations": 5,
     "lr": 1e-4
   }
 }

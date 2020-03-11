@@ -8,17 +8,21 @@ class MaskedSequenceDataset(torch.utils.data.Dataset):
     image_size = None
     frames_n = None
     frames_spacing = None
+    dilatation_filter_size = None
+    dilatation_iterations = None
     force_resize = None
     fill_color = None
-    ram_items = {}
 
-    def __init__(self, gts_dataset, masks_dataset, image_size, frames_n, frames_spacing, force_resize=False):
+    def __init__(self, gts_dataset, masks_dataset, image_size, frames_n, frames_spacing, dilatation_filter_size,
+                 dilatation_iterations, force_resize=False):
         self.gts_dataset = gts_dataset
         self.masks_dataset = masks_dataset
         self.image_size = image_size
         self.frames_n = frames_n
         self.frames_spacing = frames_spacing
         self.force_resize = force_resize
+        self.dilatation_filter_size = dilatation_filter_size
+        self.dilatation_iterations = dilatation_iterations
         self.fill_color = torch.as_tensor([0.485, 0.456, 0.406], dtype=torch.float32)
 
     def __getitem__(self, item):
@@ -39,9 +43,8 @@ class MaskedSequenceDataset(torch.utils.data.Dataset):
 
         # Apply Mask transformations
         if self.image_size != (m.size(2), m.size(3)):
-            m = utils.transforms.ImageTransforms.resize(m, self.image_size)
-        m = (torch.sum(m, dim=0, keepdim=True) > 0).float()
-        # m = utils.transforms.ImageTransforms.dilatate(m, (3, 3), 4)
+            m = utils.transforms.ImageTransforms.resize(m, self.image_size, mode='nearest')
+        m = utils.transforms.ImageTransforms.dilatate(m, self.dilatation_filter_size, self.dilatation_iterations)
 
         # Compute x
         x = (1 - m) * y + (m.permute(3, 2, 1, 0) * self.fill_color).permute(3, 2, 1, 0)

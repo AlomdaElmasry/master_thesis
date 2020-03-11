@@ -19,7 +19,7 @@ class ImageTransforms:
         Returns:
             torch.FloatTensor: resized image.
         """
-        return F.interpolate(image.transpose(0, 1), size, mode=mode, align_corners=False).transpose(0, 1)
+        return F.interpolate(image.transpose(0, 1), size, mode=mode).transpose(0, 1)
 
     @staticmethod
     def crop(image, size, crop_position=None):
@@ -54,20 +54,21 @@ class ImageTransforms:
         return (torch.sum(image, dim=0) > threshold).type(torch.float32)
 
     @staticmethod
-    def dilatate(image, filter_size, iterations):
+    def dilatate(images, filter_size, iterations):
         """Dilatates an image with a filter of size ``filter_size``.
 
         Args:
-            image (torch.FloatTensor): tensor of size (C,F,H,W) containing the image.
+            image (torch.FloatTensor): tensor of size (1,F,H,W) containing the image.
             filter_size (tuple): size of the filter in the form (H,W).
             iterations (integer): number of times to apply the filter.
 
         Returns:
             torch.FloatTensor: dilatated image.
         """
-        image = cv2.dilate(
-            image.permute(1, 2, 0).numpy(),
-            cv2.getStructuringElement(cv2.MORPH_CROSS, filter_size),
-            iterations=iterations
-        ).astype(np.float32)
-        return torch.from_numpy(image).permute(2, 0, 1)
+        for f in range(images.size(1)):
+            images[:, f] = torch.from_numpy(cv2.dilate(
+                images[:, f].permute(1, 2, 0).numpy(),
+                cv2.getStructuringElement(cv2.MORPH_CROSS, filter_size),
+                iterations=iterations
+            )).unsqueeze(0).float()
+        return images

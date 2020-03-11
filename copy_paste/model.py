@@ -2,7 +2,6 @@ from __future__ import division
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import matplotlib.pyplot as plt
 
 
 class Conv2d(nn.Module):
@@ -260,78 +259,50 @@ class CPNet(nn.Module):
         self.register_buffer('mean', torch.FloatTensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1))
         self.register_buffer('mean3d', torch.FloatTensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1, 1))
 
-    def align_encode(self, frames, holes):
-
-        # Get important parameters
-        batch_size, _, num_frames, height, width = frames.size()
+    def align(self, x, m, y, t, r_list):
+        b, c, f, h, w = x.size()  # B C H W
 
         # Add padding to everything
-        (frames, holes), pad = pad_divide_by([frames, holes], 8, (frames.size()[3], frames.size()[4]))
-
-        feat_ = []
-        for t in range(num_frames):
-            feat = self.A_Encoder(frames[:, :, t], holes[:, :, t])
-            feat_.append(feat)
-        feats = torch.stack(feat_, dim=2)
-        return feats
-
-    def align(self, frames, masks, gts, target_index, reference_indexes):
-
-        # Get important parameters
-        B, C, H, W = frames[:, :, 0].size()  # B C H W
+        (x, m, y), pad = pad_divide_by([x, m, y], 8, (h, w))
 
         # Get alignment features
-        rfeats = self.align_encode(frames, masks)
-
-        # Add padding to everything
-        (frames, masks, gts), pad = pad_divide_by([frames, masks, gts], 8, (H, W))
+        r_feats = torch.stack([self.A_Encoder(x[:, :, i], m[:, :, i]) for i in range(f)], dim=2)
 
         # List to store the aligned GTs
-        aligned_r_ = []
-        rvmap_ = []
-        aligned_gts = []
+        x_aligned = []
+        v_aligned = []
+        y_aligned = []
 
         # Iterate over the reference frames
-        for r in reference_indexes:
+        for r in r_list:
             # Predict Affine transformation and created grid
-            theta_rt = self.A_Regressor(rfeats[:, :, target_index], rfeats[:, :, r])
-            grid_rt = F.affine_grid(theta_rt, (B, C, H, W), align_corners=False)
+            theta_rt = self.A_Regressor(r_feats[:, :, t], r_feats[:, :, r])
+            grid_rt = F.affine_grid(theta_rt, (b, c, h, w), align_corners=False)
 
-            # Align Masked Frame
-            aligned_r_.append(F.grid_sample(frames[:, :, r], grid_rt, align_corners=False))
-
-            # Align Mask
-            aligned_v = F.grid_sample(1 - masks[:, :, r], grid_rt, align_corners=False)
-            aligned_v = (aligned_v > 0.5).float()
-            rvmap_.append(aligned_v)
-
-            # Align GT
-            aligned_gts.append(F.grid_sample(gts[:, :, r], grid_rt, align_corners=False))
+            # Align x, v and y
+            x_aligned.append(F.grid_sample(x[:, :, r], grid_rt, align_corners=False))
+            v_aligned.append((F.grid_sample(1 - m[:, :, r], grid_rt, align_corners=False) > 0.5).float())
+            y_aligned.append(F.grid_sample(y[:, :, r], grid_rt, align_corners=False))
 
         # Return stacked GTs
-        return torch.stack(aligned_r_, dim=2), torch.stack(rvmap_, dim=2), torch.stack(aligned_gts, dim=2)
+        return torch.stack(x_aligned, dim=2), torch.stack(v_aligned, dim=2), torch.stack(y_aligned, dim=2)
 
-    def copy_and_paste(self, x_t, m_t, y_t, x_aligned, m_aligned):
-        # Get important parameters
-        B, C, H, W = x_t.size()  # B C H W
+    def copy_and_paste(self, x_t, m_t, y_t, x_aligned, v_aligned):
+        b, c, h, w = x_t.size()  # B C H W
 
         # Get c_features of everything
-        cfeats = [self.Encoder(x_t, m_t)]
-        for f in range(x_aligned.size(2)):
-            cfeats.append(self.Encoder(x_aligned[:, :, f], m_aligned[:, :, f]))
-        cfeats = torch.stack(cfeats, dim=2)
+        c_feats = torch.stack([self.Encoder(x_t, m_t)] + [
+            self.Encoder(x_aligned[:, :, i], v_aligned[:, :, i]) for i in range(x_aligned.size(2))
+        ], dim=2)
 
         # Apply Content-Matching Module
-        p_in, c_mask = self.CM_Module(cfeats, 1 - m_t, m_aligned)
+        p_in, c_mask = self.CM_Module(c_feats, 1 - m_t, v_aligned)
 
         # Upscale c_mask to match the size of the mask
-        c_mask = (F.interpolate(c_mask, size=(H, W), mode='bilinear', align_corners=False)).detach()
+        c_mask = (F.interpolate(c_mask, size=(h, w), mode='bilinear', align_corners=False)).detach()
 
-        # Obtain the predicted output y_hat
-        y_hat = self.Decoder(p_in)
-
-        # Clip the output to be between [0, 1]
-        y_hat = torch.clamp(y_hat, 0, 1)
+        # Obtain the predicted output y_hat. Clip the output to be between [0, 1
+        y_hat = torch.clamp(self.Decoder(p_in), 0, 1)
 
         # Combine prediction with GT of the frame. Limit the output range [0, 1].
         y_hat_comp = y_hat * m_t + y_t * (1 - m_t)
@@ -340,11 +311,6 @@ class CPNet(nn.Module):
         return y_hat, y_hat_comp, c_mask
 
     def forward(self, x, m, y, t, r_list):
-        # Step 1: Align Auxiliar Frames
-        x_aligned, m_aligned, _ = self.align(x, m, y, t, r_list)
-
-        # Step 2: Copy and Paste
-        y_hat, y_hat_comp, c_mask = self.copy_and_paste(x[:, :, t], m[:, :, t], y[:, :, t], x_aligned, m_aligned)
-
-        # Return y_hat_comp, y_hat, c_mask, (aligned_frames, aligned_masks)
-        return y_hat, y_hat_comp, c_mask, (x_aligned, m_aligned)
+        x_aligned, v_aligned, _ = self.align(x, m, y, t, r_list)
+        y_hat, y_hat_comp, c_mask = self.copy_and_paste(x[:, :, t], m[:, :, t], y[:, :, t], x_aligned, v_aligned)
+        return y_hat, y_hat_comp, c_mask, (x_aligned, v_aligned)

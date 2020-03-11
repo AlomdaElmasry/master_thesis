@@ -13,7 +13,21 @@ import matplotlib.pyplot as plt
 
 class CopyPasteRunner(skeltorch.Runner):
     model_vgg = None
-    after_it_time = None
+    e_train_losses_items = None
+    e_validation_losses_items = None
+    losses_it_items = None
+    losses_epoch_items = None
+
+    def __init__(self):
+        super().__init__()
+        self.losses_it_items = {
+            'train': {'alignment': {}, 'vh': {}, 'nvh': {}, 'nh': {}, 'perceptual': {}, 'style': {}},
+            'validation': {'alignment': {}, 'vh': {}, 'nvh': {}, 'nh': {}, 'perceptual': {}, 'style': {}}
+        }
+        self.losses_epoch_items = {
+            'train': {'alignment': {}, 'vh': {}, 'nvh': {}, 'nh': {}, 'perceptual': {}, 'style': {}},
+            'validation': {'alignment': {}, 'vh': {}, 'nvh': {}, 'nh': {}, 'perceptual': {}, 'style': {}}
+        }
 
     def init_model(self, device):
         self.model = CPNet().to(device)
@@ -37,98 +51,176 @@ class CopyPasteRunner(skeltorch.Runner):
         r_list.pop(t)
 
         # Propagate through the model
-        y_hat, y_hat_comp, c_mask, (x_rt, m_rt) = self.model(x, m, y, t, r_list)
+        y_hat, y_hat_comp, c_mask, (x_aligned, v_aligned) = self.model(x, m, y, t, r_list)
 
         # Get visibility map of aligned frames and target frame
-        visibility_maps = (1 - m[:, :, t].unsqueeze(2)) * m_rt
+        visibility_maps = (1 - m[:, :, t].unsqueeze(2)) * v_aligned
 
         # Compute loss and return
-        return self._compute_loss(y[:, :, t], y_hat, y_hat_comp, x[:, :, t], x_rt, visibility_maps, m[:, :, t], c_mask)
+        loss, loss_items = self._compute_loss(
+            y[:, :, t], y_hat, y_hat_comp, x[:, :, t], x_aligned, visibility_maps, m[:, :, t], c_mask
+        )
+
+        # Append loss items to epoch dictionary
+        if self.model.training:
+            self.e_train_losses_items['alignment'].append(loss_items[0].item())
+            self.e_train_losses_items['vh'].append(loss_items[1].item())
+            self.e_train_losses_items['nvh'].append(loss_items[2].item())
+            self.e_train_losses_items['nh'].append(loss_items[3].item())
+            self.e_train_losses_items['perceptual'].append(loss_items[4].item())
+            self.e_train_losses_items['style'].append(loss_items[5].item())
+        else:
+            self.e_validation_losses_items['alignment'].append(loss_items[0].item())
+            self.e_validation_losses_items['vh'].append(loss_items[1].item())
+            self.e_validation_losses_items['nvh'].append(loss_items[2].item())
+            self.e_validation_losses_items['nh'].append(loss_items[3].item())
+            self.e_validation_losses_items['perceptual'].append(loss_items[4].item())
+            self.e_validation_losses_items['style'].append(loss_items[5].item())
+
+        # Return combined loss
+        return loss
+
+    def train_before_epoch_tasks(self, device):
+        super().train_before_epoch_tasks(device)
+        self.e_train_losses_items = {'alignment': [], 'vh': [], 'nvh': [], 'nh': [], 'perceptual': [], 'style': []}
+        self.e_validation_losses_items = {'alignment': [], 'vh': [], 'nvh': [], 'nh': [], 'perceptual': [], 'style': []}
 
     def train_iteration_log(self, e_train_losses, log_period, device):
         super().train_iteration_log(e_train_losses, log_period, device)
+        self.losses_it_items['train']['alignment'][self.counters['train_it']] = np.mean(
+            self.e_train_losses_items['alignment'][-log_period:]
+        )
+        self.losses_it_items['train']['vh'][self.counters['train_it']] = np.mean(
+            self.e_train_losses_items['vh'][-log_period:]
+        )
+        self.losses_it_items['train']['nvh'][self.counters['train_it']] = np.mean(
+            self.e_train_losses_items['nvh'][-log_period:]
+        )
+        self.losses_it_items['train']['nh'][self.counters['train_it']] = np.mean(
+            self.e_train_losses_items['nh'][-log_period:]
+        )
+        self.losses_it_items['train']['perceptual'][self.counters['train_it']] = np.mean(
+            self.e_train_losses_items['perceptual'][-log_period:]
+        )
+        self.losses_it_items['train']['style'][self.counters['train_it']] = np.mean(
+            self.e_train_losses_items['style'][-log_period:]
+        )
+        self.experiment.tbx.add_scalar(
+            'loss_alignment/iteration/train',
+            self.losses_it_items['train']['alignment'][self.counters['train_it']],
+            self.counters['train_it']
+        )
+        self.experiment.tbx.add_scalar(
+            'loss_visible_hole/iteration/train',
+            self.losses_it_items['train']['vh'][self.counters['train_it']],
+            self.counters['train_it']
+        )
+        self.experiment.tbx.add_scalar(
+            'loss_non_visible_hole/iteration/train',
+            self.losses_it_items['train']['nvh'][self.counters['train_it']],
+            self.counters['train_it']
+        )
+        self.experiment.tbx.add_scalar(
+            'loss_non_hole/iteration/train',
+            self.losses_it_items['train']['nh'][self.counters['train_it']],
+            self.counters['train_it']
+        )
+        self.experiment.tbx.add_scalar(
+            'loss_perceptual/iteration/train',
+            self.losses_it_items['train']['perceptual'][self.counters['train_it']],
+            self.counters['train_it']
+        )
+        self.experiment.tbx.add_scalar(
+            'loss_style/iteration/train',
+            self.losses_it_items['train']['style'][self.counters['train_it']],
+            self.counters['train_it']
+        )
+
+    def validation_iteration_log(self, e_validation_losses, log_period, device):
+        super().validation_iteration_log(e_validation_losses, log_period, device)
+        self.losses_it_items['validation']['alignment'][self.counters['validation_it']] = np.mean(
+            self.e_validation_losses_items['alignment'][-log_period:]
+        )
+        self.losses_it_items['validation']['vh'][self.counters['validation_it']] = np.mean(
+            self.e_validation_losses_items['vh'][-log_period:]
+        )
+        self.losses_it_items['validation']['nvh'][self.counters['validation_it']] = np.mean(
+            self.e_validation_losses_items['nvh'][-log_period:]
+        )
+        self.losses_it_items['validation']['nh'][self.counters['validation_it']] = np.mean(
+            self.e_validation_losses_items['nh'][-log_period:]
+        )
+        self.losses_it_items['validation']['perceptual'][self.counters['validation_it']] = np.mean(
+            self.e_validation_losses_items['perceptual'][-log_period:]
+        )
+        self.losses_it_items['validation']['style'][self.counters['validation_it']] = np.mean(
+            self.e_validation_losses_items['style'][-log_period:]
+        )
+        self.experiment.tbx.add_scalar(
+            'loss_alignment/iteration/validation_it',
+            self.losses_it_items['validation']['alignment'][self.counters['validation_it']],
+            self.counters['validation_it']
+        )
+        self.experiment.tbx.add_scalar(
+            'loss_visible_hole/iteration/validation_it',
+            self.losses_it_items['validation']['vh'][self.counters['validation_it']],
+            self.counters['validation_it']
+        )
+        self.experiment.tbx.add_scalar(
+            'loss_non_visible_hole/iteration/validation_it',
+            self.losses_it_items['validation']['nvh'][self.counters['validation_it']],
+            self.counters['validation_it']
+        )
+        self.experiment.tbx.add_scalar(
+            'loss_non_hole/iteration/validation',
+            self.losses_it_items['validation']['nh'][self.counters['validation_it']],
+            self.counters['validation_it']
+        )
+        self.experiment.tbx.add_scalar(
+            'loss_perceptual/iteration/validation',
+            self.losses_it_items['validation']['perceptual'][self.counters['validation_it']],
+            self.counters['validation_it']
+        )
+        self.experiment.tbx.add_scalar(
+            'loss_style/iteration/validation',
+            self.losses_it_items['validation']['style'][self.counters['validation_it']],
+            self.counters['validation_it']
+        )
 
     def train_after_epoch_tasks(self, device):
         super().train_after_epoch_tasks(device)
-        self.experiment.data.regenerate_loaders(self.experiment.data.loaders['train'].num_workers)
+        self.experiment.data.load_loaders(None, self.experiment.data.loaders['train'].num_workers)
         self._generate_random_samples(device)
-
-    def _compute_loss(self, y, y_hat, y_hat_comp, x_t, x_rt, v, m, c_mask):
-        # Loss 1: Alignment Loss
-        alignment_input = x_rt * v
-        alignment_target = x_t.unsqueeze(2).repeat(1, 1, x_rt.size(2), 1, 1) * v
-        loss_alignment = F.l1_loss(alignment_input, alignment_target, reduction='sum') / torch.sum(v)
-
-        # Loss 2: Visible Hole
-        vh_input = m * c_mask * y_hat
-        vh_target = m * c_mask * y
-        loss_vh = F.l1_loss(vh_input, vh_target)
-
-        # Loss 3: Non-Visible Hole
-        nvh_input = m * (1 - c_mask) * y_hat
-        nvh_target = m * (1 - c_mask) * y
-        loss_nvh = F.l1_loss(nvh_input, nvh_target)
-
-        # Loss 4: Non-Hole
-        nh_input = (1 - m) * c_mask * y_hat
-        nh_target = (1 - m) * c_mask * y
-        loss_nh = F.l1_loss(nh_input, nh_target)
-
-        # User VGG-16 to compute features of both the estimation and the target
-        with torch.no_grad():
-            _, vgg_y = self.model_vgg(y)
-            _, vgg_y_hat_comp = self.model_vgg(y_hat_comp)
-
-        # Loss 5: Perceptual
-        loss_perceptual = 0
-        for p in range(len(vgg_y)):
-            loss_perceptual += F.l1_loss(vgg_y_hat_comp[p], vgg_y[p])
-        loss_perceptual /= len(vgg_y)
-
-        # Loss 6: Style
-        loss_style = 0
-        for p in range(len(vgg_y)):
-            b, c, h, w = vgg_y[p].size()
-            g_y = torch.mm(vgg_y[p].view(b * c, h * w), vgg_y[p].view(b * c, h * w).t())
-            g_y_comp = torch.mm(vgg_y_hat_comp[p].view(b * c, h * w), vgg_y_hat_comp[p].view(b * c, h * w).t())
-            loss_style += F.l1_loss(g_y_comp / (b * c * h * w), g_y / (b * c * h * w))
-        loss_style /= len(vgg_y)
-
-        # Loss 7: Smoothing Checkerboard Effect
-        loss_smoothing = 0
-
-        # Return combination of the losses
-        return 2 * loss_alignment + 10 * loss_vh + 20 * loss_nvh + 6 * loss_nh + 0.01 * loss_perceptual + \
-               24 * loss_style + 0.1 * loss_smoothing
-
-    def _generate_random_samples(self, device):
-        b = self.experiment.configuration.get('training', 'batch_size')
-        loader = torch.utils.data.DataLoader(self.experiment.data.datasets['train'], shuffle=True, batch_size=b)
-        (x, m), y, _ = next(iter(loader))
-
-        # Move data to the correct device
-        x = x.to(device)
-        m = m.to(device)
-        y = y.to(device)
-
-        # Get target and reference frames
-        t = x.size(2) // 2
-        r_list = list(range(x.size(2)))
-        r_list.pop(t)
-
-        # Propagate the data through the model
-        with torch.no_grad():
-            y_hat, y_hat_comp, _, _ = self.model(x, m, y, t, r_list)
-
-        # Expand 1->3 dimensions of the masks
-        m = m.repeat(1, 3, 1, 1, 1)
-
-        # Save group image for each sample
-        for b in range(x.size(0)):
-            tensor_list = [y[b, :, t], x[b, :, t], m[b, :, t], y_hat[b, :], y_hat_comp[b, :]]
-            self.experiment.tbx.add_images(
-                'samples/epoch-{}'.format(self.counters['epoch']), tensor_list, global_step=b + 1, dataformats='CHW'
-            )
+        self.losses_epoch_items['train']['alignment'][self.counters['epoch']] = np.mean(
+            self.e_train_losses_items['alignment']
+        )
+        self.losses_epoch_items['train']['vh'][self.counters['epoch']] = np.mean(self.e_train_losses_items['vh'])
+        self.losses_epoch_items['train']['nvh'][self.counters['epoch']] = np.mean(self.e_train_losses_items['nvh'])
+        self.losses_epoch_items['train']['nh'][self.counters['epoch']] = np.mean(self.e_train_losses_items['nh'])
+        self.losses_epoch_items['train']['perceptual'][self.counters['epoch']] = np.mean(
+            self.e_train_losses_items['perceptual']
+        )
+        self.losses_epoch_items['train']['style'][self.counters['epoch']] = np.mean(
+            self.e_validation_losses_items['style']
+        )
+        self.losses_epoch_items['validation']['alignment'][self.counters['epoch']] = np.mean(
+            self.e_validation_losses_items['alignment']
+        )
+        self.losses_epoch_items['validation']['vh'][self.counters['epoch']] = np.mean(
+            self.e_validation_losses_items['vh']
+        )
+        self.losses_epoch_items['validation']['nvh'][self.counters['epoch']] = np.mean(
+            self.e_validation_losses_items['nvh']
+        )
+        self.losses_epoch_items['validation']['nh'][self.counters['epoch']] = np.mean(
+            self.e_validation_losses_items['nh']
+        )
+        self.losses_epoch_items['validation']['perceptual'][self.counters['epoch']] = np.mean(
+            self.e_validation_losses_items['perceptual']
+        )
+        self.losses_epoch_items['validation']['style'][self.counters['epoch']] = np.mean(
+            self.e_validation_losses_items['style']
+        )
 
     def test(self, epoch, save_as_video, device):
         self.load_states(epoch, device)
@@ -165,7 +257,7 @@ class CopyPasteRunner(skeltorch.Runner):
             ).transpose(0, 4, 2, 3, 1).astype(np.uint8)
 
             # Save the samples of the batch
-            self.save_samples(y_hat_comp, 'test', info[0], save_as_video)
+            self._save_samples(y_hat_comp, 'test', info[0], save_as_video)
 
     def test_alignment(self, epoch, save_as_video, device):
         self.load_states(epoch, device)
@@ -183,7 +275,7 @@ class CopyPasteRunner(skeltorch.Runner):
             y_aligned = (y_aligned.detach().cpu().permute(0, 2, 3, 4, 1).numpy() * 255).astype(np.uint8)
 
             # Save the samples of the batch
-            self.save_samples(y_aligned, 'test_alignment', info[0], save_as_video)
+            self._save_samples(y_aligned, 'test_alignment', info[0], save_as_video)
 
     def test_inpainting(self, epoch, save_as_video, device):
         self.load_states(epoch, device)
@@ -231,9 +323,92 @@ class CopyPasteRunner(skeltorch.Runner):
             ).transpose(0, 4, 2, 3, 1).astype(np.uint8)
 
             # Save the samples of the batch
-            self.save_samples(y_aligned, 'test_inpainting', info[0], save_as_video)
+            self._save_samples(y_aligned, 'test_inpainting', info[0], save_as_video)
 
-    def save_samples(self, y_hat_comp, folder_name, file_name, save_as_video=True):
+    def _compute_loss(self, y_t, y_hat, y_hat_comp, x_t, x_aligned, v_map, m, c_mask):
+        # Loss 1: Alignment Loss
+        alignment_input = x_aligned * v_map
+        alignment_target = x_t.unsqueeze(2).repeat(1, 1, x_aligned.size(2), 1, 1) * v_map
+        loss_alignment = F.l1_loss(alignment_input, alignment_target, reduction='sum') / torch.sum(v_map)
+
+        # Loss 2: Visible Hole
+        vh_input = m * c_mask * y_hat
+        vh_target = m * c_mask * y_t
+        # loss_vh = F.l1_loss(vh_input, vh_target)
+        loss_vh = F.l1_loss(vh_input, vh_target, reduction='sum') / torch.sum(m * c_mask)
+
+        # Loss 3: Non-Visible Hole
+        nvh_input = m * (1 - c_mask) * y_hat
+        nvh_target = m * (1 - c_mask) * y_t
+        # loss_nvh = F.l1_loss(nvh_input, nvh_target)
+        loss_nvh = F.l1_loss(nvh_input, nvh_target, reduction='sum') / torch.sum(m * (1 - c_mask))
+
+        # Loss 4: Non-Hole
+        nh_input = (1 - m) * c_mask * y_hat
+        nh_target = (1 - m) * c_mask * y_t
+        # loss_nh = F.l1_loss(nh_input, nh_target)
+        loss_nh = F.l1_loss(nh_input, nh_target, reduction='sum') / torch.sum((1 - m) * c_mask)
+
+        # User VGG-16 to compute features of both the estimation and the target
+        with torch.no_grad():
+            _, vgg_y = self.model_vgg(y_t)
+            _, vgg_y_hat_comp = self.model_vgg(y_hat_comp)
+
+        # Loss 5: Perceptual
+        loss_perceptual = 0
+        for p in range(len(vgg_y)):
+            loss_perceptual += F.l1_loss(vgg_y_hat_comp[p], vgg_y[p])
+        loss_perceptual /= len(vgg_y)
+
+        # Loss 6: Style
+        loss_style = 0
+        for p in range(len(vgg_y)):
+            b, c, h, w = vgg_y[p].size()
+            g_y = torch.mm(vgg_y[p].view(b * c, h * w), vgg_y[p].view(b * c, h * w).t())
+            g_y_comp = torch.mm(vgg_y_hat_comp[p].view(b * c, h * w), vgg_y_hat_comp[p].view(b * c, h * w).t())
+            loss_style += F.l1_loss(g_y_comp / (b * c * h * w), g_y / (b * c * h * w))
+        loss_style /= len(vgg_y)
+
+        # Loss 7: Smoothing Checkerboard Effect
+        loss_smoothing = 0
+
+        # Compute combined loss
+        loss = 2 * loss_alignment + 10 * loss_vh + 20 * loss_nvh + 6 * loss_nh + 0.01 * loss_perceptual + \
+               24 * loss_style + 0.1 * loss_smoothing
+
+        # Return combination of the losses
+        return loss, [loss_alignment, loss_vh, loss_nvh, loss_nh, loss_perceptual, loss_style]
+
+    def _generate_random_samples(self, device):
+        b = self.experiment.configuration.get('training', 'batch_size')
+        loader = torch.utils.data.DataLoader(self.experiment.data.datasets['train'], shuffle=True, batch_size=b)
+        (x, m), y, _ = next(iter(loader))
+
+        # Move data to the correct device
+        x = x.to(device)
+        m = m.to(device)
+        y = y.to(device)
+
+        # Get target and reference frames
+        t = x.size(2) // 2
+        r_list = list(range(x.size(2)))
+        r_list.pop(t)
+
+        # Propagate the data through the model
+        with torch.no_grad():
+            y_hat, y_hat_comp, _, _ = self.model(x, m, y, t, r_list)
+
+        # Expand 1->3 dimensions of the masks
+        m = m.repeat(1, 3, 1, 1, 1)
+
+        # Save group image for each sample
+        for b in range(x.size(0)):
+            tensor_list = [y[b, :, t], x[b, :, t], m[b, :, t], y_hat[b, :], y_hat_comp[b, :]]
+            self.experiment.tbx.add_images(
+                'samples/epoch-{}'.format(self.counters['epoch']), tensor_list, global_step=b + 1, dataformats='CHW'
+            )
+
+    def _save_samples(self, y_hat_comp, folder_name, file_name, save_as_video=True):
         """Saves a set of samples.
 
         Args:

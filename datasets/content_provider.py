@@ -1,45 +1,28 @@
 import torch.utils.data
 import numpy as np
-from utils.paths import DatasetPaths
 import random
 import jpeg4py as jpeg
 import cv2
 
 
 class ContentProvider(torch.utils.data.Dataset):
-    dataset_name = None
+    dataset_meta = None
     dataset_folder = None
-    split = None
     movement_simulator = None
     logger = None
-    return_gt = None
-    return_mask = None
     items_names = None
-    items_gts_paths = None
-    items_masks_paths = None
     items_limits = None
 
-    def __init__(self, dataset_name, data_folder, split, movement_simulator, logger, return_gt=True, return_mask=True):
-        self.dataset_name = dataset_name
+    def __init__(self, dataset_meta, data_folder, movement_simulator, logger):
+        self.dataset_meta = dataset_meta
         self.data_folder = data_folder
-        self.split = split
         self.movement_simulator = movement_simulator
         self.logger = logger
-        self.return_gt = return_gt
-        self.return_mask = return_mask
-        self.items_names, self.items_gts_paths, self.items_masks_paths = \
-            DatasetPaths.get_items(dataset_name, data_folder, split, return_gt, return_mask)
+        self.items_names = list(self.dataset_meta.keys())
         self.items_limits = np.cumsum([
-            len(item_paths) for item_paths in (
-                self.items_gts_paths if self.items_gts_paths is not None else self.items_masks_paths
-            )]
-        )
-        self._validate()
-
-    def _validate(self):
-        assert self.dataset_name in ['davis-2017', 'youtube-vos', 'got-10k']
-        assert self.split in ['train', 'validation', 'test']
-        assert not (self.dataset_name == 'youtube-vos' and self.return_mask and self.split != 'train')
+            len(self.dataset_meta[item_name][0]) if self.dataset_meta[item_name][0] is not None
+            else len(self.dataset_meta[item_name][1]) for item_name in self.items_names
+        ])
 
     def __getitem__(self, frame_index):
         """Returns the frame with index ``frame_item``.
@@ -53,44 +36,40 @@ class ContentProvider(torch.utils.data.Dataset):
         """
         sequence_index = next(x[0] for x in enumerate(self.items_limits) if x[1] > frame_index)
         frame_index_bis = frame_index - (self.items_limits[sequence_index - 1] if sequence_index > 0 else 0)
-        y = self._get_item_background(sequence_index, frame_index_bis) if self.return_gt else None
-        m = self._get_item_mask(sequence_index, frame_index_bis) if self.return_mask else None
+        y = self._get_item_background(sequence_index, frame_index_bis)
+        m = self._get_item_mask(sequence_index, frame_index_bis)
         return y, m, self.items_names[sequence_index]
 
     def _get_item_background(self, sequence_index, frame_index_bis):
-        try:
-            bg_np = jpeg.JPEG(self.items_gts_paths[sequence_index][frame_index_bis]).decode() / 255
+        if self.dataset_meta[self.items_names[sequence_index]][0] is not None:
+            bg_np = jpeg.JPEG(self.dataset_meta[self.items_names[sequence_index]][0][frame_index_bis]).decode() / 255
             return torch.from_numpy(bg_np).permute(2, 0, 1).float()
-        except Exception as e:
-            self.logger.warning(
-                'Exception with file {} - {}'.format(self.items_gts_paths[sequence_index][frame_index_bis], str(e))
-            )
-            random_frame_index_bix = random.randint(0, len(self.items_gts_paths[sequence_index]) - 1)
-            return self._get_item_background(sequence_index, random_frame_index_bix)
+        else:
+            return None
 
     def _get_item_mask(self, sequence_index, frame_index_bis):
-        try:
-            mask_np = cv2.imread(self.items_masks_paths[sequence_index][frame_index_bis], cv2.IMREAD_COLOR) / 255
-            return torch.from_numpy(mask_np).permute(2, 0, 1)
-        except Exception as e:
-            print('Exception with file {} - {}'.format(self.items_masks_paths[sequence_index][frame_index_bis], str(e)))
-            random_frame_index_bix = random.randint(0, len(self.items_masks_paths[sequence_index]) - 1)
-            return self._get_item_mask(sequence_index, random_frame_index_bix)
+        if self.dataset_meta[self.items_names[sequence_index]][1] is not None:
+            mask_np = cv2.imread(
+                self.dataset_meta[self.items_names[sequence_index]][1][frame_index_bis], cv2.IMREAD_GRAYSCALE
+            ) / 255
+            return torch.from_numpy(mask_np > 0).float()
+        else:
+            return None
 
     def get_items(self, frames_indexes):
         y, m = None, None
         y0, m0, _ = self.__getitem__(frames_indexes[0])
-        if self.return_gt:
-            y = torch.zeros((y0.size(0), len(frames_indexes), y0.size(1), y0.size(2)), dtype=torch.float32)
+        if y0 is not None:
+            y = torch.zeros((3, len(frames_indexes), y0.size(1), y0.size(2)), dtype=torch.float32)
             y[:, 0] = y0
-        if self.return_mask:
-            m = torch.zeros((m0.size(0), len(frames_indexes), m0.size(1), m0.size(2)), dtype=torch.float32)
-            m[:, 0] = m0
+        if m0 is not None:
+            m = torch.zeros((1, len(frames_indexes), m0.size(0), m0.size(1)), dtype=torch.float32)
+            m[:, 0] = m0.unsqueeze(0)
         for i in range(1, len(frames_indexes)):
             yi, mi, _ = self.__getitem__(frames_indexes[i])
-            if self.return_gt:
+            if y is not None:
                 y[:, i] = yi
-            if self.return_mask:
+            if m is not None:
                 m[:, i] = mi
         return y, m
 
