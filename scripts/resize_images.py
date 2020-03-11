@@ -10,10 +10,10 @@ parser.add_argument('--data-path', required=True, help='Path where the images ar
 parser.add_argument('--destination-path', required=True, help='Destination path where the will be stored')
 parser.add_argument('--max-width', type=int, default=910, help='Number of workers to use')
 parser.add_argument('--max-height', type=int, default=480, help='Number of workers to use')
-parser.add_argument('--keep-ratio', type=bool, default=True, help='Number of workers to use')
 parser.add_argument('--formats', nargs='+', default=['jpg', 'jpeg', 'png'], help='Image formats to search in the path')
-parser.add_argument('--save-bw', action='store_false', help='Store images in black and white')
-parser.add_argument('--upsample', action='store_false', help='Force upsampling')
+parser.add_argument('--keep-ratio', action='store_true', help='Keep image ratio')
+parser.add_argument('--save-bw', action='store_true', help='Store images in black and white')
+parser.add_argument('--upsample', action='store_true', help='Force upsampling')
 parser.add_argument('--max-workers', type=int, default=10, help='Number of workers to use')
 args = parser.parse_args()
 
@@ -61,4 +61,5 @@ bar = progressbar.ProgressBar(max_value=len(folder_paths))
 
 # Walk through the folders of args.data_path
 for i, folder_path in enumerate(folder_paths):
-    executor.submit(handle_folder, folder_path, args, bar, i)
+    handle_folder(folder_path, args, bar, i)
+    #executor.submit(handle_folder, folder_path, args, bar, i)
