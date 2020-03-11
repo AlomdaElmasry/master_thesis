@@ -50,7 +50,7 @@ class MovementSimulator:
         data_out = F.grid_sample(data_in.unsqueeze(0).repeat(n, 1, 1, 1), affine_grid)
 
         # Return both data_out and random_thetas_stacked
-        return data_out.permute(1, 0, 2, 3), random_affines_stacked
+        return data_out.permute(1, 0, 2, 3), random_affines
 
     @staticmethod
     def stack_transformations(affine_matrices, t):
