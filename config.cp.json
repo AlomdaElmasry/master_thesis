@@ -5,6 +5,7 @@
     "validation_gts_dataset": "got-10k",
     "validation_masks_dataset": "youtube-vos",
     "test_dataset": "davis-2017",
+    "train_resize": true,
     "validation_split": 0.2,
     "train_size": [256, 256],
     "test_size": [240, 480],
@@ -14,9 +15,9 @@
     "dilatation_iterations": 4
   },
   "training": {
-    "batch_size": 4,
-    "train_max_iterations": 10,
-    "validation_max_iterations": 5,
+    "batch_size": 8,
+    "train_max_iterations": 5000,
+    "validation_max_iterations": 500,
     "lr": 1e-4
   }
 }

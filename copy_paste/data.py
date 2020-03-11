@@ -14,10 +14,8 @@ class CopyPasteData(skeltorch.Data):
     validation_masks_meta = None
     test_meta = None
 
-    train_gts_indexes = None
-    train_masks_indexes = None
-    val_gts_indexes = None
-    val_masks_indexes = None
+    train_indexes = None
+    val_indexes = None
 
     def create(self, data_path):
         self.train_gts_meta = utils.paths.DatasetPaths.get_items(
@@ -49,16 +47,12 @@ class CopyPasteData(skeltorch.Data):
             data_folder=data_path,
             split='train'
         )
-        gts_indexes_limit = round(
-            (1 - self.experiment.configuration.get('data', 'validation_split')) * len(self.train_gts_meta.keys())
+        self.load_datasets(data_path)
+        indexes_limit = round(
+            (1 - self.experiment.configuration.get('data', 'validation_split')) * len(self.datasets['train'])
         )
-        masks_indexes_limit = round(
-            (1 - self.experiment.configuration.get('data', 'validation_split')) * len(self.train_masks_meta.keys())
-        )
-        self.train_gts_indexes = list(range(len(self.train_gts_meta.keys())))[:gts_indexes_limit]
-        self.val_gts_indexes = list(range(len(self.train_gts_meta.keys())))[gts_indexes_limit:]
-        self.train_masks_indexes = list(range(len(self.train_masks_meta.keys())))[:masks_indexes_limit]
-        self.val_masks_indexes = list(range(len(self.train_masks_meta.keys())))[masks_indexes_limit:]
+        self.train_indexes = list(range(len(self.datasets['train'])))[:indexes_limit]
+        self.val_indexes = list(range(len(self.datasets['train'])))[indexes_limit:]
 
     def load_datasets(self, data_path):
         gts_datasets = self._load_datasets_gts(data_path)
@@ -70,7 +64,8 @@ class CopyPasteData(skeltorch.Data):
             frames_n=self.experiment.configuration.get('data', 'frames_n'),
             frames_spacing=self.experiment.configuration.get('data', 'frames_spacing'),
             dilatation_filter_size=tuple(self.experiment.configuration.get('data', 'dilatation_filter_size')),
-            dilatation_iterations=self.experiment.configuration.get('data', 'dilatation_iterations')
+            dilatation_iterations=self.experiment.configuration.get('data', 'dilatation_iterations'),
+            force_resize=self.experiment.configuration.get('data', 'train_resize')
         )
         self.datasets['validation'] = MaskedSequenceDataset(
             gts_dataset=gts_datasets[1],
@@ -79,7 +74,8 @@ class CopyPasteData(skeltorch.Data):
             frames_n=self.experiment.configuration.get('data', 'frames_n'),
             frames_spacing=self.experiment.configuration.get('data', 'frames_spacing'),
             dilatation_filter_size=tuple(self.experiment.configuration.get('data', 'dilatation_filter_size')),
-            dilatation_iterations=self.experiment.configuration.get('data', 'dilatation_iterations')
+            dilatation_iterations=self.experiment.configuration.get('data', 'dilatation_iterations'),
+            force_resize=self.experiment.configuration.get('data', 'train_resize')
         )
         self.datasets['test'] = MaskedSequenceDataset(
             gts_dataset=gts_datasets[2],
@@ -133,15 +129,15 @@ class CopyPasteData(skeltorch.Data):
 
         # Check that the number of items in the GT do not surpass it
         train_max_items = batch_size * self.experiment.configuration.get('training', 'train_max_iterations')
-        if len(self.train_gts_indexes) > train_max_items:
-            train_gts_indexes = random.sample(self.train_gts_indexes, train_max_items)
+        if len(self.train_indexes) > train_max_items:
+            train_gts_indexes = random.sample(self.train_indexes, train_max_items)
         else:
-            train_gts_indexes = self.train_gts_indexes
+            train_gts_indexes = self.train_indexes
         validation_max_items = batch_size * self.experiment.configuration.get('training', 'validation_max_iterations')
-        if len(self.val_gts_indexes) > validation_max_items:
-            val_gts_indexes = random.sample(self.val_gts_indexes, validation_max_items)
+        if len(self.val_indexes) > validation_max_items:
+            val_gts_indexes = random.sample(self.val_indexes, validation_max_items)
         else:
-            val_gts_indexes = self.val_gts_indexes
+            val_gts_indexes = self.val_indexes
 
         self.loaders['train'] = torch.utils.data.DataLoader(
             dataset=self.datasets['train'],

@@ -1,5 +1,4 @@
 import cv2
-import numpy as np
 import random
 import torch
 import torch.nn.functional as F
@@ -8,7 +7,7 @@ import torch.nn.functional as F
 class ImageTransforms:
 
     @staticmethod
-    def resize(image, size, mode='bilinear'):
+    def resize(image, size, mode='bilinear', keep_ratio=True):
         """Resize an image using the the algorithm given in ``mode``.
 
         Args:
@@ -19,7 +18,13 @@ class ImageTransforms:
         Returns:
             torch.FloatTensor: resized image.
         """
-        return F.interpolate(image.transpose(0, 1), size, mode=mode).transpose(0, 1)
+        if keep_ratio:
+            new_height = size[0] if image.size(2) < image.size(3) else round(image.size(2) * size[1] / image.size(3))
+            new_width = size[1] if image.size(3) <= image.size(2) else round(image.size(3) * size[0] / image.size(2))
+            new_size = (new_height, new_width)
+            return F.interpolate(image.transpose(0, 1), new_size, mode=mode).transpose(0, 1)[:, :, :size[0], :size[1]]
+        else:
+            return F.interpolate(image.transpose(0, 1), size, mode=mode).transpose(0, 1)
 
     @staticmethod
     def crop(image, size, crop_position=None):

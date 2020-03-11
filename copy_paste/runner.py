@@ -38,7 +38,7 @@ class CopyPasteRunner(skeltorch.Runner):
 
     def train_step(self, it_data, device):
         # Decompose iteration data
-        (x, m), y, _ = it_data
+        (x, m), y, info = it_data
 
         # Move data to the correct device
         x = x.to(device)
