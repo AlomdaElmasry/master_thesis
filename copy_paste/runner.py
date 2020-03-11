@@ -334,19 +334,16 @@ class CopyPasteRunner(skeltorch.Runner):
         # Loss 2: Visible Hole
         vh_input = m * c_mask * y_hat
         vh_target = m * c_mask * y_t
-        # loss_vh = F.l1_loss(vh_input, vh_target)
         loss_vh = F.l1_loss(vh_input, vh_target, reduction='sum') / torch.sum(m * c_mask)
 
         # Loss 3: Non-Visible Hole
         nvh_input = m * (1 - c_mask) * y_hat
         nvh_target = m * (1 - c_mask) * y_t
-        # loss_nvh = F.l1_loss(nvh_input, nvh_target)
         loss_nvh = F.l1_loss(nvh_input, nvh_target, reduction='sum') / torch.sum(m * (1 - c_mask))
 
         # Loss 4: Non-Hole
         nh_input = (1 - m) * c_mask * y_hat
         nh_target = (1 - m) * c_mask * y_t
-        # loss_nh = F.l1_loss(nh_input, nh_target)
         loss_nh = F.l1_loss(nh_input, nh_target, reduction='sum') / torch.sum((1 - m) * c_mask)
 
         # User VGG-16 to compute features of both the estimation and the target

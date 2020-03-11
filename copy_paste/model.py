@@ -299,7 +299,7 @@ class CPNet(nn.Module):
         p_in, c_mask = self.CM_Module(c_feats, 1 - m_t, v_aligned)
 
         # Upscale c_mask to match the size of the mask
-        c_mask = (F.interpolate(c_mask, size=(h, w), mode='bilinear', align_corners=False)).detach()
+        c_mask = (F.interpolate(c_mask, size=(h, w), mode='bilinear', align_corners=False))
 
         # Obtain the predicted output y_hat. Clip the output to be between [0, 1
         y_hat = torch.clamp(self.Decoder(p_in), 0, 1)
