@@ -312,5 +312,6 @@ class CPNet(nn.Module):
 
     def forward(self, x, m, y, t, r_list):
         x_aligned, v_aligned, _ = self.align(x, m, y, t, r_list)
+        v_aligned.requires_grad = True
         y_hat, y_hat_comp, c_mask = self.copy_and_paste(x[:, :, t], m[:, :, t], y[:, :, t], x_aligned, v_aligned)
         return y_hat, y_hat_comp, c_mask, (x_aligned, v_aligned)
