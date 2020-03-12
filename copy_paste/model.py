@@ -2,6 +2,7 @@ from __future__ import division
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import matplotlib.pyplot as plt
 
 
 class Conv2d(nn.Module):
@@ -92,8 +93,8 @@ class A_Regressor(nn.Module):
         init_He(self)
 
         self.fc = nn.Linear(512, 6)
-        self.fc.weight.data.zero_()
-        self.fc.bias.data.copy_(torch.tensor([1, 0, 0, 0, 1, 0], dtype=torch.float32))
+        #self.fc.weight.data.zero_()
+        #self.fc.bias.data.copy_(torch.tensor([1, 0, 0, 0, 1, 0], dtype=torch.float32))
 
     def forward(self, feat1, feat2):
         x = torch.cat([feat1, feat2], dim=1)
