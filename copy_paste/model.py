@@ -287,7 +287,7 @@ class CPNet(nn.Module):
 
         # Align visibility maps
         v_aligned = F.grid_sample(
-            1 - m[:, :, r_list].transpose(1, 2).reshape(-1, 1, h, w), grid_rt, align_corners=False
+            1 - m[:, :, r_list].transpose(1, 2).reshape(-1, 1, h, w), grid_rt, mode='nearest'
         ).reshape(b, len(r_list), 1, h, w).transpose(1, 2)
 
         # Align y
@@ -295,15 +295,12 @@ class CPNet(nn.Module):
             y[:, :, r_list].transpose(1, 2).reshape(-1, c, h, w), grid_rt, align_corners=False
         ).reshape(b, len(r_list), c, h, w).transpose(1, 2)
 
-        # Return stacked GTs
-        return x_aligned, v_aligned, y_aligned
-
         # List to store the aligned GTs
         # x_aligned = []
         # v_aligned = []
         # y_aligned = []
         #
-        # Iterate over the reference frames
+        # # Iterate over the reference frames
         # for r in r_list:
         #     # Predict Affine transformation and created grid
         #     theta_rt = self.A_Regressor(r_feats[:, :, t], r_feats[:, :, r])
@@ -317,6 +314,9 @@ class CPNet(nn.Module):
         # x_aligned = torch.stack(x_aligned, dim=2)
         # v_aligned = torch.stack(v_aligned, dim=2)
         # y_aligned = torch.stack(y_aligned, dim=2)
+
+        # Return stacked GTs
+        return x_aligned, v_aligned, y_aligned
 
     def copy_and_paste(self, x_t, m_t, y_t, x_aligned, v_aligned):
         b, c, f_ref, h, w = x_aligned.size()  # B C H W
