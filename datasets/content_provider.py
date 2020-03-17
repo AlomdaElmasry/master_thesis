@@ -3,19 +3,20 @@ import numpy as np
 import random
 import jpeg4py as jpeg
 import cv2
+import os.path
 
 
 class ContentProvider(torch.utils.data.Dataset):
+    data_folder = None
     dataset_meta = None
-    dataset_folder = None
     movement_simulator = None
     logger = None
     items_names = None
     items_limits = None
 
-    def __init__(self, dataset_meta, data_folder, movement_simulator, logger):
-        self.dataset_meta = dataset_meta
+    def __init__(self, data_folder, dataset_meta, movement_simulator, logger):
         self.data_folder = data_folder
+        self.dataset_meta = dataset_meta
         self.movement_simulator = movement_simulator
         self.logger = logger
         self.items_names = list(self.dataset_meta.keys())
@@ -41,20 +42,20 @@ class ContentProvider(torch.utils.data.Dataset):
         return y, m, self.items_names[sequence_index]
 
     def _get_item_background(self, sequence_index, frame_index_bis):
-        if self.dataset_meta[self.items_names[sequence_index]][0] is not None:
-            bg_np = jpeg.JPEG(self.dataset_meta[self.items_names[sequence_index]][0][frame_index_bis]).decode() / 255
-            return torch.from_numpy(bg_np).permute(2, 0, 1).float()
-        else:
+        if self.dataset_meta[self.items_names[sequence_index]][0] is None:
             return None
+        item_path = os.path.join(
+            self.data_folder, self.dataset_meta[self.items_names[sequence_index]][0][frame_index_bis]
+        )
+        return torch.from_numpy(jpeg.JPEG(item_path).decode() / 255).permute(2, 0, 1).float()
 
     def _get_item_mask(self, sequence_index, frame_index_bis):
-        if self.dataset_meta[self.items_names[sequence_index]][1] is not None:
-            mask_np = cv2.imread(
-                self.dataset_meta[self.items_names[sequence_index]][1][frame_index_bis], cv2.IMREAD_GRAYSCALE
-            ) / 255
-            return torch.from_numpy(mask_np > 0).float()
-        else:
+        if self.dataset_meta[self.items_names[sequence_index]][1] is None:
             return None
+        item_path = os.path.join(
+            self.data_folder, self.dataset_meta[self.items_names[sequence_index]][1][frame_index_bis]
+        )
+        return torch.from_numpy(cv2.imread(item_path, cv2.IMREAD_GRAYSCALE) / 255 > 0).float()
 
     def get_items(self, frames_indexes):
         y, m = None, None

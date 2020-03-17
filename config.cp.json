@@ -6,6 +6,7 @@
     "validation_masks_dataset": "youtube-vos",
     "test_dataset": "davis-2017",
     "train_resize": true,
+    "max_mask_size": 0.1,
     "validation_split": 0.2,
     "train_size": [256, 256],
     "test_size": [240, 480],
