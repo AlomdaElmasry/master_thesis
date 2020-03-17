@@ -202,21 +202,23 @@ class CM_Module(nn.Module):
 
     def forward(self, values, tvmap, rvmaps):
         B, C, T, H, W = values.size()
+
         # t_feat: target feature
         t_feat = values[:, :, 0]
         # r_feats: refetence features
         r_feats = values[:, :, 1:]
 
         B, Cv, T, H, W = r_feats.size()
+
         # vmap: visibility map
         # tvmap: target visibility map
         # rvmap: reference visibility map
         # gs: cosine similarity
         # c_m: c_match
         gs_, vmap_ = [], []
-        tvmap_t = (F.interpolate(tvmap, size=(H, W), mode='bilinear', align_corners=False) > 0.5).float()
+        tvmap_t = F.interpolate(tvmap, size=(H, W), mode='nearest')
         for r in range(T):
-            rvmap_t = (F.interpolate(rvmaps[:, :, r], size=(H, W), mode='bilinear') > 0.5).float()
+            rvmap_t = F.interpolate(rvmaps[:, :, r], size=(H, W), mode='nearest')
             # vmap: visibility map
             vmap = tvmap_t * rvmap_t
             gs = (vmap * t_feat * r_feats[:, :, r]).sum(-1).sum(-1).sum(-1)
@@ -267,7 +269,6 @@ class CPNet(nn.Module):
         (x, m, y), pad = pad_divide_by([x, m, y], 8, (h, w))
 
         # Get alignment features
-        # r_feats = torch.stack([self.A_Encoder(x[:, :, i], m[:, :, i]) for i in range(f)], dim=2)
         r_feats = self.A_Encoder(x.transpose(1, 2).reshape(-1, c, h, w), m.transpose(1, 2).reshape(-1, 1, h, w))
         r_feats = r_feats.reshape(b, f, r_feats.size(1), r_feats.size(2), r_feats.size(3)).transpose(1, 2)
 
@@ -322,9 +323,6 @@ class CPNet(nn.Module):
         b, c, f_ref, h, w = x_aligned.size()  # B C H W
 
         # Get c_features of everything
-        # c_feats = torch.stack([self.Encoder(x_t, m_t)] + [
-        #    self.Encoder(x_aligned[:, :, i], v_aligned[:, :, i]) for i in range(x_aligned.size(2))
-        # ], dim=2)
         c_feats = self.Encoder(
             torch.cat([x_t.unsqueeze(2), x_aligned], dim=2).transpose(1, 2).reshape(-1, c, h, w),
             torch.cat([m_t.unsqueeze(2), v_aligned], dim=2).transpose(1, 2).reshape(-1, 1, h, w)
