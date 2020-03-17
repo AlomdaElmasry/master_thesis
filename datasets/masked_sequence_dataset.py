@@ -11,16 +11,18 @@ class MaskedSequenceDataset(torch.utils.data.Dataset):
     dilatation_filter_size = None
     dilatation_iterations = None
     force_resize = None
+    keep_ratio = None
     fill_color = None
 
     def __init__(self, gts_dataset, masks_dataset, image_size, frames_n, frames_spacing, dilatation_filter_size,
-                 dilatation_iterations, force_resize=False):
+                 dilatation_iterations, force_resize, keep_ratio):
         self.gts_dataset = gts_dataset
         self.masks_dataset = masks_dataset
         self.image_size = image_size
         self.frames_n = frames_n
         self.frames_spacing = frames_spacing
         self.force_resize = force_resize
+        self.keep_ratio = keep_ratio
         self.dilatation_filter_size = dilatation_filter_size
         self.dilatation_iterations = dilatation_iterations
         self.fill_color = torch.as_tensor([0.485, 0.456, 0.406], dtype=torch.float32)
@@ -37,13 +39,13 @@ class MaskedSequenceDataset(torch.utils.data.Dataset):
 
         # Apply GT transformations
         if self.force_resize:
-            y = utils.transforms.ImageTransforms.resize(y, self.image_size)
+            y = utils.transforms.ImageTransforms.resize(y, self.image_size, keep_ratio=self.keep_ratio)
         else:
             y, _ = utils.transforms.ImageTransforms.crop(y, self.image_size)
 
         # Apply Mask transformations
         if self.image_size != (m.size(2), m.size(3)):
-            m = utils.transforms.ImageTransforms.resize(m, self.image_size, mode='nearest')
+            m = utils.transforms.ImageTransforms.resize(m, self.image_size, mode='nearest', keep_ratio=self.keep_ratio)
         m = utils.transforms.ImageTransforms.dilatate(m, self.dilatation_filter_size, self.dilatation_iterations)
 
         # Compute x

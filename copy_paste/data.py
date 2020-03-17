@@ -65,7 +65,8 @@ class CopyPasteData(skeltorch.Data):
             frames_spacing=self.experiment.configuration.get('data', 'frames_spacing'),
             dilatation_filter_size=tuple(self.experiment.configuration.get('data', 'dilatation_filter_size')),
             dilatation_iterations=self.experiment.configuration.get('data', 'dilatation_iterations'),
-            force_resize=self.experiment.configuration.get('data', 'train_resize')
+            force_resize=self.experiment.configuration.get('data', 'train_resize'),
+            keep_ratio=True
         )
         self.datasets['validation'] = MaskedSequenceDataset(
             gts_dataset=gts_datasets[1],
@@ -75,7 +76,8 @@ class CopyPasteData(skeltorch.Data):
             frames_spacing=self.experiment.configuration.get('data', 'frames_spacing'),
             dilatation_filter_size=tuple(self.experiment.configuration.get('data', 'dilatation_filter_size')),
             dilatation_iterations=self.experiment.configuration.get('data', 'dilatation_iterations'),
-            force_resize=self.experiment.configuration.get('data', 'train_resize')
+            force_resize=self.experiment.configuration.get('data', 'train_resize'),
+            keep_ratio=True
         )
         self.datasets['test'] = MaskedSequenceDataset(
             gts_dataset=gts_datasets[2],
@@ -85,7 +87,8 @@ class CopyPasteData(skeltorch.Data):
             frames_spacing=None,
             dilatation_filter_size=tuple(self.experiment.configuration.get('data', 'dilatation_filter_size')),
             dilatation_iterations=self.experiment.configuration.get('data', 'dilatation_iterations'),
-            force_resize=True
+            force_resize=True,
+            keep_ratio=False
         )
 
     def _load_datasets_gts(self, data_path):
