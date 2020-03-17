@@ -272,48 +272,48 @@ class CPNet(nn.Module):
         r_feats = r_feats.reshape(b, f, r_feats.size(1), r_feats.size(2), r_feats.size(3)).transpose(1, 2)
 
         # Parallelize alignment
-        theta_rt = self.A_Regressor(
-            r_feats[:, :, r_list].transpose(1, 2).reshape(-1, r_feats.size(1), r_feats.size(3), r_feats.size(4)),
-            r_feats[:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1).transpose(1, 2).reshape(
-                -1, r_feats.size(1), r_feats.size(3), r_feats.size(4)
-            )
-        )
-        grid_rt = F.affine_grid(theta_rt, (theta_rt.size(0), c, h, w), align_corners=False)
-
-        # Align x
-        x_aligned = F.grid_sample(
-            x[:, :, r_list].transpose(1, 2).reshape(-1, c, h, w), grid_rt, align_corners=False
-        ).reshape(b, len(r_list), c, h, w).transpose(1, 2)
-
-        # Align visibility maps
-        v_aligned = F.grid_sample(
-            1 - m[:, :, r_list].transpose(1, 2).reshape(-1, 1, h, w), grid_rt, mode='nearest'
-        ).reshape(b, len(r_list), 1, h, w).transpose(1, 2)
-
-        # Align y
-        y_aligned = F.grid_sample(
-            y[:, :, r_list].transpose(1, 2).reshape(-1, c, h, w), grid_rt, align_corners=False
-        ).reshape(b, len(r_list), c, h, w).transpose(1, 2)
+        # theta_rt = self.A_Regressor(
+        #     r_feats[:, :, r_list].transpose(1, 2).reshape(-1, r_feats.size(1), r_feats.size(3), r_feats.size(4)),
+        #     r_feats[:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1).transpose(1, 2).reshape(
+        #         -1, r_feats.size(1), r_feats.size(3), r_feats.size(4)
+        #     )
+        # )
+        # grid_rt = F.affine_grid(theta_rt, (theta_rt.size(0), c, h, w), align_corners=False)
+        #
+        # # Align x
+        # x_aligned = F.grid_sample(
+        #     x[:, :, r_list].transpose(1, 2).reshape(-1, c, h, w), grid_rt, align_corners=False
+        # ).reshape(b, len(r_list), c, h, w).transpose(1, 2)
+        #
+        # # Align visibility maps
+        # v_aligned = F.grid_sample(
+        #     1 - m[:, :, r_list].transpose(1, 2).reshape(-1, 1, h, w), grid_rt, mode='nearest'
+        # ).reshape(b, len(r_list), 1, h, w).transpose(1, 2)
+        #
+        # # Align y
+        # y_aligned = F.grid_sample(
+        #     y[:, :, r_list].transpose(1, 2).reshape(-1, c, h, w), grid_rt, align_corners=False
+        # ).reshape(b, len(r_list), c, h, w).transpose(1, 2)
 
         # List to store the aligned GTs
-        # x_aligned = []
-        # v_aligned = []
-        # y_aligned = []
-        #
-        # # Iterate over the reference frames
-        # for r in r_list:
-        #     # Predict Affine transformation and created grid
-        #     theta_rt = self.A_Regressor(r_feats[:, :, t], r_feats[:, :, r])
-        #     grid_rt = F.affine_grid(theta_rt, (b, c, h, w), align_corners=False)
-        #
-        #     # Align x, v and y
-        #     x_aligned.append(F.grid_sample(x[:, :, r], grid_rt, align_corners=False))
-        #     v_aligned.append(F.grid_sample(1 - m[:, :, r], grid_rt, mode='nearest'))
-        #     y_aligned.append(F.grid_sample(y[:, :, r], grid_rt, align_corners=False))
-        #
-        # x_aligned = torch.stack(x_aligned, dim=2)
-        # v_aligned = torch.stack(v_aligned, dim=2)
-        # y_aligned = torch.stack(y_aligned, dim=2)
+        x_aligned = []
+        v_aligned = []
+        y_aligned = []
+
+        # Iterate over the reference frames
+        for r in r_list:
+            # Predict Affine transformation and created grid
+            theta_rt = self.A_Regressor(r_feats[:, :, t], r_feats[:, :, r])
+            grid_rt = F.affine_grid(theta_rt, (b, c, h, w), align_corners=False)
+
+            # Align x, v and y
+            x_aligned.append(F.grid_sample(x[:, :, r], grid_rt, align_corners=False))
+            v_aligned.append(F.grid_sample(1 - m[:, :, r], grid_rt, mode='nearest'))
+            y_aligned.append(F.grid_sample(y[:, :, r], grid_rt, align_corners=False))
+
+        x_aligned = torch.stack(x_aligned, dim=2)
+        v_aligned = torch.stack(v_aligned, dim=2)
+        y_aligned = torch.stack(y_aligned, dim=2)
 
         # Return stacked GTs
         return x_aligned, v_aligned, y_aligned
