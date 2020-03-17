@@ -93,8 +93,8 @@ class A_Regressor(nn.Module):
         init_He(self)
 
         self.fc = nn.Linear(512, 6)
-        #self.fc.weight.data.zero_()
-        #self.fc.bias.data.copy_(torch.tensor([1, 0, 0, 0, 1, 0], dtype=torch.float32))
+        # self.fc.weight.data.zero_()
+        # self.fc.bias.data.copy_(torch.tensor([1, 0, 0, 0, 1, 0], dtype=torch.float32))
 
     def forward(self, feat1, feat2):
         x = torch.cat([feat1, feat2], dim=1)
@@ -267,7 +267,9 @@ class CPNet(nn.Module):
         (x, m, y), pad = pad_divide_by([x, m, y], 8, (h, w))
 
         # Get alignment features
-        r_feats = torch.stack([self.A_Encoder(x[:, :, i], m[:, :, i]) for i in range(f)], dim=2)
+        # r_feats = torch.stack([self.A_Encoder(x[:, :, i], m[:, :, i]) for i in range(f)], dim=2)
+        r_feats = self.A_Encoder(x.transpose(1, 2).reshape(-1, c, h, w), m.transpose(1, 2).reshape(-1, 1, h, w))
+        r_feats = r_feats.reshape(b, f, r_feats.size(1), r_feats.size(2), r_feats.size(3)).transpose(1, 2)
 
         # List to store the aligned GTs
         x_aligned = []
@@ -289,12 +291,17 @@ class CPNet(nn.Module):
         return torch.stack(x_aligned, dim=2), torch.stack(v_aligned, dim=2), torch.stack(y_aligned, dim=2)
 
     def copy_and_paste(self, x_t, m_t, y_t, x_aligned, v_aligned):
-        b, c, h, w = x_t.size()  # B C H W
+        b, c, f_ref, h, w = x_aligned.size()  # B C H W
 
         # Get c_features of everything
-        c_feats = torch.stack([self.Encoder(x_t, m_t)] + [
-            self.Encoder(x_aligned[:, :, i], v_aligned[:, :, i]) for i in range(x_aligned.size(2))
-        ], dim=2)
+        # c_feats = torch.stack([self.Encoder(x_t, m_t)] + [
+        #    self.Encoder(x_aligned[:, :, i], v_aligned[:, :, i]) for i in range(x_aligned.size(2))
+        # ], dim=2)
+        c_feats = self.Encoder(
+            torch.cat([x_t.unsqueeze(2), x_aligned], dim=2).transpose(1, 2).reshape(-1, c, h, w),
+            torch.cat([m_t.unsqueeze(2), v_aligned], dim=2).transpose(1, 2).reshape(-1, 1, h, w)
+        )
+        c_feats = c_feats.reshape(b, f_ref + 1, c_feats.size(1), c_feats.size(2), c_feats.size(3)).transpose(1, 2)
 
         # Apply Content-Matching Module
         p_in, c_mask = self.CM_Module(c_feats, 1 - m_t, v_aligned)
