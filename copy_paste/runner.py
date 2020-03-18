@@ -9,6 +9,7 @@ import torch.nn.functional as F
 from vgg_16.model import get_pretrained_model
 import torch.utils.data
 import matplotlib.pyplot as plt
+import torchvision.transforms
 
 
 class CopyPasteRunner(skeltorch.Runner):
@@ -17,6 +18,8 @@ class CopyPasteRunner(skeltorch.Runner):
     e_validation_losses_items = None
     losses_it_items = None
     losses_epoch_items = None
+    vgg_mean = None
+    vgg_std = None
 
     def __init__(self):
         super().__init__()
@@ -35,6 +38,10 @@ class CopyPasteRunner(skeltorch.Runner):
 
     def init_optimizer(self, device):
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=1e-4)
+
+    def init_others(self, device):
+        self.vgg_mean = torch.as_tensor([0.485, 0.456, 0.406], dtype=torch.float32).to(device).unsqueeze(1).unsqueeze(1)
+        self.vgg_std = torch.as_tensor([0.229, 0.224, 0.225], dtype=torch.float32).to(device).unsqueeze(1).unsqueeze(1)
 
     def train_step(self, it_data, device):
         # Decompose iteration data
@@ -348,8 +355,8 @@ class CopyPasteRunner(skeltorch.Runner):
 
         # User VGG-16 to compute features of both the estimation and the target
         with torch.no_grad():
-            _, vgg_y = self.model_vgg(y_t.contiguous())
-            _, vgg_y_hat_comp = self.model_vgg(y_hat_comp.contiguous())
+            _, vgg_y = self.model_vgg(((y_t - self.vgg_mean) / self.vgg_std).contiguous())
+            _, vgg_y_hat_comp = self.model_vgg(((y_hat_comp - self.vgg_mean) / self.vgg_std).contiguous())
 
         # Loss 5: Perceptual
         loss_perceptual = 0
