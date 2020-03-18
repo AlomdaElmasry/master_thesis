@@ -20,6 +20,7 @@ class CopyPasteRunner(skeltorch.Runner):
     losses_epoch_items = None
     vgg_mean = None
     vgg_std = None
+    loss_weights = None
 
     def __init__(self):
         super().__init__()
@@ -42,6 +43,8 @@ class CopyPasteRunner(skeltorch.Runner):
     def init_others(self, device):
         self.vgg_mean = torch.as_tensor([0.485, 0.456, 0.406], dtype=torch.float32).to(device).unsqueeze(1).unsqueeze(1)
         self.vgg_std = torch.as_tensor([0.229, 0.224, 0.225], dtype=torch.float32).to(device).unsqueeze(1).unsqueeze(1)
+        # self.loss_weights = [2, 10, 20, 6, 0.01, 24, 0.1]
+        self.loss_weights = [1, 1, 1, 1, 1, 1, 1]
 
     def train_step(self, it_data, device):
         # Decompose iteration data
@@ -337,21 +340,25 @@ class CopyPasteRunner(skeltorch.Runner):
         alignment_input = x_aligned * v_map
         alignment_target = x_t.unsqueeze(2).repeat(1, 1, x_aligned.size(2), 1, 1) * v_map
         loss_alignment = F.l1_loss(alignment_input, alignment_target, reduction='sum') / torch.sum(v_map)
+        loss_alignment *= self.loss_weights[0]
 
         # Loss 2: Visible Hole
         vh_input = m * c_mask * y_hat
         vh_target = m * c_mask * y_t
         loss_vh = F.l1_loss(vh_input, vh_target, reduction='sum') / torch.sum(m * c_mask)
+        loss_vh *= self.loss_weights[1]
 
         # Loss 3: Non-Visible Hole
         nvh_input = m * (1 - c_mask) * y_hat
         nvh_target = m * (1 - c_mask) * y_t
         loss_nvh = F.l1_loss(nvh_input, nvh_target, reduction='sum') / torch.sum(m * (1 - c_mask))
+        loss_nvh *= self.loss_weights[2]
 
         # Loss 4: Non-Hole
         nh_input = (1 - m) * c_mask * y_hat
         nh_target = (1 - m) * c_mask * y_t
         loss_nh = F.l1_loss(nh_input, nh_target, reduction='sum') / torch.sum((1 - m) * c_mask)
+        loss_nh *= self.loss_weights[3]
 
         # User VGG-16 to compute features of both the estimation and the target
         with torch.no_grad():
@@ -363,6 +370,7 @@ class CopyPasteRunner(skeltorch.Runner):
         for p in range(len(vgg_y)):
             loss_perceptual += F.l1_loss(vgg_y_hat_comp[p], vgg_y[p])
         loss_perceptual /= len(vgg_y)
+        loss_perceptual *= self.loss_weights[4]
 
         # Loss 6: Style
         loss_style = 0
@@ -372,13 +380,14 @@ class CopyPasteRunner(skeltorch.Runner):
             g_y_comp = torch.mm(vgg_y_hat_comp[p].view(b * c, h * w), vgg_y_hat_comp[p].view(b * c, h * w).t())
             loss_style += F.l1_loss(g_y_comp / (b * c * h * w), g_y / (b * c * h * w))
         loss_style /= len(vgg_y)
+        loss_style *= self.loss_weights[5]
 
         # Loss 7: Smoothing Checkerboard Effect
         loss_smoothing = 0
+        loss_smoothing *= self.loss_weights[6]
 
         # Compute combined loss
-        loss = 2 * loss_alignment + 10 * loss_vh + 20 * loss_nvh + 6 * loss_nh + 0.01 * loss_perceptual + \
-               24 * loss_style + 0.1 * loss_smoothing
+        loss = loss_alignment + loss_vh + loss_nvh + loss_nh + loss_perceptual + loss_style + loss_smoothing
 
         # Return combination of the losses
         return loss, [loss_alignment, loss_vh, loss_nvh, loss_nh, loss_perceptual, loss_style]
