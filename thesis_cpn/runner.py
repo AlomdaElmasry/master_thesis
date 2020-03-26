@@ -258,8 +258,8 @@ class CopyPasteRunner(skeltorch.Runner):
             loss_alignment = 0
 
         # Loss 2: Visible Hole
-        vh_input = m * c_mask * y_hat
-        vh_target = m * c_mask * y_t
+        vh_input = m * (1 - c_mask) * y_hat
+        vh_target = m * (1 - c_mask) * y_t
         if self.loss_constant_normalization:
             loss_vh = F.l1_loss(vh_input, vh_target)
         else:
@@ -267,8 +267,8 @@ class CopyPasteRunner(skeltorch.Runner):
         loss_vh *= self.loss_weights[1]
 
         # Loss 3: Non-Visible Hole
-        nvh_input = m * (1 - c_mask) * y_hat
-        nvh_target = m * (1 - c_mask) * y_t
+        nvh_input = m * c_mask * y_hat
+        nvh_target = m * c_mask * y_t
         if self.loss_constant_normalization:
             loss_nvh = F.l1_loss(nvh_input, nvh_target)
         else:
@@ -276,8 +276,8 @@ class CopyPasteRunner(skeltorch.Runner):
         loss_nvh *= self.loss_weights[2]
 
         # Loss 4: Non-Hole
-        nh_input = (1 - m) * c_mask * y_hat
-        nh_target = (1 - m) * c_mask * y_t
+        nh_input = (1 - m) * y_hat
+        nh_target = (1 - m) * y_t
         if self.loss_constant_normalization:
             loss_nh = F.l1_loss(nh_input, nh_target)
         else:
