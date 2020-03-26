@@ -19,7 +19,7 @@
     "variant": "cpn_alignment"
   },
   "training": {
-    "batch_size": 16,
+    "batch_size": 4,
     "train_max_iterations": 5000,
     "validation_max_iterations": 500,
     "lr": 1e-4,

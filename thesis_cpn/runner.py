@@ -263,7 +263,7 @@ class CopyPasteRunner(skeltorch.Runner):
         if self.loss_constant_normalization:
             loss_vh = F.l1_loss(vh_input, vh_target)
         else:
-            loss_vh = F.l1_loss(vh_input, vh_target, reduction='sum') / torch.sum(m * c_mask)
+            loss_vh = F.l1_loss(vh_input, vh_target, reduction='sum') / torch.sum(m * (1 - c_mask))
         loss_vh *= self.loss_weights[1]
 
         # Loss 3: Non-Visible Hole
@@ -272,7 +272,7 @@ class CopyPasteRunner(skeltorch.Runner):
         if self.loss_constant_normalization:
             loss_nvh = F.l1_loss(nvh_input, nvh_target)
         else:
-            loss_nvh = F.l1_loss(nvh_input, nvh_target, reduction='sum') / torch.sum(m * (1 - c_mask))
+            loss_nvh = F.l1_loss(nvh_input, nvh_target, reduction='sum') / torch.sum(m * c_mask)
         loss_nvh *= self.loss_weights[2]
 
         # Loss 4: Non-Hole
@@ -281,7 +281,7 @@ class CopyPasteRunner(skeltorch.Runner):
         if self.loss_constant_normalization:
             loss_nh = F.l1_loss(nh_input, nh_target)
         else:
-            loss_nh = F.l1_loss(nh_input, nh_target, reduction='sum') / torch.sum((1 - m) * c_mask)
+            loss_nh = F.l1_loss(nh_input, nh_target, reduction='sum') / torch.sum(1 - m)
         loss_nh *= self.loss_weights[3]
 
         # User VGG-16 to compute features of both the estimation and the target

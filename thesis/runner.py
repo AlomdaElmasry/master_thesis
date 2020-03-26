@@ -1,13 +1,14 @@
 import skeltorch
-import models.align_masks
+from .model import SqueezeAndExcitationModel
 import torch
+import torch.nn.functional as F
 
 
 class ThesisRunner(skeltorch.Runner):
     aligner = None
 
     def init_model(self, device):
-        self.model = models.align_masks.AlignMasksModel()
+        self.model = SqueezeAndExcitationModel()
 
     def init_optimizer(self, device):
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=1e-4)
@@ -27,7 +28,24 @@ class ThesisRunner(skeltorch.Runner):
         r_list.pop(t)
 
         # Propagate through the model
-        y_hat, y_hat_comp, c_mask, (x_aligned, v_aligned) = self.model(x, m, y, t, r_list)
+        y_hat, att_map = self.model(x, m, y, t, r_list)
+
+        # Return loss
+        return self.compute_loss(y[:, :, t], m[:, :, t], y_hat, att_map)
+
+    def compute_loss(self, y, m, t, y_hat, att_map):
+        # Get y_t and m_t
+        y_t, m_t = y[:, :, t], m[:, :, t]
+
+        # Loss 1: Non-Hole
+        loss_nh = F.l1_loss((1 - m_t) * y_hat, (1 - m_t) * y_t, reduction='sum') / torch.sum(1 - m_t)
+
+        # Loss 2: Hole
+        loss_nh = F.l1_loss(m_t * y_hat, m_t * y_t, reduction='sum') / torch.sum(m_t)
+
+        # Loss 3: Attention Maps
+        a = 1
+
 
     def test(self, epoch, device):
         pass
