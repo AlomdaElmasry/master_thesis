@@ -255,7 +255,7 @@ class CopyPasteRunner(skeltorch.Runner):
                 loss_alignment = F.l1_loss(alignment_input, alignment_target, reduction='sum') / torch.sum(v_map)
             loss_alignment *= self.loss_weights[0]
         else:
-            loss_alignment = 0
+            loss_alignment = torch.zeros(1)
 
         # Loss 2: Visible Hole
         vh_input = m * (1 - c_mask) * y_hat
