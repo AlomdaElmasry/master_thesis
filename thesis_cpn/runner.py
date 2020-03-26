@@ -244,14 +244,18 @@ class CopyPasteRunner(skeltorch.Runner):
             # self._save_samples(y_aligned, 'test_inpainting', info[0], save_as_video)
 
     def _compute_loss(self, y_t, y_hat, y_hat_comp, x_t, x_aligned, v_map, m, c_mask):
+
         # Loss 1: Alignment Loss
-        alignment_input = x_aligned * v_map
-        alignment_target = x_t.unsqueeze(2).repeat(1, 1, x_aligned.size(2), 1, 1) * v_map
-        if self.loss_constant_normalization:
-            loss_alignment = F.l1_loss(alignment_input, alignment_target)
+        if self.experiment.configuration.get('model', 'use_aligner'):
+            alignment_input = x_aligned * v_map
+            alignment_target = x_t.unsqueeze(2).repeat(1, 1, x_aligned.size(2), 1, 1) * v_map
+            if self.loss_constant_normalization:
+                loss_alignment = F.l1_loss(alignment_input, alignment_target)
+            else:
+                loss_alignment = F.l1_loss(alignment_input, alignment_target, reduction='sum') / torch.sum(v_map)
+            loss_alignment *= self.loss_weights[0]
         else:
-            loss_alignment = F.l1_loss(alignment_input, alignment_target, reduction='sum') / torch.sum(v_map)
-        loss_alignment *= self.loss_weights[0]
+            loss_alignment = 0
 
         # Loss 2: Visible Hole
         vh_input = m * c_mask * y_hat
