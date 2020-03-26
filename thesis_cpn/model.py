@@ -1,4 +1,3 @@
-from __future__ import division
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -94,11 +93,11 @@ class ContextMatching(nn.Module):
         v_t = (F.interpolate(v_t, size=(h, w), mode='bilinear', align_corners=False) > 0.5).float()
 
         # Compute visibility map and cosine similarity for each reference frame
-        cos_sim, v_map = [], []
+        cos_sim, vr_map = [], []
         for r in range(f - 1):
             # Resize the size of the reference visibilty map
             v_r = (F.interpolate(v_aligned[:, :, r], size=(h, w), mode='bilinear', align_corners=False) > 0.5).float()
-            v_map.append(v_r)
+            vr_map.append(v_r)
 
             # Computer visibility maps
             vmap = v_t * v_r
@@ -113,16 +112,15 @@ class ContextMatching(nn.Module):
 
         # Stack lists into Tensors
         cos_sim = torch.stack(cos_sim, dim=2)
-        v_map = torch.stack(v_map, dim=2)
+        vr_map = torch.stack(vr_map, dim=2)
 
         # weighted pixelwise masked softmax
-        c_match = self.masked_softmax(cos_sim, v_map, dim=2)
+        c_match = self.masked_softmax(cos_sim, vr_map, dim=2)
         c_out = torch.sum(c_feats[:, :, 1:] * c_match, dim=2)
 
         # c_mask
-        c_mask = (c_match * v_map)
-        c_mask = torch.sum(c_mask, 2)
-        c_mask = 1 - (torch.mean(c_mask, 1, keepdim=True))
+        c_mask = torch.sum(c_match * vr_map, 2)
+        c_mask = 1 - torch.mean(c_mask, 1, keepdim=True)
 
         return torch.cat([c_feats[:, :, 0], c_out, c_mask], dim=1), c_mask
 
@@ -160,13 +158,16 @@ class Decoder(nn.Module):
 
 
 class CPNet(nn.Module):
-    def __init__(self):
+    use_aligner = None
+
+    def __init__(self, use_aligner=True):
         super(CPNet, self).__init__()
         self.A_Encoder = AlignmentEncoder()
         self.A_Regressor = AlignmentRegressor()
         self.Encoder = Encoder()
         self.CM_Module = ContextMatching()
         self.Decoder = Decoder()
+        self.use_aligner = use_aligner
 
     def align(self, x, m, y, t, r_list):
         b, c, f, h, w = x.size()  # B C H W
@@ -197,7 +198,7 @@ class CPNet(nn.Module):
         # Align y
         y_aligned = F.grid_sample(
             y[:, :, r_list].transpose(1, 2).reshape(-1, c, h, w), grid_rt, align_corners=False
-        ).reshape(b, len(r_list), c, h, w).transpose(1, 2)
+        ).reshape(b, len(r_list), c, h, w).transpose(1, 2) if not self.training else None
 
         # Return stacked GTs
         return x_aligned, v_aligned, y_aligned
@@ -228,6 +229,9 @@ class CPNet(nn.Module):
         return y_hat, y_hat_comp, c_mask
 
     def forward(self, x, m, y, t, r_list):
-        x_aligned, v_aligned, _ = self.align(x, m, y, t, r_list)
+        if self.use_aligner:
+            x_aligned, v_aligned, _ = self.align(x, m, y, t, r_list)
+        else:
+            x_aligned, v_aligned = x[:, :, r_list], 1 - m[:, :, r_list]
         y_hat, y_hat_comp, c_mask = self.copy_and_paste(x[:, :, t], m[:, :, t], y[:, :, t], x_aligned, v_aligned)
         return y_hat, y_hat_comp, c_mask, (x_aligned, v_aligned)

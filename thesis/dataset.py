@@ -4,6 +4,7 @@ import random
 import jpeg4py as jpeg
 import cv2
 import os.path
+import utils.transforms
 
 
 class ContentProvider(torch.utils.data.Dataset):
@@ -13,8 +14,9 @@ class ContentProvider(torch.utils.data.Dataset):
     logger = None
     items_names = None
     items_limits = None
+    _ram_data = None
 
-    def __init__(self, data_folder, dataset_meta, movement_simulator, logger):
+    def __init__(self, data_folder, dataset_meta, movement_simulator, logger, load_in_ram=False):
         self.data_folder = data_folder
         self.dataset_meta = dataset_meta
         self.movement_simulator = movement_simulator
@@ -24,6 +26,8 @@ class ContentProvider(torch.utils.data.Dataset):
             len(self.dataset_meta[item_name][0]) if self.dataset_meta[item_name][0] is not None
             else len(self.dataset_meta[item_name][1]) for item_name in self.items_names
         ])
+        if load_in_ram:
+            self._load_data_in_ram()
 
     def __getitem__(self, frame_index):
         """Returns the frame with index ``frame_item``.
@@ -42,19 +46,21 @@ class ContentProvider(torch.utils.data.Dataset):
         return y, m, self.items_names[sequence_index]
 
     def _get_item_background(self, sequence_index, frame_index_bis):
-        if self.dataset_meta[self.items_names[sequence_index]][0] is None:
+        item_name = self.items_names[sequence_index]
+        if self.dataset_meta[item_name][0] is None:
             return None
-        item_path = os.path.join(
-            self.data_folder, self.dataset_meta[self.items_names[sequence_index]][0][frame_index_bis]
-        )
+        if self._ram_data is not None and self._ram_data[item_name][0][frame_index_bis] is not None:
+            return self._ram_data[item_name][0][frame_index_bis]
+        item_path = os.path.join(self.data_folder, self.dataset_meta[item_name][0][frame_index_bis])
         return torch.from_numpy(jpeg.JPEG(item_path).decode() / 255).permute(2, 0, 1).float()
 
     def _get_item_mask(self, sequence_index, frame_index_bis):
-        if self.dataset_meta[self.items_names[sequence_index]][1] is None:
+        item_name = self.items_names[sequence_index]
+        if self.dataset_meta[item_name][1] is None:
             return None
-        item_path = os.path.join(
-            self.data_folder, self.dataset_meta[self.items_names[sequence_index]][1][frame_index_bis]
-        )
+        if self._ram_data is not None and self._ram_data[item_name][1][frame_index_bis] is not None:
+            return self._ram_data[item_name][1][frame_index_bis]
+        item_path = os.path.join(self.data_folder, self.dataset_meta[item_name][1][frame_index_bis])
         return torch.from_numpy(cv2.imread(item_path, cv2.IMREAD_GRAYSCALE) / 255 > 0).float()
 
     def get_items(self, frames_indexes):
@@ -132,3 +138,78 @@ class ContentProvider(torch.utils.data.Dataset):
                 m, frames_n, transformation_matrices
             )
         return y, m, (info, transformation_matrices)
+
+    def _load_data_in_ram(self):
+        self._ram_data = {}
+        for dataset_item_key in self.dataset_meta.keys():
+            self._ram_data[dataset_item_key] = [None, None]
+            if self.dataset_meta[dataset_item_key][0] is not None:
+                self._ram_data[dataset_item_key][0] = [None] * len(self.dataset_meta[dataset_item_key][0])
+                self._load_data_in_ram_background(dataset_item_key)
+            if self.dataset_meta[dataset_item_key][1] is not None:
+                self._ram_data[dataset_item_key][1] = [None] * len(self.dataset_meta[dataset_item_key][1])
+                self._load_data_in_ram_masks(dataset_item_key)
+
+    def _load_data_in_ram_background(self, dataset_item_key):
+        for i, item_path in enumerate(self.dataset_meta[dataset_item_key][1]):
+            self._ram_data[dataset_item_key][0][i] = self._get_item_background(
+                self.items_names.index(dataset_item_key), i
+            )
+
+    def _load_data_in_ram_masks(self, dataset_item_key):
+        for i, item_path in enumerate(self.dataset_meta[dataset_item_key][1]):
+            self._ram_data[dataset_item_key][1][i] = self._get_item_mask(self.items_names.index(dataset_item_key), i)
+
+
+class MaskedSequenceDataset(torch.utils.data.Dataset):
+    gts_dataset = None
+    masks_dataset = None
+    image_size = None
+    frames_n = None
+    frames_spacing = None
+    dilatation_filter_size = None
+    dilatation_iterations = None
+    force_resize = None
+    keep_ratio = None
+    fill_color = None
+
+    def __init__(self, gts_dataset, masks_dataset, image_size, frames_n, frames_spacing, dilatation_filter_size,
+                 dilatation_iterations, force_resize, keep_ratio):
+        self.gts_dataset = gts_dataset
+        self.masks_dataset = masks_dataset
+        self.image_size = image_size
+        self.frames_n = frames_n
+        self.frames_spacing = frames_spacing
+        self.force_resize = force_resize
+        self.keep_ratio = keep_ratio
+        self.dilatation_filter_size = dilatation_filter_size
+        self.dilatation_iterations = dilatation_iterations
+        self.fill_color = torch.as_tensor([0.485, 0.456, 0.406], dtype=torch.float32)
+
+    def __getitem__(self, item):
+        # Get the data associated to the GT
+        y, m, info = self.gts_dataset.get_sequence(item) if self.frames_n == -1 \
+            else self.gts_dataset.get_patch(item, self.frames_n, self.frames_spacing)
+
+        # If self.gts_dataset and self.masks_dataset are not the same, obtain new mask
+        if self.masks_dataset is not None:
+            masks_n = self.frames_n if self.frames_n != -1 else y.size(1)
+            _, m, _ = self.masks_dataset.get_patch_random(masks_n, self.frames_spacing)
+
+        # Apply GT transformations
+        if self.force_resize:
+            y = utils.transforms.ImageTransforms.resize(y, self.image_size, keep_ratio=self.keep_ratio)
+        else:
+            y, _ = utils.transforms.ImageTransforms.crop(y, self.image_size)
+
+        # Apply Mask transformations
+        if self.image_size != (m.size(2), m.size(3)):
+            m = utils.transforms.ImageTransforms.resize(m, self.image_size, mode='nearest', keep_ratio=self.keep_ratio)
+        m = utils.transforms.ImageTransforms.dilatate(m, self.dilatation_filter_size, self.dilatation_iterations)
+
+        # Compute x
+        x = (1 - m) * y + (m.permute(3, 2, 1, 0) * self.fill_color).permute(3, 2, 1, 0)
+        return (x, m), y, info
+
+    def __len__(self):
+        return self.gts_dataset.len_sequences() if self.frames_n == -1 else len(self.gts_dataset)

@@ -1,6 +1,6 @@
 import skeltorch
-from datasets.content_provider import ContentProvider
-from datasets.masked_sequence_dataset import MaskedSequenceDataset
+from .dataset import ContentProvider
+from .dataset import MaskedSequenceDataset
 import random
 import torch.utils.data
 import utils.movement
@@ -10,15 +10,12 @@ import os.path
 import numpy as np
 
 
-class CopyPasteData(skeltorch.Data):
+class ThesisData(skeltorch.Data):
     train_gts_meta = None
     train_masks_meta = None
     validation_gts_meta = None
     validation_masks_meta = None
     test_meta = None
-
-    train_indexes = None
-    val_indexes = None
 
     def create(self, data_path):
         self.train_gts_meta = utils.paths.DatasetPaths.get_items(
@@ -107,7 +104,7 @@ class CopyPasteData(skeltorch.Data):
             data_folder=data_path,
             dataset_meta=self.train_gts_meta,
             movement_simulator=None,
-            logger=self.logger,
+            logger=self.logger
         )
         validation_gts_dataset = ContentProvider(
             data_folder=data_path,
@@ -129,6 +126,7 @@ class CopyPasteData(skeltorch.Data):
             data_folder=data_path,
             movement_simulator=None,
             logger=self.logger,
+            load_in_ram=False
         )
         validation_masks_dataset = ContentProvider(
             dataset_meta=self.validation_masks_meta,

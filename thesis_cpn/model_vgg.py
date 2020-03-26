@@ -10,7 +10,13 @@ ssl._create_default_https_context = ssl._create_unverified_context
 
 class VGGFeatures(torchvision.models.VGG):
 
+    def __init__(self, features, device):
+        super().__init__(features)
+        self.vgg_mean = torch.as_tensor([0.485, 0.456, 0.406]).view(3, 1, 1).to(device)
+        self.vgg_std = torch.as_tensor([0.229, 0.224, 0.225]).view(3, 1, 1).to(device)
+
     def forward(self, x):
+        x = (x - self.vgg_mean) / self.vgg_std
         pool_feats = []
         for layer in self.features:
             x = layer(x)
@@ -22,8 +28,8 @@ class VGGFeatures(torchvision.models.VGG):
         return x, pool_feats
 
 
-def get_pretrained_model():
-    model = VGGFeatures(make_layers(cfgs['D'], batch_norm=False))
+def get_pretrained_model(device):
+    model = VGGFeatures(make_layers(cfgs['D'], batch_norm=False), device)
     state_dict = torchvision.models.utils.load_state_dict_from_url(model_urls['vgg16'])
     model.load_state_dict(state_dict)
-    return model
+    return model.to(device)

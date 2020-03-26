@@ -1,10 +1,10 @@
 import skeltorch
-from copy_paste.data import CopyPasteData
-from copy_paste.runner import CopyPasteRunner
+from thesis.data import ThesisData
+from .runner import CopyPasteRunner
 
 # Create Skeltorch object
 runner = CopyPasteRunner()
-skel = skeltorch.Skeltorch(CopyPasteData(), runner)
+skel = skeltorch.Skeltorch(ThesisData(), runner)
 
 # Add the folder to store the data in test
 test_parser = skel.get_parser('test')

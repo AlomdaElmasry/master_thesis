@@ -6,9 +6,8 @@ from PIL import Image
 import os.path
 import utils
 import torch.nn.functional as F
-from vgg_16.model import get_pretrained_model
+from .model_vgg import get_pretrained_model
 import torch.utils.data
-import matplotlib.pyplot as plt
 
 
 class CopyPasteRunner(skeltorch.Runner):
@@ -35,15 +34,15 @@ class CopyPasteRunner(skeltorch.Runner):
         }
 
     def init_model(self, device):
-        self.model = CPNet().to(device)
-        self.model_vgg = get_pretrained_model().to(device)
+        use_aligner = self.experiment.configuration.get('model', 'use_aligner')
+        use_aligner = use_aligner if use_aligner is not None else True
+        self.model = CPNet(use_aligner=use_aligner).to(device)
+        self.model_vgg = get_pretrained_model(device)
 
     def init_optimizer(self, device):
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=1e-4)
 
     def init_others(self, device):
-        self.vgg_mean = torch.as_tensor([0.485, 0.456, 0.406]).view(3, 1, 1).to(device)
-        self.vgg_std = torch.as_tensor([0.229, 0.224, 0.225]).view(3, 1, 1).to(device)
         self.loss_constant_normalization = self.experiment.configuration.get('model', 'loss_constant_normalization')
         self.loss_weights = self.experiment.configuration.get('model', 'loss_lambdas')
         self.scheduler = torch.optim.lr_scheduler.StepLR(
@@ -244,7 +243,7 @@ class CopyPasteRunner(skeltorch.Runner):
             # Save the samples of the batch
             # self._save_samples(y_aligned, 'test_inpainting', info[0], save_as_video)
 
-    def _compute_loss(self, y_t, y_hat, y_hat_comp, x_t, x_aligned, v_map, m, c_mask, constant_normalization=True):
+    def _compute_loss(self, y_t, y_hat, y_hat_comp, x_t, x_aligned, v_map, m, c_mask):
         # Loss 1: Alignment Loss
         alignment_input = x_aligned * v_map
         alignment_target = x_t.unsqueeze(2).repeat(1, 1, x_aligned.size(2), 1, 1) * v_map
@@ -283,8 +282,8 @@ class CopyPasteRunner(skeltorch.Runner):
 
         # User VGG-16 to compute features of both the estimation and the target
         with torch.no_grad():
-            _, vgg_y = self.model_vgg(((y_t - self.vgg_mean) / self.vgg_std).contiguous())
-            _, vgg_y_hat_comp = self.model_vgg(((y_hat_comp - self.vgg_mean) / self.vgg_std).contiguous())
+            _, vgg_y = self.model_vgg(y_t.contiguous())
+            _, vgg_y_hat_comp = self.model_vgg(y_hat_comp.contiguous())
 
         # Loss 5: Perceptual
         loss_perceptual = 0
