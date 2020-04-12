@@ -18,14 +18,11 @@ class VGGFeatures(torchvision.models.VGG):
     def forward(self, x):
         x = (x - self.vgg_mean) / self.vgg_std
         pool_feats = []
-        for layer in self.features:
+        for i, layer in enumerate(self.features):
             x = layer(x)
             if isinstance(layer, nn.MaxPool2d):
                 pool_feats.append(x.detach())
-        x = self.avgpool(x)
-        x = torch.flatten(x, 1)
-        x = self.classifier(x)
-        return x, pool_feats
+        return pool_feats
 
 
 def get_pretrained_model(device):

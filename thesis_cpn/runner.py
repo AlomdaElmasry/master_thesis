@@ -25,12 +25,12 @@ class CopyPasteRunner(skeltorch.Runner):
     def __init__(self):
         super().__init__()
         self.losses_it_items = {
-            'train': {'alignment': {}, 'vh': {}, 'nvh': {}, 'nh': {}, 'perceptual': {}, 'style': {}},
-            'validation': {'alignment': {}, 'vh': {}, 'nvh': {}, 'nh': {}, 'perceptual': {}, 'style': {}}
+            'train': {'alignment': {}, 'vh': {}, 'nvh': {}, 'nh': {}, 'perceptual': {}, 'style': {}, 'tv': {}},
+            'validation': {'alignment': {}, 'vh': {}, 'nvh': {}, 'nh': {}, 'perceptual': {}, 'style': {}, 'tv': {}}
         }
         self.losses_epoch_items = {
-            'train': {'alignment': {}, 'vh': {}, 'nvh': {}, 'nh': {}, 'perceptual': {}, 'style': {}},
-            'validation': {'alignment': {}, 'vh': {}, 'nvh': {}, 'nh': {}, 'perceptual': {}, 'style': {}}
+            'train': {'alignment': {}, 'vh': {}, 'nvh': {}, 'nh': {}, 'perceptual': {}, 'style': {}, 'tv': {}},
+            'validation': {'alignment': {}, 'vh': {}, 'nvh': {}, 'nh': {}, 'perceptual': {}, 'style': {}, 'tv': {}}
         }
 
     def init_model(self, device):
@@ -84,14 +84,19 @@ class CopyPasteRunner(skeltorch.Runner):
         e_losses_items['nh'].append(loss_items[3].item())
         e_losses_items['perceptual'].append(loss_items[4].item())
         e_losses_items['style'].append(loss_items[5].item())
+        e_losses_items['tv'].append(loss_items[6].item())
 
         # Return combined loss
         return loss
 
     def train_before_epoch_tasks(self, device):
         super().train_before_epoch_tasks(device)
-        self.e_train_losses_items = {'alignment': [], 'vh': [], 'nvh': [], 'nh': [], 'perceptual': [], 'style': []}
-        self.e_validation_losses_items = {'alignment': [], 'vh': [], 'nvh': [], 'nh': [], 'perceptual': [], 'style': []}
+        self.e_train_losses_items = {
+            'alignment': [], 'vh': [], 'nvh': [], 'nh': [], 'perceptual': [], 'style': [], 'tv': []
+        }
+        self.e_validation_losses_items = {
+            'alignment': [], 'vh': [], 'nvh': [], 'nh': [], 'perceptual': [], 'style': [], 'tv': []
+        }
         self.experiment.tbx.add_scalar('lr', self.optimizer.param_groups[0]['lr'], self.counters['epoch'])
 
     def train_iteration_log(self, e_train_losses, log_period, device):
@@ -121,6 +126,7 @@ class CopyPasteRunner(skeltorch.Runner):
         losses_it_items_split['nh'][it_n] = np.mean(e_losses_items['nh'][-log_period:])
         losses_it_items_split['perceptual'][it_n] = np.mean(e_losses_items['perceptual'][-log_period:])
         losses_it_items_split['style'][it_n] = np.mean(e_losses_items['style'][-log_period:])
+        losses_it_items_split['tv'][it_n] = np.mean(e_losses_items['tv'][-log_period:])
         self.experiment.tbx.add_scalar(
             'loss_alignment/{}/{}'.format(ot, split), losses_it_items_split['alignment'][it_n], it_n
         )
@@ -138,6 +144,9 @@ class CopyPasteRunner(skeltorch.Runner):
         )
         self.experiment.tbx.add_scalar(
             'loss_style/{}/{}'.format(ot, split), losses_it_items_split['style'][it_n], it_n
+        )
+        self.experiment.tbx.add_scalar(
+            'loss_tv/{}/{}'.format(ot, split), losses_it_items_split['tv'][it_n], it_n
         )
 
     def test(self, epoch, save_as_video, device):
@@ -244,7 +253,6 @@ class CopyPasteRunner(skeltorch.Runner):
             # self._save_samples(y_aligned, 'test_inpainting', info[0], save_as_video)
 
     def _compute_loss(self, y_t, y_hat, y_hat_comp, x_t, x_aligned, v_map, m, c_mask):
-
         # Loss 1: Alignment Loss
         if self.experiment.configuration.get('model', 'use_aligner'):
             alignment_input = x_aligned * v_map
@@ -286,13 +294,13 @@ class CopyPasteRunner(skeltorch.Runner):
 
         # User VGG-16 to compute features of both the estimation and the target
         with torch.no_grad():
-            _, vgg_y = self.model_vgg(y_t.contiguous())
-            _, vgg_y_hat_comp = self.model_vgg(y_hat_comp.contiguous())
+            vgg_y = self.model_vgg(y_t.contiguous())
+            vgg_y_hat = self.model_vgg(y_hat.contiguous())
 
         # Loss 5: Perceptual
         loss_perceptual = 0
         for p in range(len(vgg_y)):
-            loss_perceptual += F.l1_loss(vgg_y_hat_comp[p], vgg_y[p])
+            loss_perceptual += F.l1_loss(vgg_y_hat[p], vgg_y[p])
         loss_perceptual /= len(vgg_y)
         loss_perceptual *= self.loss_weights[4]
 
@@ -301,20 +309,22 @@ class CopyPasteRunner(skeltorch.Runner):
         for p in range(len(vgg_y)):
             b, c, h, w = vgg_y[p].size()
             g_y = torch.mm(vgg_y[p].view(b * c, h * w), vgg_y[p].view(b * c, h * w).t())
-            g_y_comp = torch.mm(vgg_y_hat_comp[p].view(b * c, h * w), vgg_y_hat_comp[p].view(b * c, h * w).t())
+            g_y_comp = torch.mm(vgg_y_hat[p].view(b * c, h * w), vgg_y_hat[p].view(b * c, h * w).t())
             loss_style += F.l1_loss(g_y_comp / (b * c * h * w), g_y / (b * c * h * w))
         loss_style /= len(vgg_y)
         loss_style *= self.loss_weights[5]
 
         # Loss 7: Smoothing Checkerboard Effect
-        loss_smoothing = 0
-        loss_smoothing *= self.loss_weights[6]
+        loss_tv_h = (y_hat[:, :, 1:, :] - y_hat[:, :, :-1, :]).pow(2).sum()
+        loss_tv_w = (y_hat[:, :, :, 1:] - y_hat[:, :, :, :-1]).pow(2).sum()
+        loss_tv = (loss_tv_h + loss_tv_w) / (y_hat.size(0) * y_hat.size(1) * y_hat.size(2) * y_hat.size(3))
+        loss_tv *= self.loss_weights[6]
 
         # Compute combined loss
-        loss = loss_alignment + loss_vh + loss_nvh + loss_nh + loss_perceptual + loss_style + loss_smoothing
+        loss = loss_alignment + loss_vh + loss_nvh + loss_nh + loss_perceptual + loss_style + loss_tv
 
         # Return combination of the losses
-        return loss, [loss_alignment, loss_vh, loss_nvh, loss_nh, loss_perceptual, loss_style]
+        return loss, [loss_alignment, loss_vh, loss_nvh, loss_nh, loss_perceptual, loss_style, loss_tv]
 
     def _generate_random_samples(self, device):
         b = self.experiment.configuration.get('training', 'batch_size')
