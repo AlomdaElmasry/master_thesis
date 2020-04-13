@@ -6,7 +6,7 @@ from PIL import Image
 import os.path
 import utils
 import torch.nn.functional as F
-from .model_vgg import get_pretrained_model
+from thesis.model_vgg import get_pretrained_model
 import torch.utils.data
 
 
@@ -50,6 +50,12 @@ class CopyPasteRunner(skeltorch.Runner):
             step_size=self.experiment.configuration.get('training', 'lr_scheduler_step_size'),
             gamma=self.experiment.configuration.get('training', 'lr_scheduler_gamma')
         )
+        if len(self.experiment.checkpoints_get()) == 0:
+            params = {}
+            params.update({'data_' + k: v for k, v in self.experiment.configuration.data.items()})
+            params.update({'model_' + k: v for k, v in self.experiment.configuration.model.items()})
+            params.update({'training_' + k: v for k, v in self.experiment.configuration.training.items()})
+            self.experiment.tbx.add_hparams(params, {})
 
     def train_step(self, it_data, device):
         # Decompose iteration data

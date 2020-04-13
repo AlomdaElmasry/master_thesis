@@ -104,24 +104,29 @@ class ContentProvider(torch.utils.data.Dataset):
         """Return the number of different sequences."""
         return len(self.items_names)
 
-    def get_patch(self, frame_index, frames_n, frames_spacing):
+    def get_patch(self, frame_index, frames_n, frames_spacing, randomize_frames):
         if self.movement_simulator is None:
-            return self._get_patch_contiguous(frame_index, frames_n, frames_spacing)
+            return self._get_patch_contiguous(frame_index, frames_n, frames_spacing, randomize_frames)
         else:
             return self._get_patch_simulated(frame_index, frames_n)
 
-    def get_patch_random(self, frames_n, frames_spacing):
-        return self.get_patch(random.randint(0, self.__len__() - 1), frames_n, frames_spacing)
+    def get_patch_random(self, frames_n, frames_spacing, get_patch_random):
+        return self.get_patch(random.randint(0, self.__len__() - 1), frames_n, frames_spacing, get_patch_random)
 
-    def _get_patch_contiguous(self, frame_index, frames_n, frames_spacing):
+    def _get_patch_contiguous(self, frame_index, frames_n, frames_spacing, randomize_frames):
+        assert frames_n % 2 == 1
         sequence_item = next(x[0] for x in enumerate(self.items_limits) if x[1] > frame_index)
         sequence_first_frame_index = self.items_limits[sequence_item - 1] if sequence_item > 0 else 0
         sequence_last_frame_index = self.items_limits[sequence_item] - 1
-        frames_indexes = list(range(
-            frame_index - (frames_n // 2) * frames_spacing,
-            frame_index + (frames_n // 2) * frames_spacing + 1,
-            frames_spacing
-        ))
+        frame_indexes_candidates_pre = list(range(frame_index - (frames_n // 2) * frames_spacing, frame_index))
+        frame_indexes_candidates_post = list(range(frame_index + 1, frame_index + (frames_n // 2) * frames_spacing + 1))
+        if randomize_frames:
+            frames_indexes_before = sorted(random.sample(frame_indexes_candidates_pre, frames_n // 2))
+            frames_indexes_after = sorted(random.sample(frame_indexes_candidates_post, frames_n // 2))
+        else:
+            frames_indexes_before = frame_indexes_candidates_pre[::frames_spacing]
+            frames_indexes_after = frame_indexes_candidates_post[1::frames_spacing]
+        frames_indexes = frames_indexes_before + [frame_index] + frames_indexes_after
         frames_indexes = np.clip(frames_indexes, sequence_first_frame_index, sequence_last_frame_index)
         y, m = self.get_items(frames_indexes)
         return y, m, (self.items_names[sequence_item], 0)
@@ -167,19 +172,21 @@ class MaskedSequenceDataset(torch.utils.data.Dataset):
     image_size = None
     frames_n = None
     frames_spacing = None
+    frames_randomize = None
     dilatation_filter_size = None
     dilatation_iterations = None
     force_resize = None
     keep_ratio = None
     fill_color = None
 
-    def __init__(self, gts_dataset, masks_dataset, image_size, frames_n, frames_spacing, dilatation_filter_size,
-                 dilatation_iterations, force_resize, keep_ratio):
+    def __init__(self, gts_dataset, masks_dataset, image_size, frames_n, frames_spacing, frames_randomize,
+                 dilatation_filter_size, dilatation_iterations, force_resize, keep_ratio):
         self.gts_dataset = gts_dataset
         self.masks_dataset = masks_dataset
         self.image_size = image_size
         self.frames_n = frames_n
         self.frames_spacing = frames_spacing
+        self.frames_randomize = frames_randomize
         self.force_resize = force_resize
         self.keep_ratio = keep_ratio
         self.dilatation_filter_size = dilatation_filter_size
@@ -189,12 +196,12 @@ class MaskedSequenceDataset(torch.utils.data.Dataset):
     def __getitem__(self, item):
         # Get the data associated to the GT
         y, m, info = self.gts_dataset.get_sequence(item) if self.frames_n == -1 \
-            else self.gts_dataset.get_patch(item, self.frames_n, self.frames_spacing)
+            else self.gts_dataset.get_patch(item, self.frames_n, self.frames_spacing, self.frames_randomize)
 
         # If self.gts_dataset and self.masks_dataset are not the same, obtain new mask
         if self.masks_dataset is not None:
             masks_n = self.frames_n if self.frames_n != -1 else y.size(1)
-            _, m, _ = self.masks_dataset.get_patch_random(masks_n, self.frames_spacing)
+            _, m, _ = self.masks_dataset.get_patch_random(masks_n, self.frames_spacing, False)
 
         # Apply GT transformations
         if self.force_resize:
