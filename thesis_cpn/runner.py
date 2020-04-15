@@ -14,10 +14,6 @@ class CopyPasteRunner(thesis.runner.ThesisRunner):
     model_vgg = None
     model_lpips = None
     losses_items_ids = ['alignment', 'vh', 'nvh', 'nh', 'perceptual', 'style', 'tv']
-    e_train_losses_items = None
-    e_validation_losses_items = None
-    losses_it_items = None
-    losses_epoch_items = None
     scheduler = None
 
     def init_model(self, device):
@@ -40,8 +36,13 @@ class CopyPasteRunner(thesis.runner.ThesisRunner):
         # Decompose iteration data
         (x, m), y, info = it_data
 
+        # Move Tensors to correct device
+        x = x.to(device)
+        m = m.to(device)
+        y = y.to(device)
+
         # Propagate through the model
-        (y_hat, y_hat_comp, c_mask, (x_aligned, v_aligned)), t, r_list = self.train_step_propagate(x, m, y, device)
+        (y_hat, y_hat_comp, c_mask, (x_aligned, v_aligned)), t, r_list = self.train_step_propagate(x, m, y)
 
         # Get visibility map of aligned frames and target frame
         visibility_maps = (1 - m[:, :, t].unsqueeze(2)) * v_aligned
@@ -64,12 +65,7 @@ class CopyPasteRunner(thesis.runner.ThesisRunner):
         # Return combined loss
         return loss
 
-    def train_step_propagate(self, x, m, y, device):
-        # Move Tensors to correct device
-        x = x.to(device)
-        m = m.to(device)
-        y = y.to(device)
-
+    def train_step_propagate(self, x, m, y):
         # Set target and auxilliary frames indexes
         t = x.size(2) // 2
         r_list = list(range(x.size(2)))
@@ -113,8 +109,11 @@ class CopyPasteRunner(thesis.runner.ThesisRunner):
         # Iterate over the samples
         for it_data in loader:
             (x, m), y, _ = it_data
+            x = x.to(device)
+            m = m.to(device)
+            y = y.to(device)
             with torch.no_grad():
-                (_, y_hat_comp, _, (_, _)), t, _ = self.train_step_propagate(x, m, y, device)
+                (_, y_hat_comp, _, (_, _)), t, _ = self.train_step_propagate(x, m, y)
                 psnr += utils.measures.psnr(y[:, :, t].cpu(), y_hat_comp.cpu())
                 ssim += utils.measures.ssim(y[:, :, t].cpu(), y_hat_comp.cpu())
                 lpips += utils.measures.lpips(y[:, :, t], y_hat_comp, self.model_lpips)
@@ -142,8 +141,11 @@ class CopyPasteRunner(thesis.runner.ThesisRunner):
         # Iterate over the samples
         for it_data in loader:
             (x, m), y, _ = it_data
+            x = x.to(device)
+            m = m.to(device)
+            y = y.to(device)
             with torch.no_grad():
-                (y_hat, y_hat_comp, _, (_, _)), t, _ = self.train_step_propagate(x, m, y, device)
+                (y_hat, y_hat_comp, _, (_, _)), t, _ = self.train_step_propagate(x, m, y)
             x_tbx.append(x[:, :, t].cpu().numpy())
             y_hat_tbx.append(y_hat.cpu().numpy())
             y_hat_comp_tbx.append(y_hat_comp.cpu().numpy())

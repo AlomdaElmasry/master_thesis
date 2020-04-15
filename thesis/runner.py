@@ -1,5 +1,4 @@
 import skeltorch
-import torch
 import numpy as np
 import os
 import utils
@@ -8,6 +7,10 @@ from PIL import Image
 
 class ThesisRunner(skeltorch.Runner):
     losses_items_ids = None
+    losses_it_items = None
+    losses_epoch_items = None
+    e_train_losses_items = None
+    e_validation_losses_items = None
     scheduler = None
 
     def __init__(self):
