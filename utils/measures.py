@@ -13,7 +13,7 @@ def psnr(y, y_hat_comp):
     items_psnr = []
     for b in range(y.size(0)):
         items_psnr.append(skimage.metrics.peak_signal_noise_ratio(y[b].numpy(), y_hat_comp[b].numpy()))
-    return items_psnr
+    return [item_psnr for item_psnr in items_psnr if not np.isinf(item_psnr) and not np.isnan(item_psnr)]
 
 
 def ssim(y, y_hat_comp):
