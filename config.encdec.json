@@ -17,7 +17,7 @@
     "loss_lambdas": [10, 6, 0.1, 240, 0.1]
   },
   "training": {
-    "batch_size": 16,
+    "batch_size": 32,
     "train_max_iterations": 5000,
     "validation_max_iterations": 500,
     "lr": 1e-4,

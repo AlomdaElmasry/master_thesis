@@ -16,6 +16,9 @@ class ThesisData(skeltorch.Data):
     validation_gts_meta = None
     validation_masks_meta = None
     test_meta = None
+    test_objective_measures_indexes = None
+    test_frames_indexes = None
+    test_sequences_indexes = None
 
     def create(self, data_path):
         self.train_gts_meta = utils.paths.DatasetPaths.get_items(
@@ -52,6 +55,12 @@ class ThesisData(skeltorch.Data):
         if self.experiment.configuration.get('data', 'max_mask_size') is not None:
             self._clean_masks(data_path, self.train_masks_meta)
             self._clean_masks(data_path, self.validation_masks_meta)
+
+        # Initialize test indexes
+        test_samples = sum([len(v[0]) for k, v in self.test_meta.items()])
+        self.test_objective_measures_indexes = random.sample(list(range(test_samples)), 1000)
+        self.test_frames_indexes = random.sample(list(range(test_samples)), 20)
+        self.test_sequences_indexes = [12, 15, 22, 50, 53]
 
     def _clean_masks(self, data_path, masks_meta):
         train_masks_items = list(masks_meta.keys())
@@ -94,7 +103,7 @@ class ThesisData(skeltorch.Data):
             masks_dataset=masks_datasets[2],
             image_size=tuple(self.experiment.configuration.get('data', 'test_size')),
             frames_n=-1,
-            frames_spacing=None,
+            frames_spacing=self.experiment.configuration.get('data', 'frames_spacing'),
             frames_randomize=self.experiment.configuration.get('data', 'frames_randomize'),
             dilatation_filter_size=tuple(self.experiment.configuration.get('data', 'dilatation_filter_size')),
             dilatation_iterations=self.experiment.configuration.get('data', 'dilatation_iterations'),
