@@ -1,7 +1,10 @@
 from thesis.runner import ThesisRunner
 import torch
 import torch.nn.functional as F
+import torch.utils.data
 from .model import ThesisAligner
+import copy
+import numpy as np
 
 
 class AlignerRunner(ThesisRunner):
@@ -31,13 +34,8 @@ class AlignerRunner(ThesisRunner):
         m = m.to(device)
         y = y.to(device)
 
-        # Set target and auxilliary frames indexes
-        t = x.size(2) // 2
-        r_list = list(range(x.size(2)))
-        r_list.pop(t)
-
         # Propagate through the model
-        x_aligned, v_aligned, y_aligned = self.model(x, m, y, t, r_list)
+        (x_aligned, v_aligned, y_aligned), t, r_list = self.train_step_propagate(x, m, y)
 
         # Get visibility map of aligned frames and target frame
         visibility_maps = (1 - m[:, :, t].unsqueeze(2)) * v_aligned
@@ -51,6 +49,54 @@ class AlignerRunner(ThesisRunner):
 
         # Return the loss
         return loss
+
+    def train_step_propagate(self, x, m, y):
+        # Set target and auxilliary frames indexes
+        t = x.size(2) // 2
+        r_list = list(range(x.size(2)))
+        r_list.pop(t)
+
+        # Return result from the model
+        return self.model(x, m, y, t, r_list), t, r_list
+
+    def test(self, epoch, device):
+        # Set training parameters to the original test dataset
+        samples_dataset = copy.deepcopy(self.experiment.data.datasets['test'])
+        samples_dataset.frames_n = self.experiment.configuration.get('data', 'frames_n')
+
+        # Create a Subset using self.experiment.data.test_frames_indexes defined frames
+        subset_dataset = torch.utils.data.Subset(samples_dataset, self.experiment.data.test_frames_indexes)
+        loader = torch.utils.data.DataLoader(
+            subset_dataset, self.experiment.configuration.get('training', 'batch_size')
+        )
+
+        # Create variables with the images to log inside TensorBoard -> (b,c,h,w)
+        x_tbx = []
+        x_aligned_tbx = []
+
+        # Iterate over the samples
+        for it_data in loader:
+            (x, m), y, _ = it_data
+            x = x.to(device)
+            m = m.to(device)
+            y = y.to(device)
+            with torch.no_grad():
+                (x_aligned, _, _), t, r_list = self.train_step_propagate(x, m, y)
+            x_tbx.append(x[:, :, t].cpu().numpy())
+            x_aligned_tbx.append(x_aligned.cpu().numpy())
+
+        # Concatenate the results along dim=0
+        x_tbx = np.concatenate(x_tbx)
+        x_aligned_tbx = np.concatenate(x_aligned_tbx)
+
+        # Save group image for each sample
+        for b in range(len(self.experiment.data.test_sequences_indexes)):
+            tensor_list = [x_aligned_tbx[b, :, i] for i in range(x_aligned_tbx.shape[2] // 2)]
+            tensor_list += [x_tbx[b]]
+            tensor_list += [x_aligned_tbx[b, :, -i - 1] for i in range(x_aligned_tbx.shape[2] // 2)]
+            self.experiment.tbx.add_images(
+                'test_alignment/{}'.format(b), tensor_list, global_step=self.counters['epoch'], dataformats='CHW'
+            )
 
     def _compute_loss(self, x_t, x_aligned, v_map):
         alignment_input = x_aligned * v_map
