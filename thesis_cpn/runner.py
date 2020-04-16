@@ -33,6 +33,7 @@ class CopyPasteRunner(thesis.runner.ThesisRunner):
         )
 
     def train_step(self, it_data, device):
+        self.test(None, device)
         # Decompose iteration data
         (x, m), y, info = it_data
 
@@ -83,10 +84,10 @@ class CopyPasteRunner(thesis.runner.ThesisRunner):
         self.model.eval()
 
         # Compute objective quality measures
-        self._test_objective_measures(device)
+        # self._test_objective_measures(device)
 
         # Inpaint individual frames given by self.experiment.data.test_frames_indexes
-        self._test_frames(device)
+        # self._test_frames(device)
 
         # Inpaint entire sequences given by self.experiment.data.test_sequences_indexes
         self._test_sequences(device)
@@ -198,9 +199,9 @@ class CopyPasteRunner(thesis.runner.ThesisRunner):
             forward_factor = np.arange(start=0, stop=y_hat_comp.shape[2]) / f
             backward_factor = (f - np.arange(start=0, stop=y_hat_comp.shape[2])) / f
             y_hat_comp = (
-                    y_hat_comp[0].transpose(0, 2, 3, 1) * forward_factor * 255 +
-                    y_hat_comp[1].transpose(0, 2, 3, 1) * backward_factor * 255
-            ).transpose(0, 3, 1, 2).astype(np.uint8)
+                    y_hat_comp[0].transpose(0, 2, 3, 1) * forward_factor +
+                    y_hat_comp[1].transpose(0, 2, 3, 1) * backward_factor
+            ).transpose(0, 3, 1, 2)
 
             # Log 4 middle frames inside TensorBoard
             y_hat_comp_tbx = [
@@ -212,7 +213,7 @@ class CopyPasteRunner(thesis.runner.ThesisRunner):
             )
 
             # Save the sequence in disk
-            self._save_sample(y_hat_comp, 'test', info[0], True)
+            self._save_sample((y_hat_comp * 255).astype(np.uint8), 'test', info[0], True)
 
     def test_alignment(self, epoch, save_as_video, device):
         self.load_states(epoch, device)
