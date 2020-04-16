@@ -33,7 +33,6 @@ class CopyPasteRunner(thesis.runner.ThesisRunner):
         )
 
     def train_step(self, it_data, device):
-        self.test(None, device)
         # Decompose iteration data
         (x, m), y, info = it_data
 
@@ -84,10 +83,10 @@ class CopyPasteRunner(thesis.runner.ThesisRunner):
         self.model.eval()
 
         # Compute objective quality measures
-        # self._test_objective_measures(device)
+        self._test_objective_measures(device)
 
         # Inpaint individual frames given by self.experiment.data.test_frames_indexes
-        # self._test_frames(device)
+        self._test_frames(device)
 
         # Inpaint entire sequences given by self.experiment.data.test_sequences_indexes
         self._test_sequences(device)
