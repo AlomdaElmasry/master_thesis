@@ -8,7 +8,7 @@ class AlignerRunner(ThesisRunner):
     losses_items_ids = ['alignment']
 
     def init_model(self, device):
-        self.model = ThesisAligner()
+        self.model = ThesisAligner().to(device)
 
     def init_optimizer(self, device):
         self.optimizer = torch.optim.Adam(
