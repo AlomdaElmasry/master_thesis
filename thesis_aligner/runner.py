@@ -90,7 +90,7 @@ class AlignerRunner(ThesisRunner):
         x_aligned_tbx = np.concatenate(x_aligned_tbx)
 
         # Save group image for each sample
-        for b in range(len(self.experiment.data.test_sequences_indexes)):
+        for b in range(len(self.experiment.data.test_frames_indexes)):
             tensor_list = [x_aligned_tbx[b, :, i] for i in range(x_aligned_tbx.shape[2] // 2)]
             tensor_list += [x_tbx[b]]
             tensor_list += [x_aligned_tbx[b, :, -i - 1] for i in range(x_aligned_tbx.shape[2] // 2)]

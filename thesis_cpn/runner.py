@@ -132,8 +132,10 @@ class CopyPasteRunner(thesis.runner.ThesisRunner):
         samples_dataset.frames_n = self.experiment.configuration.get('data', 'frames_n')
 
         # Create a Subset using self.experiment.data.test_frames_indexes defined frames
-        subset_dataset = torch.utils.data.Subset(samples_dataset, indices=self.experiment.data.test_frames_indexes)
-        loader = torch.utils.data.DataLoader(subset_dataset, batch_size=4)
+        subset_dataset = torch.utils.data.Subset(samples_dataset, self.experiment.data.test_frames_indexes)
+        loader = torch.utils.data.DataLoader(
+            subset_dataset, self.experiment.configuration.get('training', 'batch_size')
+        )
 
         # Create variables with the images to log inside TensorBoard -> (b,c,h,w)
         x_tbx, y_hat_tbx, y_hat_comp_tbx, y_tbx = [], [], [], []
@@ -158,7 +160,7 @@ class CopyPasteRunner(thesis.runner.ThesisRunner):
         y_tbx = np.concatenate(y_tbx)
 
         # Save group image for each sample
-        for b in range(len(self.experiment.data.test_sequences_indexes)):
+        for b in range(len(self.experiment.data.test_frames_indexes)):
             tensor_list = [x_tbx[b], y_hat_tbx[b], y_hat_comp_tbx[b], y_tbx[b]]
             self.experiment.tbx.add_images(
                 'test_frames/{}'.format(b), tensor_list, global_step=self.counters['epoch'], dataformats='CHW'
