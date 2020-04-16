@@ -1,7 +1,53 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from thesis_cpn.model import AlignmentEncoder, AlignmentRegressor
+
+
+def init_weights(m):
+    if type(m) == nn.Conv2d:
+        nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+
+
+class AlignmentEncoder(nn.Module):
+    def __init__(self):
+        super(AlignmentEncoder, self).__init__()
+        self.convs = nn.Sequential(
+            nn.Conv2d(4, 64, kernel_size=5, stride=2, padding=2), nn.ReLU(),
+            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1), nn.ReLU(),
+            nn.Conv2d(64, 128, kernel_size=3, stride=2, padding=1), nn.ReLU(),
+            nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1), nn.ReLU(),
+            nn.Conv2d(128, 256, kernel_size=3, stride=2, padding=1), nn.ReLU(),
+            nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1), nn.ReLU(),
+            nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1), nn.ReLU(),
+        )
+        self.convs.apply(init_weights)
+
+    def forward(self, in_f, in_v):
+        x = torch.cat([in_f, in_v], dim=1)
+        x = F.interpolate(x, size=(224, 224), mode='bilinear', align_corners=False)
+        return self.convs(x)
+
+
+class AlignmentRegressor(nn.Module):
+    def __init__(self):
+        super(AlignmentRegressor, self).__init__()
+        self.convs = nn.Sequential(
+            nn.Conv2d(512, 512, kernel_size=3, stride=2, padding=1), nn.ReLU(),
+            nn.Conv2d(512, 512, kernel_size=3, stride=1, padding=1), nn.ReLU(),
+            nn.Conv2d(512, 512, kernel_size=3, stride=1, padding=1), nn.ReLU(),
+            nn.Conv2d(512, 512, kernel_size=3, stride=2, padding=1), nn.ReLU(),
+            nn.Conv2d(512, 512, kernel_size=3, stride=1, padding=1), nn.ReLU(),
+            nn.Conv2d(512, 512, kernel_size=3, stride=1, padding=1), nn.ReLU(),
+        )
+        self.fc = nn.Linear(512, 6)
+        self.convs.apply(init_weights)
+
+    def forward(self, feat1, feat2):
+        x = torch.cat([feat1, feat2], dim=1)
+        x = self.convs(x)
+        x = F.avg_pool2d(x, x.shape[2])
+        x = x.view(-1, x.shape[1])
+        return self.fc(x).view(-1, 2, 3)
 
 
 class ThesisAligner(nn.Module):
@@ -10,9 +56,14 @@ class ThesisAligner(nn.Module):
         super(ThesisAligner, self).__init__()
         self.A_Encoder = AlignmentEncoder()
         self.A_Regressor = AlignmentRegressor()
+        self.register_buffer('mean', torch.as_tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1, 1))
+        self.register_buffer('std', torch.as_tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1, 1))
 
     def forward(self, x, m, y, t, r_list):
         b, c, f, h, w = x.size()  # B C H W
+
+        # Normalize Inputs
+        x = (x - self.mean) / self.std
 
         # Get alignment features
         r_feats = self.A_Encoder(x.transpose(1, 2).reshape(-1, c, h, w), m.transpose(1, 2).reshape(-1, 1, h, w))
@@ -26,6 +77,9 @@ class ThesisAligner(nn.Module):
             )
         )
         grid_rt = F.affine_grid(theta_rt, (theta_rt.size(0), c, h, w), align_corners=False)
+
+        # Denormalize outputs
+        x = (x * self.std) + self.mean
 
         # Align x
         x_aligned = F.grid_sample(

@@ -42,8 +42,15 @@ class AlignerRunner(ThesisRunner):
         # Get visibility map of aligned frames and target frame
         visibility_maps = (1 - m[:, :, t].unsqueeze(2)) * v_aligned
 
+        # Compute the loss
+        loss = self._compute_loss(x[:, :, t], x_aligned, visibility_maps)
+
+        # Append loss items to epoch dictionary
+        e_losses_items = self.e_train_losses_items if self.model.training else self.e_validation_losses_items
+        e_losses_items['alignment'].append(loss.item())
+
         # Return the loss
-        return self._compute_loss(x[:, :, t], x_aligned, visibility_maps)
+        return loss
 
     def _compute_loss(self, x_t, x_aligned, v_map):
         alignment_input = x_aligned * v_map
