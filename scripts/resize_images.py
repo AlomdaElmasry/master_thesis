@@ -33,10 +33,9 @@ def handle_folder(folder_path, args, bar, i):
             if file_extension in args.formats:
                 image = cv2.imread(os.path.join(folder_path, folder_item))
                 if args.upsample or (image.shape[0] > args.max_height or image.shape[1] > args.max_width):
-                    new_height = args.max_height if image.shape[0] >= image.shape[1] else \
-                        round(image.shape[0] * args.max_width / image.shape[1])
-                    new_width = args.max_width if image.shape[1] > image.shape[0] else \
-                        round(image.shape[1] * args.max_height / image.shape[0])
+                    img_ratio = image.shape[0] / image.shape[1]
+                    new_height = min(args.max_height, round(args.max_width * img_ratio))
+                    new_width = min(args.max_width, round(args.max_height / img_ratio))
                     new_height = new_height if args.keep_ratio else args.max_height
                     new_width = new_width if args.keep_ratio else args.max_width
                     image = cv2.resize(image, (new_width, new_height))
