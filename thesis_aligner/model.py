@@ -41,6 +41,8 @@ class AlignmentRegressor(nn.Module):
             nn.Conv2d(512, 512, kernel_size=3, stride=1, padding=1), nn.ReLU(),
         )
         self.fc = nn.Linear(512, 6)
+        self.fc.weight.data.zero_()
+        self.fc.bias.data.copy_(torch.tensor([1, 0, 0, 0, 1, 0], dtype=torch.float32))
         self.convs.apply(init_weights)
 
     def forward(self, feat1, feat2):
@@ -48,8 +50,8 @@ class AlignmentRegressor(nn.Module):
         x = self.convs(x)
         x = F.avg_pool2d(x, x.shape[2])
         x = x.view(-1, x.shape[1])
-        return self.fc(x).view(-1, 2, 3)
-
+        a = self.fc(x).view(-1, 2, 3)
+        return a
 
 class ThesisAligner(nn.Module):
 
