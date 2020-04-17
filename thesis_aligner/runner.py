@@ -35,6 +35,15 @@ class AlignerRunner(ThesisRunner):
         m = m.to(device)
         y = y.to(device)
 
+        plt.imshow(x[0, :, 0].permute(1, 2, 0).numpy())
+        plt.show()
+
+        plt.imshow(x[0, :, 1].permute(1, 2, 0).numpy())
+        plt.show()
+
+        plt.imshow(x[0, :, 2].permute(1, 2, 0).numpy())
+        plt.show()
+
         # Propagate through the model
         (x_aligned, v_aligned, y_aligned), t, r_list = self.train_step_propagate(x, m, y)
 
