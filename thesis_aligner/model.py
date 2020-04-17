@@ -53,6 +53,7 @@ class AlignmentRegressor(nn.Module):
         a = self.fc(x).view(-1, 2, 3)
         return a
 
+
 class ThesisAligner(nn.Module):
 
     def __init__(self):

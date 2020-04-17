@@ -5,7 +5,6 @@ import torch.utils.data
 from .model import ThesisAligner
 import copy
 import numpy as np
-import matplotlib.pyplot as plt
 
 
 class AlignerRunner(ThesisRunner):
