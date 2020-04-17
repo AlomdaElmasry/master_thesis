@@ -4,6 +4,7 @@ import torch.utils.data
 import matplotlib.pyplot as plt
 import utils.movement
 import torch.nn.functional as F
+import utils.paths
 
 parser = argparse.ArgumentParser(description='Visualize samples from the dataset')
 parser.add_argument('--data-path', required=True, help='Path where the images are stored')
@@ -16,28 +17,55 @@ parser.add_argument('--frames-n', default=5, type=int, help='Frame number')
 parser.add_argument('--frames-spacing', default=2, type=int, help='Frame spacing')
 args = parser.parse_args()
 
-# Load data sets
-movement = utils.movement.MovementSimulator()
-gts_dataset = ContentProvider(args.gts_dataset, args.data_path, args.gts_split, movement, None)
-masks_dataset = ContentProvider(args.masks_dataset, args.data_path, args.masks_split, None, None)
-dataset = MaskedSequenceDataset(gts_dataset, masks_dataset, (args.image_size, args.image_size), args.frames_n,
-                                args.frames_spacing, force_resize=False)
+# Get Meta
+gts_meta = utils.paths.DatasetPaths.get_items(
+    dataset_name='got-10k',
+    data_folder=args.data_path,
+    split='train',
+    return_masks=False
+)
+masks_meta = utils.paths.DatasetPaths.get_items(
+    dataset_name='youtube-vos',
+    data_folder=args.data_path,
+    split='train',
+    return_gts=False
+)
+
+# Create ContentProviders
+movement_null = utils.movement.MovementSimulator(0, 0, 0)
+movement_simulator = utils.movement.MovementSimulator()
+gts_dataset = ContentProvider(args.data_path, gts_meta, movement_null, None)
+masks_dataset = ContentProvider(args.data_path, masks_meta, movement_simulator, None)
+
+# Create ContentProviders
+dataset = MaskedSequenceDataset(
+    gts_dataset=gts_dataset,
+    masks_dataset=masks_dataset,
+    image_size=[256, 256],
+    frames_n=5,
+    frames_spacing=2,
+    frames_randomize=False,
+    dilatation_filter_size=(3, 3),
+    dilatation_iterations=4,
+    force_resize=False,
+    keep_ratio=True
+)
 loader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=False)
 
 # Iterate over the data sets
 for i, data in enumerate(loader):
-    (x, m), y, (info, random_affines_stacked, (h, w)) = data
-
-    random_affines_stacked = [torch.inverse(random_affines_stacked[0, i]) for i in range(5)]
-    random_thetas_stacked = torch.stack([
-        utils.MovementSimulator.affine2theta(ra, 256, 256) for ra in random_affines_stacked
-    ])
-    affine_grid = F.affine_grid(random_thetas_stacked, [5, 3, 256, 256])
-    data_out = F.grid_sample(x[0].transpose(0, 1), affine_grid).squeeze(0)
+    (x, m), y, info = data
 
     for i in range(x.size(2)):
         plt.imshow(x[0, :, i].permute(1, 2, 0))
-        plt.imshow(data_out[i].permute(1, 2, 0))
         plt.show()
+
+    # random_affines_stacked = [torch.inverse(random_affines_stacked[0, i]) for i in range(5)]
+    # random_thetas_stacked = torch.stack([
+    #     utils.MovementSimulator.affine2theta(ra, 256, 256) for ra in random_affines_stacked
+    # ])
+    # affine_grid = F.affine_grid(random_thetas_stacked, [5, 3, 256, 256])
+    # data_out = F.grid_sample(x[0].transpose(0, 1), affine_grid).squeeze(0)
+
 
     exit()

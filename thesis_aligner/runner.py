@@ -102,9 +102,4 @@ class AlignerRunner(ThesisRunner):
     def _compute_loss(self, x_t, x_aligned, v_map):
         alignment_input = x_aligned * v_map
         alignment_target = x_t.unsqueeze(2).repeat(1, 1, x_aligned.size(2), 1, 1) * v_map
-        plt.imshow(alignment_input[0, :, 0].permute(1, 2, 0).detach().numpy())
-        plt.show()
-        plt.imshow(alignment_target[0, :, 0].permute(1, 2, 0).detach().numpy())
-        plt.show()
-
         return F.l1_loss(alignment_input, alignment_target)

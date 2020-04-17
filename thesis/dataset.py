@@ -30,13 +30,14 @@ class ContentProvider(torch.utils.data.Dataset):
             self._load_data_in_ram()
 
     def __getitem__(self, frame_index):
-        """Returns the frame with index ``frame_item``.
+        """Returns both the GT and the mask associated with index ``frame_item``.
 
         Args:
             frame_index (int): frame index between 0 and ``self.__len__()``.
 
         Returns:
-            torch.FloatTensor: frame quantized between [0,1] with shape (C,H,W).
+            torch.FloatTensor: tensor of size (C,H,W) containing a GT image quantized between [0,1] or None.
+            torch.FloatTensor: tensor of size (C,H,W) containing a mask image quantized between [0,1] or None.
             str: name of the sequence.
         """
         sequence_index = next(x[0] for x in enumerate(self.items_limits) if x[1] > frame_index)
@@ -46,6 +47,12 @@ class ContentProvider(torch.utils.data.Dataset):
         return y, m, self.items_names[sequence_index]
 
     def _get_item_background(self, sequence_index, frame_index_bis):
+        """Returns the GT associated to frame `frame_index_bis` of `sequence_index`. It will return None if the path
+        at that position is None.
+
+        Returns:
+            torch.FloatTensor: tensor of size (C,H,W) containing a GT image quantized between [0,1] or None.
+        """
         item_name = self.items_names[sequence_index]
         if self.dataset_meta[item_name][0] is None:
             return None
@@ -55,6 +62,12 @@ class ContentProvider(torch.utils.data.Dataset):
         return torch.from_numpy(jpeg.JPEG(item_path).decode() / 255).permute(2, 0, 1).float()
 
     def _get_item_mask(self, sequence_index, frame_index_bis):
+        """Returns the mask associated to frame `frame_index_bis` of `sequence_index`. It will return None if the path
+        at that position is None.
+
+        Returns:
+            torch.FloatTensor: tensor of size (C,H,W) containing a mask image quantized between [0,1].
+        """
         item_name = self.items_names[sequence_index]
         if self.dataset_meta[item_name][1] is None:
             return None
@@ -133,6 +146,7 @@ class ContentProvider(torch.utils.data.Dataset):
 
     def _get_patch_simulated(self, frame_index, frames_n):
         y, m, info = self.__getitem__(frame_index)
+        m = m.unsqueeze(0) if m is not None and len(m.size()) == 2 else m
         transformation_matrices = None
         if y is not None:
             y, transformation_matrices = self.movement_simulator.simulate_movement(

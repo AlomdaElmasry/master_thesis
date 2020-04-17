@@ -43,6 +43,7 @@ class AlignmentRegressor(nn.Module):
             nn.Conv2d(512, 512, kernel_size=3, stride=1, padding=1), nn.ReLU(),
         )
         self.fc = nn.Linear(512, 6)
+        self.fc.bias.data.copy_(torch.tensor([1, 0, 0, 0, 1, 0], dtype=torch.float32))
         self.convs.apply(init_weights)
 
     def forward(self, feat1, feat2):

@@ -13,7 +13,8 @@ class MovementSimulator:
         self.max_rotation = max_rotation
 
     def random_affine(self):
-        tx, ty = np.random.randint(low=-self.max_displacement, high=self.max_displacement, size=2)
+        tx, ty = np.random.randint(low=-self.max_displacement, high=self.max_displacement,
+                                   size=2) if self.max_displacement > 0 else (0, 0)
         sx, sy = np.random.uniform(low=1 - self.max_scaling, high=1 + self.max_scaling, size=2)
         rot = np.random.uniform(low=-self.max_rotation, high=self.max_rotation)
         affine_matrix = AffineTransform(translation=(tx, ty), scale=(sx, sy), rotation=rot).params

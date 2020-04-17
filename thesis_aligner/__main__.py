@@ -1,6 +1,6 @@
 import skeltorch
-from thesis.data import ThesisData
+from .data import AlignerData
 from .runner import AlignerRunner
 
 # Create Skeltorch object and run it
-skeltorch.Skeltorch(ThesisData(), AlignerRunner()).run()
+skeltorch.Skeltorch(AlignerData(), AlignerRunner()).run()
