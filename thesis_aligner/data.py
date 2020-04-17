@@ -115,19 +115,19 @@ class AlignerData(skeltorch.Data):
         train_gts_dataset = ContentProvider(
             data_folder=data_path,
             dataset_meta=self.train_gts_meta,
-            movement_simulator=utils.movement.MovementSimulator(0, 0, 0),
+            movement_simulator=utils.movement.MovementSimulator(50, 0, 0),
             logger=self.logger
         )
         validation_gts_dataset = ContentProvider(
             data_folder=data_path,
             dataset_meta=self.validation_gts_meta,
-            movement_simulator=utils.movement.MovementSimulator(0, 0, 0),
+            movement_simulator=utils.movement.MovementSimulator(50, 0, 0),
             logger=self.logger,
         )
         test_gts_dataset = ContentProvider(
             data_folder=data_path,
             dataset_meta=self.test_meta,
-            movement_simulator=utils.movement.MovementSimulator(0, 0, 0),
+            movement_simulator=utils.movement.MovementSimulator(50, 0, 0),
             logger=self.logger,
         )
         return train_gts_dataset, validation_gts_dataset, test_gts_dataset
@@ -136,14 +136,14 @@ class AlignerData(skeltorch.Data):
         train_masks_dataset = ContentProvider(
             dataset_meta=self.train_masks_meta,
             data_folder=data_path,
-            movement_simulator=utils.movement.MovementSimulator(50, 0, 0),
+            movement_simulator=utils.movement.MovementSimulator(0, 0, 0),
             logger=self.logger,
             load_in_ram=False
         )
         validation_masks_dataset = ContentProvider(
             dataset_meta=self.validation_masks_meta,
             data_folder=data_path,
-            movement_simulator=utils.movement.MovementSimulator(50, 0, 0),
+            movement_simulator=utils.movement.MovementSimulator(0, 0, 0),
             logger=self.logger,
         )
         return train_masks_dataset, validation_masks_dataset, None

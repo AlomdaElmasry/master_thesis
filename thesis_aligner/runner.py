@@ -102,4 +102,4 @@ class AlignerRunner(ThesisRunner):
     def _compute_loss(self, x_t, x_aligned, v_map):
         alignment_input = x_aligned * v_map
         alignment_target = x_t.unsqueeze(2).repeat(1, 1, x_aligned.size(2), 1, 1) * v_map
-        return F.l1_loss(alignment_input, alignment_target)
+        return F.l1_loss(alignment_input, alignment_target, reduction='sum') / torch.sum(v_map)
