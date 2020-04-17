@@ -83,7 +83,7 @@ class AlignerRunner(ThesisRunner):
             y = y.to(device)
             with torch.no_grad():
                 (x_aligned, _, _), t, r_list = self.train_step_propagate(x, m, y)
-            x_tbx.append(x[:, :, t].cpu().numpy())
+            x_tbx.append(x.cpu().numpy())
             x_aligned_tbx.append(x_aligned.cpu().numpy())
 
         # Concatenate the results along dim=0
@@ -92,11 +92,16 @@ class AlignerRunner(ThesisRunner):
 
         # Save group image for each sample
         for b in range(len(self.experiment.data.test_frames_indexes)):
-            tensor_list = [x_aligned_tbx[b, :, i] for i in range(x_aligned_tbx.shape[2] // 2)]
-            tensor_list += [x_tbx[b]]
-            tensor_list += [x_aligned_tbx[b, :, -i - 1] for i in range(x_aligned_tbx.shape[2] // 2)]
+            default_list = [x_tbx[b, :, i] for i in range(x_tbx.shape[2])]
+            aligned_list = [x_aligned_tbx[b, :, i] for i in range(x_aligned_tbx.shape[2] // 2)]
+            aligned_list += [x_tbx[b, :, t]]
+            aligned_list += [x_aligned_tbx[b, :, -i - 1] for i in range(x_aligned_tbx.shape[2] // 2)]
             self.experiment.tbx.add_images(
-                'test_alignment/{}'.format(b), tensor_list, global_step=self.counters['epoch'], dataformats='CHW'
+                'test_alignment_x/{}'.format(b), default_list, global_step=self.counters['epoch'], dataformats='CHW'
+            )
+            self.experiment.tbx.add_images(
+                'test_alignment_x_aligned/{}'.format(b), aligned_list, global_step=self.counters['epoch'],
+                dataformats='CHW'
             )
 
     def _compute_loss(self, x_t, x_aligned, v_map):
