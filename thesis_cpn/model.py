@@ -159,16 +159,16 @@ class Decoder(nn.Module):
 
 
 class CPNet(nn.Module):
-    use_aligner = None
 
-    def __init__(self, use_aligner=True):
+    def __init__(self, aligner=None):
         super(CPNet, self).__init__()
-        self.A_Encoder = AlignmentEncoder()
-        self.A_Regressor = AlignmentRegressor()
+        self.aligner = aligner
+        if aligner is None:
+            self.A_Encoder = AlignmentEncoder()
+            self.A_Regressor = AlignmentRegressor()
         self.Encoder = Encoder()
         self.CM_Module = ContextMatching()
         self.Decoder = Decoder()
-        self.use_aligner = use_aligner
 
     def align(self, x, m, y, t, r_list):
         b, c, f, h, w = x.size()  # B C H W
@@ -230,9 +230,9 @@ class CPNet(nn.Module):
         return y_hat, y_hat_comp, c_mask
 
     def forward(self, x, m, y, t, r_list):
-        if self.use_aligner:
+        if self.aligner is None:
             x_aligned, v_aligned, _ = self.align(x, m, y, t, r_list)
         else:
-            x_aligned, v_aligned = x[:, :, r_list], 1 - m[:, :, r_list]
+            x_aligned, v_aligned, _ = self.aligner(x, m, y, t, r_list)
         y_hat, y_hat_comp, c_mask = self.copy_and_paste(x[:, :, t], m[:, :, t], y[:, :, t], x_aligned, v_aligned)
         return y_hat, y_hat_comp, c_mask, (x_aligned, v_aligned)

@@ -5,9 +5,11 @@ import torch.nn.functional as F
 import thesis.runner
 from thesis.model_vgg import get_pretrained_model
 from thesis.model_lpips import PerceptualLoss
+from thesis_aligner.model_cpn_original import AlignerOriginal
 import torch.utils.data
 import copy
 import utils.measures
+import os.path
 
 
 class CopyPasteRunner(thesis.runner.ThesisRunner):
@@ -17,7 +19,8 @@ class CopyPasteRunner(thesis.runner.ThesisRunner):
     scheduler = None
 
     def init_model(self, device):
-        self.model = CPNet(use_aligner=self.experiment.configuration.get('model', 'use_aligner')).to(device)
+        aligner_model = self._get_trained_aligner(device) if True else None
+        self.model = CPNet(aligner=aligner_model).to(device)
         self.model_vgg = get_pretrained_model(device)
 
     def init_optimizer(self, device):
@@ -31,6 +34,25 @@ class CopyPasteRunner(thesis.runner.ThesisRunner):
             step_size=self.experiment.configuration.get('training', 'lr_scheduler_step_size'),
             gamma=self.experiment.configuration.get('training', 'lr_scheduler_gamma')
         )
+
+    def _get_trained_aligner(self, device):
+        # Trained aligner should be in experiment named "". Checkpoint number is 1.
+        exp_name = 'cpn_aligner_official'
+        checkpoint_path = os.path.join(
+            self.experiment.paths['checkpoints'].replace(self.experiment.experiment_name, exp_name), '1.checkpoint.pkl'
+        )
+        checkpoint_data = torch.load(checkpoint_path, map_location='cpu')
+
+        # Load model and state
+        aligner_model = AlignerOriginal().to(device)
+        aligner_model.load_state_dict(checkpoint_data['model'])
+
+        # Freeze the state of the aligner
+        for param in aligner_model.parameters():
+            param.requires_grad = False
+
+        # Return detached aligned with loaded weights
+        return aligner_model
 
     def train_step(self, it_data, device):
         # Decompose iteration data
@@ -240,16 +262,13 @@ class CopyPasteRunner(thesis.runner.ThesisRunner):
         loss_weights = self.experiment.configuration.get('model', 'loss_lambdas')
 
         # Loss 1: Alignment Loss
-        if self.experiment.configuration.get('model', 'use_aligner'):
-            alignment_input = x_aligned * v_map
-            alignment_target = x_t.unsqueeze(2).repeat(1, 1, x_aligned.size(2), 1, 1) * v_map
-            if loss_constant_normalization:
-                loss_alignment = F.l1_loss(alignment_input, alignment_target)
-            else:
-                loss_alignment = F.l1_loss(alignment_input, alignment_target, reduction='sum') / torch.sum(v_map)
-            loss_alignment *= loss_weights[0]
+        alignment_input = x_aligned * v_map
+        alignment_target = x_t.unsqueeze(2).repeat(1, 1, x_aligned.size(2), 1, 1) * v_map
+        if loss_constant_normalization:
+            loss_alignment = F.l1_loss(alignment_input, alignment_target)
         else:
-            loss_alignment = torch.zeros(1).to(y_hat.device)
+            loss_alignment = F.l1_loss(alignment_input, alignment_target, reduction='sum') / torch.sum(v_map)
+        loss_alignment *= loss_weights[0]
 
         # Loss 2: Visible Hole
         vh_input = m * (1 - c_mask) * y_hat

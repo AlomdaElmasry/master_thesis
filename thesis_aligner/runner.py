@@ -2,20 +2,23 @@ from thesis.runner import ThesisRunner
 import torch
 import torch.nn.functional as F
 import torch.utils.data
-from .model import ThesisAligner
+from .model_cpn import ThesisAligner
+from .model_cpn_original import AlignerOriginal
 import copy
 import numpy as np
+import os.path
 
 
 class AlignerRunner(ThesisRunner):
     losses_items_ids = ['alignment']
 
     def init_model(self, device):
-        self.model = ThesisAligner().to(device)
+        self.model = AlignerOriginal().to(device)
+        self._init_cpn_weights()
 
     def init_optimizer(self, device):
         self.optimizer = torch.optim.Adam(
-            self.model.parameters(), lr=1e-5
+            self.model.parameters(), lr=1e-9
         )
 
     def init_others(self, device):
@@ -25,7 +28,17 @@ class AlignerRunner(ThesisRunner):
             gamma=self.experiment.configuration.get('training', 'lr_scheduler_gamma')
         )
 
+    def _init_cpn_weights(self):
+        checkpoint_data = dict(torch.load('./weights/cpn.pth', map_location='cpu'))
+        model_state = self.model.state_dict()
+        for ck_item, k_data in checkpoint_data.items():
+            if ck_item.replace('module.', '') in model_state:
+                model_state[ck_item.replace('module.', '')].copy_(k_data)
+        self.model.load_state_dict(model_state)
+
     def train_step(self, it_data, device):
+        self.save_states()
+        exit()
         # Decompose iteration data
         (x, m), y, info = it_data
 
@@ -61,7 +74,7 @@ class AlignerRunner(ThesisRunner):
 
     def test(self, epoch, device):
         # Set training parameters to the original test dataset
-        samples_dataset = copy.deepcopy(self.experiment.data.datasets['test'])
+        samples_dataset = copy.deepcopy(self.experiment.data.datasets['train'])
         samples_dataset.frames_n = self.experiment.configuration.get('data', 'frames_n')
 
         # Create a Subset using self.experiment.data.test_frames_indexes defined frames
