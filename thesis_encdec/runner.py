@@ -1,12 +1,8 @@
 import skeltorch
 from .model import CPNEncoderDecoder
 import torch.optim
-import numpy as np
-from PIL import Image
-import os.path
-import utils
 import torch.nn.functional as F
-from thesis.model_vgg import get_pretrained_model
+from models.model_vgg import get_pretrained_model
 import torch.utils.data
 
 

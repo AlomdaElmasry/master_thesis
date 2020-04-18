@@ -1,8 +1,6 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import numpy as np
-import cv2
 
 
 def init_weights(m):
@@ -10,34 +8,9 @@ def init_weights(m):
         nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
 
 
-def remap_using_flow_fields(image, disp_x, disp_y, interpolation=cv2.INTER_LINEAR, border_mode=cv2.BORDER_CONSTANT):
-    """
-    opencv remap : carefull here mapx and mapy contains the index of the future position for each pixel
-    not the displacement !
-    map_x contains the index of the future horizontal position of each pixel [i,j] while map_y contains the index of the
-    future y position of each pixel [i,j]
-    All are numpy arrays
-    :param image: image to remap, HxWxC
-    :param disp_x: displacement on the horizontal direction to apply to each pixel. must be float32. HxW
-    :param disp_y: isplacement in the vertical direction to apply to each pixel. must be float32. HxW
-    :return:
-    remapped image. HxWxC
-    """
-    h_scale, w_scale = image.shape[:2]
-
-    # estimate the grid
-    X, Y = np.meshgrid(np.linspace(0, w_scale - 1, w_scale),
-                       np.linspace(0, h_scale - 1, h_scale))
-    map_x = (X + disp_x).astype(np.float32)
-    map_y = (Y + disp_y).astype(np.float32)
-    remapped_image = cv2.remap(image, map_x, map_y, interpolation=interpolation, borderMode=border_mode)
-
-    return remapped_image
-
-
-class AlignmentEncoder(nn.Module):
+class CPNAlignmentEncoder(nn.Module):
     def __init__(self):
-        super(AlignmentEncoder, self).__init__()
+        super(CPNAlignmentEncoder, self).__init__()
         self.convs = nn.Sequential(
             nn.Conv2d(4, 64, kernel_size=5, stride=2, padding=2), nn.ReLU(),
             nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1), nn.ReLU(),
@@ -47,20 +20,17 @@ class AlignmentEncoder(nn.Module):
             nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1), nn.ReLU(),
             nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1), nn.ReLU(),
         )
-        self.register_buffer('mean', torch.as_tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1))
-        self.register_buffer('std', torch.as_tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1))
         self.convs.apply(init_weights)
 
     def forward(self, in_f, in_v):
-        f = (in_f - self.mean) / self.std
-        x = torch.cat([f, in_v], dim=1)
+        x = torch.cat([in_f, in_v], dim=1)
         x = F.interpolate(x, size=(224, 224), mode='bilinear', align_corners=False)
         return self.convs(x)
 
 
-class AlignmentRegressor(nn.Module):
+class CPNAlignmentRegressor(nn.Module):
     def __init__(self):
-        super(AlignmentRegressor, self).__init__()
+        super(CPNAlignmentRegressor, self).__init__()
         self.convs = nn.Sequential(
             nn.Conv2d(512, 512, kernel_size=3, stride=2, padding=1), nn.ReLU(),
             nn.Conv2d(512, 512, kernel_size=3, stride=1, padding=1), nn.ReLU(),
@@ -81,9 +51,9 @@ class AlignmentRegressor(nn.Module):
         return self.fc(x).view(-1, 2, 3)
 
 
-class Encoder(nn.Module):
+class CPNEncoder(nn.Module):
     def __init__(self):
-        super(Encoder, self).__init__()
+        super(CPNEncoder, self).__init__()
         self.convs = nn.Sequential(
             nn.Conv2d(4, 64, kernel_size=5, stride=2, padding=2), nn.ReLU(),
             nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1), nn.ReLU(),
@@ -91,18 +61,14 @@ class Encoder(nn.Module):
             nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1), nn.ReLU(),
             nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1)
         )
-        self.register_buffer('mean', torch.as_tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1))
-        self.register_buffer('std', torch.as_tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1))
 
     def forward(self, in_f, in_v):
-        f = (in_f - self.mean) / self.std
-        x = torch.cat([f, in_v], dim=1)
-        return self.convs(x)
+        return self.convs(torch.cat([in_f, in_v], dim=1))
 
 
-class ContextMatching(nn.Module):
+class CPNContextMatching(nn.Module):
     def __init__(self):
-        super(ContextMatching, self).__init__()
+        super(CPNContextMatching, self).__init__()
 
     def masked_softmax(self, vec, mask, dim):
         masked_vec = vec * mask.float()
@@ -153,9 +119,9 @@ class ContextMatching(nn.Module):
         return torch.cat([c_feats[:, :, 0], c_out, c_mask], dim=1), c_mask
 
 
-class Decoder(nn.Module):
+class CPNDecoder(nn.Module):
     def __init__(self):
-        super(Decoder, self).__init__()
+        super(CPNDecoder, self).__init__()
         self.convs = nn.Sequential(
             nn.Conv2d(257, 257, kernel_size=3, stride=1, padding=1), nn.ReLU(),
             nn.Conv2d(257, 257, kernel_size=3, stride=1, padding=1), nn.ReLU(),
@@ -173,29 +139,33 @@ class Decoder(nn.Module):
             nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1), nn.ReLU()
         )
         self.convs_3 = nn.Conv2d(64, 3, kernel_size=5, stride=1, padding=2)
-        self.register_buffer('mean', torch.as_tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1))
-        self.register_buffer('std', torch.as_tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1))
 
     def forward(self, x):
         x = self.convs(x)
         x = F.interpolate(x, scale_factor=2, mode='nearest')
         x = self.convs_2(x)
         x = F.interpolate(x, scale_factor=2, mode='nearest')
-        x = self.convs_3(x)
-        return (x * self.std) + self.mean
+        return self.convs_3(x)
+        # return (x * self.std) + self.mean
 
 
 class CPNet(nn.Module):
+    _modes_all = ['full', 'aligner', 'encdec']
 
-    def __init__(self, aligner=None):
+    def __init__(self, mode, utils_alignment=None):
         super(CPNet, self).__init__()
-        self.aligner = aligner
-        if aligner is None:
-            self.A_Encoder = AlignmentEncoder()
-            self.A_Regressor = AlignmentRegressor()
-        self.Encoder = Encoder()
-        self.CM_Module = ContextMatching()
-        self.Decoder = Decoder()
+        assert mode in self._modes_all
+        self.mode = mode
+        self.utils_alignment = utils_alignment
+        if utils_alignment is None and mode in ['full', 'aligner']:
+            self.A_Encoder = CPNAlignmentEncoder()
+            self.A_Regressor = CPNAlignmentRegressor()
+        if mode in ['full', 'encdec']:
+            self.Encoder = CPNEncoder()
+            self.CM_Module = CPNContextMatching()
+            self.Decoder = CPNDecoder()
+        self.register_buffer('mean', torch.as_tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1, 1))
+        self.register_buffer('std', torch.as_tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1, 1))
 
     def align(self, x, m, y, t, r_list):
         b, c, f, h, w = x.size()  # B C H W
@@ -247,27 +217,38 @@ class CPNet(nn.Module):
         # Upscale c_mask to match the size of the mask
         c_mask = (F.interpolate(c_mask, size=(h, w), mode='bilinear', align_corners=False)).detach()
 
-        # Obtain the predicted output y_hat. Clip the output to be between [0, 1
-        y_hat = torch.clamp(self.Decoder(p_in), 0, 1)
+        # Obtain the predicted output y_hat. Clip the output to be between [0, 1]
+        y_hat = torch.clamp((self.Decoder(p_in) - self.mean.squeeze(4)) / self.std.squeeze(4), 0, 1)
 
-        # Combine prediction with GT of the frame. Limit the output range [0, 1].
+        # Combine prediction with GT of the frame.
         y_hat_comp = y_hat * m_t + y_t * (1 - m_t)
 
         # Return everything
         return y_hat, y_hat_comp, c_mask
 
     def forward(self, x, m, y, t, r_list):
-        if self.aligner is None:
+        # Normalize input data
+        x = (x - self.mean) / self.std
+
+        # Propagate using appropiate mode
+        if self.mode == 'full':
+            return self._forward_full(x, m, y, t, r_list)
+        elif self.mode == 'aligner':
+            return self._forward_aligner(x, m, y, t, r_list)
+        elif self.mode == 'encdec':
+            pass
+
+    def _forward_full(self, x, m, y, t, r_list):
+        if self.utils_alignment is None:
             x_aligned, v_aligned, _ = self.align(x, m, y, t, r_list)
         else:
-            # x_aligned, v_aligned, _ = self.aligner(x, m, y, t, r_list)
-            estimated_flow = self.aligner.estimate_flow(
-                x[:, :, t], x[:, :, r_list[0]], 'cuda', mode='channel_first'
-            )
-            print(estimated_flow)
-            exit()
-            #warped_source_image = remap_using_flow_fields(source_image, estimated_flow.squeeze()[0].cpu().numpy(),
-            #                                              estimated_flow.squeeze()[1].cpu().numpy())
-
+            x_aligned, v_aligned, _ = self.utils_alignment.align(x, m, y, t, r_list)
         y_hat, y_hat_comp, c_mask = self.copy_and_paste(x[:, :, t], m[:, :, t], y[:, :, t], x_aligned, v_aligned)
         return y_hat, y_hat_comp, c_mask, (x_aligned, v_aligned)
+
+    def _forward_aligner(self, x, m, y, t, r_list):
+        if self.utils_alignment is None:
+            x_aligned, v_aligned, _ = self.align(x, m, y, t, r_list)
+        else:
+            x_aligned, v_aligned, _ = self.utils_alignment.align(x, m, y, t, r_list)
+        return None, None, None, (x_aligned, v_aligned)

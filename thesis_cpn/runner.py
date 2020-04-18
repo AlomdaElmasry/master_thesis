@@ -1,28 +1,31 @@
-from .model import CPNet
 import torch.optim
 import numpy as np
 import torch.nn.functional as F
 import thesis.runner
-from thesis.model_glunet import GLU_Net
-from thesis.model_vgg import get_pretrained_model
-from thesis.model_lpips import PerceptualLoss
-from thesis_aligner.model_cpn_original import AlignerOriginal
+import models.cpn
 import torch.utils.data
 import copy
 import utils.measures
-import os.path
+import utils.perceptual
 
 
-class CopyPasteRunner(thesis.runner.ThesisRunner):
-    model_vgg = None
-    model_lpips = None
-    losses_items_ids = ['alignment', 'vh', 'nvh', 'nh', 'perceptual', 'style', 'tv']
+class ThesisCPNRunner(thesis.runner.ThesisRunner):
     scheduler = None
+    utils_perceptual = None
+    utils_measures = None
+    mode = 'full'
+    mode_losses = {
+        'full': ['alignment', 'vh', 'nvh', 'nh', 'perceptual', 'style', 'tv'],
+        'aligner': ['alignment'],
+        'encdec': ['nvh', 'nh', 'perceptual', 'style', 'tv']
+    }
+    losses_items_ids = ['alignment', 'vh', 'nvh', 'nh', 'perceptual', 'style', 'tv']
 
     def init_model(self, device):
-        aligner_model = self._get_trained_aligner_glu(device) if True else None
-        self.model = CPNet(aligner=aligner_model).to(device)
-        self.model_vgg = get_pretrained_model(device)
+        aligner_model = None
+        self.model = models.cpn.CPNet(self.mode, utils_alignment=aligner_model).to(device)
+        self.utils_perceptual = utils.perceptual.PerceptualUtils(device)
+        self.utils_measures = utils.measures.UtilsMeasures()
 
     def init_optimizer(self, device):
         self.optimizer = torch.optim.Adam(
@@ -35,31 +38,6 @@ class CopyPasteRunner(thesis.runner.ThesisRunner):
             step_size=self.experiment.configuration.get('training', 'lr_scheduler_step_size'),
             gamma=self.experiment.configuration.get('training', 'lr_scheduler_gamma')
         )
-
-    def _get_trained_aligner(self, device):
-        # Trained aligner should be in experiment named "". Checkpoint number is 1.
-        exp_name = 'cpn_aligner_official'
-        checkpoint_path = os.path.join(
-            self.experiment.paths['checkpoints'].replace(self.experiment.experiment_name, exp_name), '1.checkpoint.pkl'
-        )
-        checkpoint_data = torch.load(checkpoint_path, map_location='cpu')
-
-        # Load model and state
-        aligner_model = AlignerOriginal().to(device)
-        aligner_model.load_state_dict(checkpoint_data['model'])
-
-        # Freeze the state of the aligner
-        for param in aligner_model.parameters():
-            param.requires_grad = False
-
-        # Return detached aligned with loaded weights
-        return aligner_model
-
-    def _get_trained_aligner_glu(self, device):
-        aligner_model = GLU_Net(path_pre_trained_models='../weights/glunet/', model_type='DPED_CityScape_ADE',
-                                consensus_network=False, cyclic_consistency=True, iterative_refinement=True,
-                                apply_flipping_condition=False)
-        return aligner_model
 
     def train_step(self, it_data, device):
         # Decompose iteration data
@@ -83,13 +61,8 @@ class CopyPasteRunner(thesis.runner.ThesisRunner):
 
         # Append loss items to epoch dictionary
         e_losses_items = self.e_train_losses_items if self.model.training else self.e_validation_losses_items
-        e_losses_items['alignment'].append(loss_items[0].item())
-        e_losses_items['vh'].append(loss_items[1].item())
-        e_losses_items['nvh'].append(loss_items[2].item())
-        e_losses_items['nh'].append(loss_items[3].item())
-        e_losses_items['perceptual'].append(loss_items[4].item())
-        e_losses_items['style'].append(loss_items[5].item())
-        e_losses_items['tv'].append(loss_items[6].item())
+        for i, loss_item in enumerate(self.mode_losses[self.mode]):
+            e_losses_items[loss_item].append(loss_items[i].item())
 
         # Return combined loss
         return loss
@@ -112,25 +85,28 @@ class CopyPasteRunner(thesis.runner.ThesisRunner):
         self.model.eval()
 
         # Compute objective quality measures
-        self._test_objective_measures(device)
+        if self.mode in ['full', 'encdec']:
+            self._test_objective_measures(device)
 
         # Inpaint individual frames given by self.experiment.data.test_frames_indexes
         self._test_frames(device)
 
         # Inpaint entire sequences given by self.experiment.data.test_sequences_indexes
-        self._test_sequences(device)
+        if self.mode == ['full']:
+            self._test_sequences(device)
 
     def _test_objective_measures(self, device):
-        # Set training parameters to the original test dataset
-        samples_dataset = copy.deepcopy(self.experiment.data.datasets['test'])
-        samples_dataset.frames_n = self.experiment.configuration.get('data', 'frames_n')
-
         # Create a Subset using self.experiment.data.test_objective_measures_indexes defined frames
-        subset_dataset = torch.utils.data.Subset(samples_dataset, self.experiment.data.test_objective_measures_indexes)
-        loader = torch.utils.data.DataLoader(subset_dataset, batch_size=4)
+        subset_dataset = torch.utils.data.Subset(
+            self.experiment.data.datasets['validation'],
+            self.experiment.data.test_objective_measures_indexes
+        )
+        loader = torch.utils.data.DataLoader(
+            subset_dataset, self.experiment.configuration.get('training', 'batch_size')
+        )
 
         # Initialize LPSIS model to proper device
-        self.model_lpips = PerceptualLoss(model='net-lin', net='alex', use_gpu='cuda' in device)
+        self.utils_measures.init_lpips(device)
 
         # Create variables to store PSNR, SSIM and LPIPS
         psnr, ssim, lpips = [], [], []
@@ -143,12 +119,12 @@ class CopyPasteRunner(thesis.runner.ThesisRunner):
             y = y.to(device)
             with torch.no_grad():
                 (_, y_hat_comp, _, (_, _)), t, _ = self.train_step_propagate(x, m, y)
-                psnr += utils.measures.psnr(y[:, :, t].cpu(), y_hat_comp.cpu())
-                ssim += utils.measures.ssim(y[:, :, t].cpu(), y_hat_comp.cpu())
-                lpips += utils.measures.lpips(y[:, :, t], y_hat_comp, self.model_lpips)
+                psnr += self.utils_measures.psnr(y[:, :, t].cpu(), y_hat_comp.cpu())
+                ssim += self.utils_measures.ssim(y[:, :, t].cpu(), y_hat_comp.cpu())
+                lpips += self.utils_measures.lpips(y[:, :, t], y_hat_comp)
 
         # Remove LPSIS model from memory
-        self.model_lpips = None
+        self.utils_measures.destroy_lpips()
 
         # Log measures in TensorBoard
         self.experiment.tbx.add_scalar('test_measures/psrn', np.mean(psnr), global_step=self.counters['epoch'])
@@ -167,7 +143,7 @@ class CopyPasteRunner(thesis.runner.ThesisRunner):
         )
 
         # Create variables with the images to log inside TensorBoard -> (b,c,h,w)
-        x_tbx, y_hat_tbx, y_hat_comp_tbx, y_tbx = [], [], [], []
+        x_tbx, y_tbx, y_hat_tbx, y_hat_comp_tbx, x_aligned_tbx = [], [], [], [], []
 
         # Iterate over the samples
         for it_data in loader:
@@ -176,24 +152,42 @@ class CopyPasteRunner(thesis.runner.ThesisRunner):
             m = m.to(device)
             y = y.to(device)
             with torch.no_grad():
-                (y_hat, y_hat_comp, _, (_, _)), t, _ = self.train_step_propagate(x, m, y)
-            x_tbx.append(x[:, :, t].cpu().numpy())
-            y_hat_tbx.append(y_hat.cpu().numpy())
-            y_hat_comp_tbx.append(y_hat_comp.cpu().numpy())
-            y_tbx.append(y[:, :, t].cpu().numpy())
+                (y_hat, y_hat_comp, _, (x_aligned, _)), t, _ = self.train_step_propagate(x, m, y)
+            x_tbx.append(x.cpu().numpy())
+            if self.mode in ['full', 'encdec']:
+                y_tbx.append(y.cpu().numpy())
+                y_hat_tbx.append(y_hat.cpu().numpy())
+                y_hat_comp_tbx.append(y_hat_comp.cpu().numpy())
+            if self.mode in ['full', 'aligner']:
+                x_aligned_tbx.append(x_aligned.cpu().numpy())
 
         # Concatenate the results along dim=0
-        x_tbx = np.concatenate(x_tbx)
-        y_hat_tbx = np.concatenate(y_hat_tbx)
-        y_hat_comp_tbx = np.concatenate(y_hat_comp_tbx)
-        y_tbx = np.concatenate(y_tbx)
+        x_tbx = np.concatenate(x_tbx) if len(x_tbx) > 0 else x_tbx
+        y_tbx = np.concatenate(y_tbx) if len(y_tbx) > 0 else y_tbx
+        y_hat_tbx = np.concatenate(y_hat_tbx) if len(y_hat_tbx) > 0 else y_hat_tbx
+        y_hat_comp_tbx = np.concatenate(y_hat_comp_tbx) if len(y_hat_comp_tbx) > 0 else y_hat_comp_tbx
+        x_aligned_tbx = np.concatenate(x_aligned_tbx) if len(x_aligned_tbx) > 0 else y_tbx
 
         # Save group image for each sample
         for b in range(len(self.experiment.data.test_frames_indexes)):
-            tensor_list = [x_tbx[b], y_hat_tbx[b], y_hat_comp_tbx[b], y_tbx[b]]
-            self.experiment.tbx.add_images(
-                'test_frames/{}'.format(b), tensor_list, global_step=self.counters['epoch'], dataformats='CHW'
-            )
+            if self.mode in ['full', 'encdec']:
+                test_frames = [x_tbx[b, :, t], y_hat_tbx[b], y_hat_comp_tbx[b], y_tbx[b, :, t]]
+                self.experiment.tbx.add_images(
+                    'test_frames/{}'.format(b), test_frames, global_step=self.counters['epoch'], dataformats='CHW'
+                )
+            if self.mode in ['full', 'aligner']:
+                test_alignment_x = [x_tbx[b, :, i] for i in range(x_tbx.shape[2])]
+                test_alignment_x_aligned = [x_aligned_tbx[b, :, i] for i in range(x_aligned_tbx.shape[2] // 2)]
+                test_alignment_x_aligned += [x_tbx[b, :, t]]
+                test_alignment_x_aligned += [x_aligned_tbx[b, :, -i - 1] for i in reversed(range(x_aligned_tbx.shape[2] // 2))]
+                self.experiment.tbx.add_images(
+                    'test_alignment_x/{}'.format(b), test_alignment_x, global_step=self.counters['epoch'],
+                    dataformats='CHW'
+                )
+                self.experiment.tbx.add_images(
+                    'test_alignment_x_aligned/{}'.format(b), test_alignment_x_aligned,
+                    global_step=self.counters['epoch'],  dataformats='CHW'
+                )
 
     def _test_sequences(self, device):
         # Iterate over the set of sequences
@@ -217,7 +211,7 @@ class CopyPasteRunner(thesis.runner.ThesisRunner):
 
                 # Iterate over all the frames of the video
                 for t in (list(range(f)) if d == 0 else reversed(list(range(f)))):
-                    r_list = CopyPasteRunner.get_reference_frame_indexes(t, f)
+                    r_list = ThesisCPNRunner.get_reference_frame_indexes(t, f)
 
                     # Replace input_frames and input_masks with previous predictions to improve quality
                     with torch.no_grad():
@@ -245,25 +239,13 @@ class CopyPasteRunner(thesis.runner.ThesisRunner):
             # Save the sequence in disk
             self._save_sample((y_hat_comp * 255).astype(np.uint8), 'test', info[0], True)
 
-    def test_alignment(self, epoch, save_as_video, device):
-        self.load_states(epoch, device)
-        self.model.eval()
-        for it_data in self.experiment.data.loaders['test']:
-            (x, m), y, info = it_data
-            b, c, n, h, w = x.size()
-
-            # Force t=0 and obtain predicted aligned frames
-            t = 0
-            r_list = CopyPasteRunner.get_reference_frame_indexes(t, n)
-            _, _, y_aligned = self.model.align(x, m, y, t, r_list)
-
-            # Create a numpy array of size (B,F,H,W,C)
-            y_aligned = (y_aligned.detach().cpu().permute(0, 2, 3, 4, 1).numpy() * 255).astype(np.uint8)
-
-            # Save the samples of the batch
-            self._save_sample(y_aligned, 'test_alignment', info[0], save_as_video)
-
     def _compute_loss(self, y_t, y_hat, y_hat_comp, x_t, x_aligned, v_map, m, c_mask):
+        if self.mode == 'full':
+            return self._compute_loss_full(y_t, y_hat, y_hat_comp, x_t, x_aligned, v_map, m, c_mask)
+        elif self.mode == 'aligner':
+            return self._compute_loss_aligner(x_t, x_aligned, v_map)
+
+    def _compute_loss_full(self, y_t, y_hat, y_hat_comp, x_t, x_aligned, v_map, m, c_mask):
         # Retrieve configuration parameters
         loss_constant_normalization = self.experiment.configuration.get('model', 'loss_constant_normalization')
         loss_weights = self.experiment.configuration.get('model', 'loss_lambdas')
@@ -271,10 +253,7 @@ class CopyPasteRunner(thesis.runner.ThesisRunner):
         # Loss 1: Alignment Loss
         alignment_input = x_aligned * v_map
         alignment_target = x_t.unsqueeze(2).repeat(1, 1, x_aligned.size(2), 1, 1) * v_map
-        if loss_constant_normalization:
-            loss_alignment = F.l1_loss(alignment_input, alignment_target)
-        else:
-            loss_alignment = F.l1_loss(alignment_input, alignment_target, reduction='sum') / torch.sum(v_map)
+        loss_alignment = F.l1_loss(alignment_input, alignment_target, reduction='sum') / torch.sum(v_map)
         loss_alignment *= loss_weights[0]
 
         # Loss 2: Visible Hole
@@ -305,9 +284,8 @@ class CopyPasteRunner(thesis.runner.ThesisRunner):
         loss_nh *= loss_weights[3]
 
         # User VGG-16 to compute features of both the estimation and the target
-        with torch.no_grad():
-            vgg_y = self.model_vgg(y_t.contiguous())
-            vgg_y_hat_comp = self.model_vgg(y_hat_comp.contiguous())
+        vgg_y = self.utils_perceptual.vgg_features(y_t)
+        vgg_y_hat_comp = self.utils_perceptual.vgg_features(y_hat_comp)
 
         # Loss 5: Perceptual
         loss_perceptual = 0
@@ -337,6 +315,12 @@ class CopyPasteRunner(thesis.runner.ThesisRunner):
 
         # Return combination of the losses
         return loss, [loss_alignment, loss_vh, loss_nvh, loss_nh, loss_perceptual, loss_style, loss_tv]
+
+    def _compute_loss_aligner(self, x_t, x_aligned, v_map):
+        alignment_input = x_aligned * v_map
+        alignment_target = x_t.unsqueeze(2).repeat(1, 1, x_aligned.size(2), 1, 1) * v_map
+        loss_alignment = F.l1_loss(alignment_input, alignment_target, reduction='sum') / torch.sum(v_map)
+        return loss_alignment, [loss_alignment]
 
     @staticmethod
     def get_reference_frame_indexes(t, n_frames, p=2, r_list_max_length=120):
