@@ -146,7 +146,6 @@ class CPNDecoder(nn.Module):
         x = self.convs_2(x)
         x = F.interpolate(x, scale_factor=2, mode='nearest')
         return self.convs_3(x)
-        # return (x * self.std) + self.mean
 
 
 class CPNet(nn.Module):
@@ -218,7 +217,7 @@ class CPNet(nn.Module):
         c_mask = (F.interpolate(c_mask, size=(h, w), mode='bilinear', align_corners=False)).detach()
 
         # Obtain the predicted output y_hat. Clip the output to be between [0, 1]
-        y_hat = torch.clamp((self.Decoder(p_in) - self.mean.squeeze(4)) / self.std.squeeze(4), 0, 1)
+        y_hat = torch.clamp((self.Decoder(p_in) * self.std.squeeze(4)) + self.mean.squeeze(4), 0, 1)
 
         # Combine prediction with GT of the frame.
         y_hat_comp = y_hat * m_t + y_t * (1 - m_t)
