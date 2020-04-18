@@ -43,6 +43,8 @@ class ThesisCPNRunner(thesis.runner.ThesisRunner):
         # Decompose iteration data
         (x, m), y, info = it_data
 
+        self.test(None, device)
+
         # Move Tensors to correct device
         x = x.to(device)
         m = m.to(device)
@@ -92,7 +94,7 @@ class ThesisCPNRunner(thesis.runner.ThesisRunner):
         self._test_frames(device)
 
         # Inpaint entire sequences given by self.experiment.data.test_sequences_indexes
-        if self.mode == ['full']:
+        if self.mode in ['full']:
             self._test_sequences(device)
 
     def _test_objective_measures(self, device):
@@ -176,17 +178,13 @@ class ThesisCPNRunner(thesis.runner.ThesisRunner):
                     'test_frames/{}'.format(b), test_frames, global_step=self.counters['epoch'], dataformats='CHW'
                 )
             if self.mode in ['full', 'aligner']:
-                test_alignment_x = [x_tbx[b, :, i] for i in range(x_tbx.shape[2])]
-                test_alignment_x_aligned = [x_aligned_tbx[b, :, i] for i in range(x_aligned_tbx.shape[2] // 2)]
-                test_alignment_x_aligned += [x_tbx[b, :, t]]
-                test_alignment_x_aligned += [x_aligned_tbx[b, :, -i - 1] for i in reversed(range(x_aligned_tbx.shape[2] // 2))]
-                self.experiment.tbx.add_images(
-                    'test_alignment_x/{}'.format(b), test_alignment_x, global_step=self.counters['epoch'],
-                    dataformats='CHW'
+                test_alignment_x = x_tbx[b].transpose(1, 0, 2, 3)
+                test_alignment_x_aligned = np.insert(
+                    x_aligned_tbx[b].transpose(1, 0, 2, 3), x_tbx[b].shape[1] // 2, x_tbx[b, :, t], 0
                 )
+                test_alignment = np.concatenate((test_alignment_x, test_alignment_x_aligned), axis=2)
                 self.experiment.tbx.add_images(
-                    'test_alignment_x_aligned/{}'.format(b), test_alignment_x_aligned,
-                    global_step=self.counters['epoch'],  dataformats='CHW'
+                    'test_alignment/{}'.format(b), test_alignment, global_step=self.counters['epoch']
                 )
 
     def _test_sequences(self, device):
