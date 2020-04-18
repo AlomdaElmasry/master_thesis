@@ -488,7 +488,8 @@ class DistModel(BaseModel):
             if (model_path is None):
                 import inspect
                 model_path = os.path.abspath(
-                    os.path.join(inspect.getfile(self.initialize), '..', '../weights/v%s/%s.pth' % (version, net)))
+                    os.path.join(inspect.getfile(self.initialize), '..', '../weights/lpips/v%s/%s.pth' % (version, net))
+                )
 
             if (not is_train):
                 print('Loading model from: %s' % model_path)

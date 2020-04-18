@@ -3,6 +3,7 @@ import torch.optim
 import numpy as np
 import torch.nn.functional as F
 import thesis.runner
+from thesis.model_glunet import GLU_Net
 from thesis.model_vgg import get_pretrained_model
 from thesis.model_lpips import PerceptualLoss
 from thesis_aligner.model_cpn_original import AlignerOriginal
@@ -19,7 +20,7 @@ class CopyPasteRunner(thesis.runner.ThesisRunner):
     scheduler = None
 
     def init_model(self, device):
-        aligner_model = self._get_trained_aligner(device) if True else None
+        aligner_model = self._get_trained_aligner_glu(device) if True else None
         self.model = CPNet(aligner=aligner_model).to(device)
         self.model_vgg = get_pretrained_model(device)
 
@@ -52,6 +53,12 @@ class CopyPasteRunner(thesis.runner.ThesisRunner):
             param.requires_grad = False
 
         # Return detached aligned with loaded weights
+        return aligner_model
+
+    def _get_trained_aligner_glu(self, device):
+        aligner_model = GLU_Net(path_pre_trained_models='../weights/glunet/', model_type='DPED_CityScape_ADE',
+                                consensus_network=False, cyclic_consistency=True, iterative_refinement=True,
+                                apply_flipping_condition=False)
         return aligner_model
 
     def train_step(self, it_data, device):
