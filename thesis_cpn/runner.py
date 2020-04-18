@@ -19,7 +19,7 @@ class ThesisCPNRunner(thesis.runner.ThesisRunner):
         'aligner': ['alignment'],
         'encdec': ['nvh', 'nh', 'perceptual', 'style', 'tv']
     }
-    losses_items_ids = ['alignment', 'vh', 'nvh', 'nh', 'perceptual', 'style', 'tv']
+    losses_items_ids = None
 
     def init_model(self, device):
         aligner_model = None
@@ -38,6 +38,7 @@ class ThesisCPNRunner(thesis.runner.ThesisRunner):
             step_size=self.experiment.configuration.get('training', 'lr_scheduler_step_size'),
             gamma=self.experiment.configuration.get('training', 'lr_scheduler_gamma')
         )
+        self.losses_items_ids = self.mode_losses[self.mode]
 
     def train_step(self, it_data, device):
         # Decompose iteration data
