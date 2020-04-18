@@ -43,8 +43,6 @@ class ThesisCPNRunner(thesis.runner.ThesisRunner):
         # Decompose iteration data
         (x, m), y, info = it_data
 
-        self.test(None, device)
-
         # Move Tensors to correct device
         x = x.to(device)
         m = m.to(device)
