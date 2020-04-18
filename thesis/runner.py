@@ -13,8 +13,13 @@ class ThesisRunner(skeltorch.Runner):
     e_validation_losses_items = None
     scheduler = None
 
-    def __init__(self):
-        super().__init__()
+    def init_model(self, device):
+        raise NotImplemented
+
+    def init_optimizer(self, device):
+        raise NotImplemented
+
+    def init_others(self, device):
         self.losses_it_items = {
             'train': {loss_item_id: {} for loss_item_id in self.losses_items_ids},
             'validation': {loss_item_id: {} for loss_item_id in self.losses_items_ids}
@@ -23,12 +28,6 @@ class ThesisRunner(skeltorch.Runner):
             'train': {loss_item_id: {} for loss_item_id in self.losses_items_ids},
             'validation': {loss_item_id: {} for loss_item_id in self.losses_items_ids}
         }
-
-    def init_model(self, device):
-        raise NotImplemented
-
-    def init_optimizer(self, device):
-        raise NotImplemented
 
     def load_states_others(self, checkpoint_data):
         self.scheduler.load_state_dict(checkpoint_data['scheduler'])

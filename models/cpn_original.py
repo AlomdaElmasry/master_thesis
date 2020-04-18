@@ -112,9 +112,9 @@ class A_Regressor(nn.Module):
         return theta
 
 
-class AlignerOriginal(nn.Module):
+class CPNOriginalAligner(nn.Module):
     def __init__(self):
-        super(AlignerOriginal, self).__init__()
+        super(CPNOriginalAligner, self).__init__()
         self.A_Encoder = A_Encoder()  # Align
         self.A_Regressor = A_Regressor()  # output: alignment network
         self.register_buffer('mean', torch.FloatTensor([0.485, 0.456, 0.406]).view(1,3,1,1))

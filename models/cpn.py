@@ -120,10 +120,10 @@ class CPNContextMatching(nn.Module):
 
 
 class CPNDecoder(nn.Module):
-    def __init__(self):
+    def __init__(self, single_frame=False):
         super(CPNDecoder, self).__init__()
         self.convs = nn.Sequential(
-            nn.Conv2d(257, 257, kernel_size=3, stride=1, padding=1), nn.ReLU(),
+            nn.Conv2d(128 if single_frame else 257, 257, kernel_size=3, stride=1, padding=1), nn.ReLU(),
             nn.Conv2d(257, 257, kernel_size=3, stride=1, padding=1), nn.ReLU(),
             nn.Conv2d(257, 257, kernel_size=3, stride=1, padding=1), nn.ReLU(),
             nn.Conv2d(257, 257, kernel_size=3, stride=1, padding=2, dilation=2), nn.ReLU(),
@@ -157,12 +157,12 @@ class CPNet(nn.Module):
         self.mode = mode
         self.utils_alignment = utils_alignment
         if utils_alignment is None and mode in ['full', 'aligner']:
-            self.A_Encoder = CPNAlignmentEncoder()
-            self.A_Regressor = CPNAlignmentRegressor()
+            self.alignment_encoder = CPNAlignmentEncoder()
+            self.alignment_regressor = CPNAlignmentRegressor()
         if mode in ['full', 'encdec']:
-            self.Encoder = CPNEncoder()
-            self.CM_Module = CPNContextMatching()
-            self.Decoder = CPNDecoder()
+            self.encoder = CPNEncoder()
+            self.context_matching = CPNContextMatching()
+            self.decoder = CPNDecoder(mode == 'encdec')
         self.register_buffer('mean', torch.as_tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1, 1))
         self.register_buffer('std', torch.as_tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1, 1))
 
@@ -170,11 +170,11 @@ class CPNet(nn.Module):
         b, c, f, h, w = x.size()  # B C H W
 
         # Get alignment features
-        r_feats = self.A_Encoder(x.transpose(1, 2).reshape(-1, c, h, w), m.transpose(1, 2).reshape(-1, 1, h, w))
+        r_feats = self.alignment_encoder(x.transpose(1, 2).reshape(-1, c, h, w), m.transpose(1, 2).reshape(-1, 1, h, w))
         r_feats = r_feats.reshape(b, f, r_feats.size(1), r_feats.size(2), r_feats.size(3)).transpose(1, 2)
 
         # Get alignment grid
-        theta_rt = self.A_Regressor(
+        theta_rt = self.alignment_regressor(
             r_feats[:, :, r_list].transpose(1, 2).reshape(-1, r_feats.size(1), r_feats.size(3), r_feats.size(4)),
             r_feats[:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1).transpose(1, 2).reshape(
                 -1, r_feats.size(1), r_feats.size(3), r_feats.size(4)
@@ -204,20 +204,20 @@ class CPNet(nn.Module):
         b, c, f_ref, h, w = x_aligned.size()
 
         # Get c_features of everything
-        c_feats = self.Encoder(
+        c_feats = self.encoder(
             torch.cat([x_t.unsqueeze(2), x_aligned], dim=2).transpose(1, 2).reshape(-1, c, h, w),
             torch.cat([1 - m_t.unsqueeze(2), v_aligned], dim=2).transpose(1, 2).reshape(-1, 1, h, w)
         )
         c_feats = c_feats.reshape(b, f_ref + 1, c_feats.size(1), c_feats.size(2), c_feats.size(3)).transpose(1, 2)
 
         # Apply Content-Matching Module
-        p_in, c_mask = self.CM_Module(c_feats, 1 - m_t, v_aligned)
+        p_in, c_mask = self.context_matching(c_feats, 1 - m_t, v_aligned)
 
         # Upscale c_mask to match the size of the mask
         c_mask = (F.interpolate(c_mask, size=(h, w), mode='bilinear', align_corners=False)).detach()
 
         # Obtain the predicted output y_hat. Clip the output to be between [0, 1]
-        y_hat = torch.clamp(self.Decoder(p_in) * self.std.squeeze(4) + self.mean.squeeze(4), 0, 1)
+        y_hat = torch.clamp(self.decoder(p_in) * self.std.squeeze(4) + self.mean.squeeze(4), 0, 1)
 
         # Combine prediction with GT of the frame.
         y_hat_comp = y_hat * m_t + y_t * (1 - m_t)
@@ -231,14 +231,14 @@ class CPNet(nn.Module):
 
         # Propagate using appropiate mode
         if self.mode == 'full':
-            y_hat, y_hat_comp, c_mask, (x_aligned, v_aligned) =  self._forward_full(x, m, y, t, r_list)
+            y_hat, y_hat_comp, c_mask, (x_aligned, v_aligned) = self._forward_full(x, m, y, t, r_list)
         elif self.mode == 'aligner':
             y_hat, y_hat_comp, c_mask, (x_aligned, v_aligned) = self._forward_aligner(x, m, y, t, r_list)
-        elif self.mode == 'encdec':
-            pass
+        else:
+            y_hat, y_hat_comp, c_mask, (x_aligned, v_aligned) = self._forward_encdec(x, m, y, t)
 
         # De-normalize x_aligned, which has been computed using normalized x
-        x_aligned = x_aligned * self.std + self.mean
+        x_aligned = x_aligned * self.std + self.mean if x_aligned is not None else x_aligned
 
         # Return data
         return y_hat, y_hat_comp, c_mask, (x_aligned, v_aligned)
@@ -257,3 +257,10 @@ class CPNet(nn.Module):
         else:
             x_aligned, v_aligned, _ = self.utils_alignment.align(x, m, y, t, r_list)
         return None, None, None, (x_aligned, v_aligned)
+
+    def _forward_encdec(self, x, m, y, t):
+        c_feats = self.encoder(x[:, :, t], 1 - m[:, :, t])
+        y_hat = self.decoder(c_feats)
+        y_hat = torch.clamp((y_hat * self.std.squeeze(4)) + self.mean.squeeze(4), 0, 1)
+        y_hat_comp = y_hat * m[:, :, t] + y[:, :, t] * (1 - m[:, :, t])
+        return y_hat, y_hat_comp, m.squeeze(2), (x, 1 - m)

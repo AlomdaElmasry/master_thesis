@@ -1,30 +1,27 @@
 import torch.optim
 import numpy as np
-import torch.nn.functional as F
 import thesis.runner
 import models.cpn
 import torch.utils.data
 import copy
 import utils.measures
-import utils.perceptual
+import utils.losses
+import utils.alignment
 
 
 class ThesisCPNRunner(thesis.runner.ThesisRunner):
     scheduler = None
-    utils_perceptual = None
+    utils_losses = None
     utils_measures = None
-    mode = 'full'
-    mode_losses = {
-        'full': ['alignment', 'vh', 'nvh', 'nh', 'perceptual', 'style', 'tv'],
-        'aligner': ['alignment'],
-        'encdec': ['nvh', 'nh', 'perceptual', 'style', 'tv']
-    }
     losses_items_ids = None
 
     def init_model(self, device):
-        aligner_model = None
-        self.model = models.cpn.CPNet(self.mode, utils_alignment=aligner_model).to(device)
-        self.utils_perceptual = utils.perceptual.PerceptualUtils(device)
+        trained_aligner = self.experiment.configuration.get('model', 'trained_aligner')
+        utils_alignment = utils.alignment.AlignmentUtils(trained_aligner, device) if trained_aligner is not None else \
+            None
+        self.model = models.cpn.CPNet(self.experiment.configuration.get('model', 'mode'), utils_alignment).to(device)
+        self.utils_losses = utils.losses.LossesUtils()
+        self.utils_losses.init_vgg(device)
         self.utils_measures = utils.measures.UtilsMeasures()
 
     def init_optimizer(self, device):
@@ -38,7 +35,19 @@ class ThesisCPNRunner(thesis.runner.ThesisRunner):
             step_size=self.experiment.configuration.get('training', 'lr_scheduler_step_size'),
             gamma=self.experiment.configuration.get('training', 'lr_scheduler_gamma')
         )
-        self.losses_items_ids = self.mode_losses[self.mode]
+        self._init_mode_params()
+        super().init_others(device)
+
+    def _init_mode_params(self):
+        if self.experiment.configuration.get('model', 'mode') == 'full':
+            self.losses_items_ids = ['alignment', 'vh', 'nvh', 'nh', 'perceptual', 'style', 'tv']
+            self.loss_function = self._compute_loss_full
+        elif self.experiment.configuration.get('model', 'mode') == 'aligner':
+            self.losses_items_ids = ['alignment']
+            self.loss_function = self._compute_loss_aligner
+        else:
+            self.losses_items_ids = ['vh', 'nvh', 'nh', 'perceptual', 'style', 'tv']
+            self.loss_function = self._compute_loss_encdec
 
     def train_step(self, it_data, device):
         # Decompose iteration data
@@ -56,13 +65,13 @@ class ThesisCPNRunner(thesis.runner.ThesisRunner):
         visibility_maps = (1 - m[:, :, t].unsqueeze(2)) * v_aligned
 
         # Compute loss and return
-        loss, loss_items = self._compute_loss(
+        loss, loss_items = self.loss_function(
             y[:, :, t], y_hat, y_hat_comp, x[:, :, t], x_aligned, visibility_maps, m[:, :, t], c_mask
         )
 
         # Append loss items to epoch dictionary
         e_losses_items = self.e_train_losses_items if self.model.training else self.e_validation_losses_items
-        for i, loss_item in enumerate(self.mode_losses[self.mode]):
+        for i, loss_item in enumerate(self.losses_items_ids):
             e_losses_items[loss_item].append(loss_items[i].item())
 
         # Return combined loss
@@ -86,14 +95,14 @@ class ThesisCPNRunner(thesis.runner.ThesisRunner):
         self.model.eval()
 
         # Compute objective quality measures
-        if self.mode in ['full', 'encdec']:
+        if self.experiment.configuration.get('model', 'mode') in ['full', 'encdec']:
             self._test_objective_measures(device)
 
         # Inpaint individual frames given by self.experiment.data.test_frames_indexes
         self._test_frames(device)
 
         # Inpaint entire sequences given by self.experiment.data.test_sequences_indexes
-        if self.mode in ['full']:
+        if self.experiment.configuration.get('model', 'mode') in ['full']:
             self._test_sequences(device)
 
     def _test_objective_measures(self, device):
@@ -155,11 +164,11 @@ class ThesisCPNRunner(thesis.runner.ThesisRunner):
             with torch.no_grad():
                 (y_hat, y_hat_comp, _, (x_aligned, _)), t, _ = self.train_step_propagate(x, m, y)
             x_tbx.append(x.cpu().numpy())
-            if self.mode in ['full', 'encdec']:
+            if self.experiment.configuration.get('model', 'mode') in ['full', 'encdec']:
                 y_tbx.append(y.cpu().numpy())
                 y_hat_tbx.append(y_hat.cpu().numpy())
                 y_hat_comp_tbx.append(y_hat_comp.cpu().numpy())
-            if self.mode in ['full', 'aligner']:
+            if self.experiment.configuration.get('model', 'mode') in ['full', 'aligner']:
                 x_aligned_tbx.append(x_aligned.cpu().numpy())
 
         # Concatenate the results along dim=0
@@ -171,12 +180,12 @@ class ThesisCPNRunner(thesis.runner.ThesisRunner):
 
         # Save group image for each sample
         for b in range(len(self.experiment.data.test_frames_indexes)):
-            if self.mode in ['full', 'encdec']:
+            if self.experiment.configuration.get('model', 'mode') in ['full', 'encdec']:
                 test_frames = [x_tbx[b, :, t], y_hat_tbx[b], y_hat_comp_tbx[b], y_tbx[b, :, t]]
                 self.experiment.tbx.add_images(
                     'test_frames/{}'.format(b), test_frames, global_step=self.counters['epoch'], dataformats='CHW'
                 )
-            if self.mode in ['full', 'aligner']:
+            if self.experiment.configuration.get('model', 'mode') in ['full', 'aligner']:
                 test_alignment_x = x_tbx[b].transpose(1, 0, 2, 3)
                 test_alignment_x_aligned = np.insert(
                     x_aligned_tbx[b].transpose(1, 0, 2, 3), x_tbx[b].shape[1] // 2, x_tbx[b, :, t], 0
@@ -236,88 +245,36 @@ class ThesisCPNRunner(thesis.runner.ThesisRunner):
             # Save the sequence in disk
             self._save_sample((y_hat_comp * 255).astype(np.uint8), 'test', info[0], True)
 
-    def _compute_loss(self, y_t, y_hat, y_hat_comp, x_t, x_aligned, v_map, m, c_mask):
-        if self.mode == 'full':
-            return self._compute_loss_full(y_t, y_hat, y_hat_comp, x_t, x_aligned, v_map, m, c_mask)
-        elif self.mode == 'aligner':
-            return self._compute_loss_aligner(x_t, x_aligned, v_map)
-
     def _compute_loss_full(self, y_t, y_hat, y_hat_comp, x_t, x_aligned, v_map, m, c_mask):
-        # Retrieve configuration parameters
-        loss_constant_normalization = self.experiment.configuration.get('model', 'loss_constant_normalization')
+        reduction = 'mean' if self.experiment.configuration.get('model', 'loss_constant_normalization') else 'sum'
         loss_weights = self.experiment.configuration.get('model', 'loss_lambdas')
-
-        # Loss 1: Alignment Loss
-        alignment_input = x_aligned * v_map
-        alignment_target = x_t.unsqueeze(2).repeat(1, 1, x_aligned.size(2), 1, 1) * v_map
-        loss_alignment = F.l1_loss(alignment_input, alignment_target, reduction='sum') / torch.sum(v_map)
-        loss_alignment *= loss_weights[0]
-
-        # Loss 2: Visible Hole
-        vh_input = m * (1 - c_mask) * y_hat
-        vh_target = m * (1 - c_mask) * y_t
-        if loss_constant_normalization:
-            loss_vh = F.l1_loss(vh_input, vh_target)
-        else:
-            loss_vh = F.l1_loss(vh_input, vh_target, reduction='sum') / torch.sum(m * (1 - c_mask))
-        loss_vh *= loss_weights[1]
-
-        # Loss 3: Non-Visible Hole
-        nvh_input = m * c_mask * y_hat
-        nvh_target = m * c_mask * y_t
-        if loss_constant_normalization:
-            loss_nvh = F.l1_loss(nvh_input, nvh_target)
-        else:
-            loss_nvh = F.l1_loss(nvh_input, nvh_target, reduction='sum') / torch.sum(m * c_mask)
-        loss_nvh *= loss_weights[2]
-
-        # Loss 4: Non-Hole
-        nh_input = (1 - m) * y_hat
-        nh_target = (1 - m) * y_t
-        if loss_constant_normalization:
-            loss_nh = F.l1_loss(nh_input, nh_target)
-        else:
-            loss_nh = F.l1_loss(nh_input, nh_target, reduction='sum') / torch.sum(1 - m)
-        loss_nh *= loss_weights[3]
-
-        # User VGG-16 to compute features of both the estimation and the target
-        vgg_y = self.utils_perceptual.vgg_features(y_t)
-        vgg_y_hat_comp = self.utils_perceptual.vgg_features(y_hat_comp)
-
-        # Loss 5: Perceptual
-        loss_perceptual = 0
-        for p in range(len(vgg_y)):
-            loss_perceptual += F.l1_loss(vgg_y_hat_comp[p], vgg_y[p])
-        loss_perceptual /= len(vgg_y)
-        loss_perceptual *= loss_weights[4]
-
-        # Loss 6: Style
-        loss_style = 0
-        for p in range(len(vgg_y)):
-            b, c, h, w = vgg_y[p].size()
-            g_y = torch.mm(vgg_y[p].view(b * c, h * w), vgg_y[p].view(b * c, h * w).t())
-            g_y_comp = torch.mm(vgg_y_hat_comp[p].view(b * c, h * w), vgg_y_hat_comp[p].view(b * c, h * w).t())
-            loss_style += F.l1_loss(g_y_comp / (b * c * h * w), g_y / (b * c * h * w))
-        loss_style /= len(vgg_y)
-        loss_style *= loss_weights[5]
-
-        # Loss 7: Smoothing Checkerboard Effect
-        loss_tv_h = (y_hat[:, :, 1:, :] - y_hat[:, :, :-1, :]).pow(2).sum()
-        loss_tv_w = (y_hat[:, :, :, 1:] - y_hat[:, :, :, :-1]).pow(2).sum()
-        loss_tv = (loss_tv_h + loss_tv_w) / (y_hat.size(0) * y_hat.size(1) * y_hat.size(2) * y_hat.size(3))
-        loss_tv *= loss_weights[6]
-
-        # Compute combined loss
+        x_extended = x_t.unsqueeze(2).repeat(1, 1, x_aligned.size(2), 1, 1)
+        loss_alignment = self.utils_losses.masked_l1(x_extended, x_aligned, v_map, 'sum', loss_weights[0])
+        loss_vh = self.utils_losses.masked_l1(y_t, y_hat, m * (1 - c_mask), reduction, loss_weights[1])
+        loss_nvh = self.utils_losses.masked_l1(y_t, y_hat, m * c_mask, reduction, loss_weights[2])
+        loss_nh = self.utils_losses.masked_l1(y_t, y_hat, 1 - m, reduction, loss_weights[3])
+        loss_perceptual, vgg_y, vgg_y_hat_comp = self.utils_losses.perceptual(y_t, y_hat_comp, loss_weights[4])
+        loss_style = self.utils_losses.style(vgg_y, vgg_y_hat_comp, loss_weights[5])
+        loss_tv = self.utils_losses.tv(y_hat, loss_weights[6])
         loss = loss_alignment + loss_vh + loss_nvh + loss_nh + loss_perceptual + loss_style + loss_tv
-
-        # Return combination of the losses
         return loss, [loss_alignment, loss_vh, loss_nvh, loss_nh, loss_perceptual, loss_style, loss_tv]
 
-    def _compute_loss_aligner(self, x_t, x_aligned, v_map):
-        alignment_input = x_aligned * v_map
-        alignment_target = x_t.unsqueeze(2).repeat(1, 1, x_aligned.size(2), 1, 1) * v_map
-        loss_alignment = F.l1_loss(alignment_input, alignment_target, reduction='sum') / torch.sum(v_map)
+    def _compute_loss_aligner(self, y_t, y_hat, y_hat_comp, x_t, x_aligned, v_map, m, c_mask):
+        x_extended = x_t.unsqueeze(2).repeat(1, 1, x_aligned.size(2), 1, 1)
+        loss_alignment = self.utils_losses.masked_l1(x_extended, x_aligned, v_map, 'sum')
         return loss_alignment, [loss_alignment]
+
+    def _compute_loss_encdec(self, y_t, y_hat, y_hat_comp, x_t, x_aligned, v_map, m, c_mask):
+        reduction = 'mean' if self.experiment.configuration.get('model', 'loss_constant_normalization') else 'sum'
+        loss_weights = self.experiment.configuration.get('model', 'loss_lambdas')
+        loss_vh = self.utils_losses.masked_l1(y_t, y_hat, m * (1 - c_mask), reduction, loss_weights[0])
+        loss_nvh = self.utils_losses.masked_l1(y_t, y_hat, m * c_mask, reduction, loss_weights[1])
+        loss_nh = self.utils_losses.masked_l1(y_t, y_hat, 1 - m, reduction, loss_weights[2])
+        loss_perceptual, vgg_y, vgg_y_hat_comp = self.utils_losses.perceptual(y_t, y_hat_comp, loss_weights[3])
+        loss_style = self.utils_losses.style(vgg_y, vgg_y_hat_comp, loss_weights[4])
+        loss_tv = self.utils_losses.tv(y_hat, loss_weights[5])
+        loss = loss_vh + loss_nvh + loss_nh + loss_perceptual + loss_style + loss_tv
+        return loss, [loss_vh, loss_nvh, loss_nh, loss_perceptual, loss_style, loss_tv]
 
     @staticmethod
     def get_reference_frame_indexes(t, n_frames, p=2, r_list_max_length=120):
