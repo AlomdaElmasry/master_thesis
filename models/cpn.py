@@ -217,7 +217,7 @@ class CPNet(nn.Module):
         c_mask = (F.interpolate(c_mask, size=(h, w), mode='bilinear', align_corners=False)).detach()
 
         # Obtain the predicted output y_hat. Clip the output to be between [0, 1]
-        y_hat = torch.clamp((self.Decoder(p_in) * self.std.squeeze(4)) + self.mean.squeeze(4), 0, 1)
+        y_hat = torch.clamp(self.Decoder(p_in) * self.std.squeeze(4) + self.mean.squeeze(4), 0, 1)
 
         # Combine prediction with GT of the frame.
         y_hat_comp = y_hat * m_t + y_t * (1 - m_t)
@@ -231,11 +231,17 @@ class CPNet(nn.Module):
 
         # Propagate using appropiate mode
         if self.mode == 'full':
-            return self._forward_full(x, m, y, t, r_list)
+            y_hat, y_hat_comp, c_mask, (x_aligned, v_aligned) =  self._forward_full(x, m, y, t, r_list)
         elif self.mode == 'aligner':
-            return self._forward_aligner(x, m, y, t, r_list)
+            y_hat, y_hat_comp, c_mask, (x_aligned, v_aligned) = self._forward_aligner(x, m, y, t, r_list)
         elif self.mode == 'encdec':
             pass
+
+        # De-normalize x_aligned, which has been computed using normalized x
+        x_aligned = x_aligned * self.std + self.mean
+
+        # Return data
+        return y_hat, y_hat_comp, c_mask, (x_aligned, v_aligned)
 
     def _forward_full(self, x, m, y, t, r_list):
         if self.utils_alignment is None:
