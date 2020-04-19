@@ -34,7 +34,7 @@ class AlignmentUtils:
     def _init_glunet(self, device):
         import models.glunet
         checkpoint_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'weights', 'glunet')
-        self.fmodel = models.glunet.GLU_Net(
+        self.model = models.glunet.GLU_Net(
             path_pre_trained_models=checkpoint_path, model_type='DPED_CityScape_ADE',
             consensus_network=False, cyclic_consistency=True, iterative_refinement=True,
             apply_flipping_condition=False
