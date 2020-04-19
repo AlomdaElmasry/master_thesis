@@ -80,7 +80,7 @@ class AlignmentUtils:
         return self.model(x, m, y, t, r_list)
 
     def _align_glunet(self, x, m, y, t, r_list):
-        source_images = (x[:, :, t] * 255).byte()
+        source_images = (x[:, :, t - 2] * 255).byte()
         dest_images = (x[:, :, t + 2] * 255).byte()
         with torch.no_grad():
             estimated_flow = self.model.estimate_flow(source_images, dest_images, self.device, mode='channel_first')
@@ -113,6 +113,5 @@ class AlignmentUtils:
         fig.savefig(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'Warped_source_image_original.png'),
                     bbox_inches='tight')
         plt.close(fig)
-
 
         exit()
