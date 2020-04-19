@@ -45,11 +45,23 @@ class AlignmentUtils:
 
     def remap(self, image, disp_x, disp_y, interpolation=cv2.INTER_LINEAR,
               border_mode=cv2.BORDER_CONSTANT):
+
+        # h_scale = 256, w_scale = 256
         h_scale, w_scale = image.shape[:2]
+
+        # Linspace between 0 and 255, 256 points
         X, Y = np.meshgrid(np.linspace(0, w_scale - 1, w_scale), np.linspace(0, h_scale - 1, h_scale))
         map_x = (X + disp_x).astype(np.float32)
         map_y = (Y + disp_y).astype(np.float32)
         return cv2.remap(image, map_x, map_y, interpolation=interpolation, borderMode=border_mode)
+
+    def map_torch(self, image, estimated_flow):
+        # Image is FloatTensor of size (16, 3, 256, 256)
+        # EstimatedFlow is FloatTensor of size (16, 2, 256, 256)
+        print(image.size())
+        print(estimated_flow.size())
+        exit()
+        pass
 
     def align(self, x, m, y, t, r_list):
         return self._models_align_handlers[self.model_name](x, m, y, t, r_list)
@@ -66,9 +78,11 @@ class AlignmentUtils:
         with torch.no_grad():
             estimated_flow = self.model.estimate_flow(source_images, dest_images, self.device, mode='channel_first')
             print(estimated_flow.size())
-        warped_source_image = self.remap(
-            source_images[0].permute(1, 2, 0).cpu().numpy(), estimated_flow[0, 0].cpu().numpy(), estimated_flow[0, 1].cpu().numpy()
-        )
+
+        warped_source_image = self.map_torch(source_images, estimated_flow)
+        # warped_source_image = self.remap(
+        #     source_images[0].permute(1, 2, 0).cpu().numpy(), estimated_flow[0, 0].cpu().numpy(), estimated_flow[0, 1].cpu().numpy()
+        # )
 
         fig, (axis1, axis2, axis3) = plt.subplots(1, 3, figsize=(30, 30))
         axis1.imshow(source_images[0].permute(1, 2, 0).cpu().numpy())
