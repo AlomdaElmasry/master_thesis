@@ -60,7 +60,8 @@ class AlignmentUtils:
     def _align_glunet(self, x, m, y, t, r_list):
         source_images = x[:, :, t] * 255
         dest_images = x[:, :, t + 1] * 255
-        estimated_flow = self.model.estimate_flow(source_images, dest_images, self.device, mode='channel_first')
+        with torch.no_grad():
+            estimated_flow = self.model.estimate_flow(source_images, dest_images, self.device, mode='channel_first')
         warped_source_image = self.remap(
             source_images, estimated_flow.squeeze()[0].cpu().numpy(), estimated_flow.squeeze()[1].cpu().numpy()
         )
