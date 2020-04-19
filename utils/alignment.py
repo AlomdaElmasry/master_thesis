@@ -68,6 +68,10 @@ class AlignmentUtils:
         with torch.no_grad():
             estimated_flow = self.model.estimate_flow(aux_frames, target_frame, self.device, mode='channel_first')
 
+        import pickle
+        pickle.dump(estimated_flow.cpu(), open('test.pkl', 'wb'))
+        exit()
+
         # Align x
         x_aligned = self._align_glunet_transform((aux_frames / 255).float(), estimated_flow)
         x_aligned = x_aligned.reshape(b, f - 1, c, h, w).transpose(1, 2)
