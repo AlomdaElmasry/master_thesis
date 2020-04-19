@@ -66,7 +66,7 @@ class AlignmentUtils:
             estimated_flow = self.model.estimate_flow(source_images, dest_images, self.device, mode='channel_first')
             print(estimated_flow.size())
         warped_source_image = self.remap(
-            source_images[0, :, t].permute(1, 2, 0).numpy(), estimated_flow[0, 0].cpu().numpy(), estimated_flow[0, 1].cpu().numpy()
+            source_images[0].permute(1, 2, 0).numpy(), estimated_flow[0, 0].cpu().numpy(), estimated_flow[0, 1].cpu().numpy()
         )
 
         fig, (axis1, axis2, axis3) = plt.subplots(1, 3, figsize=(30, 30))
