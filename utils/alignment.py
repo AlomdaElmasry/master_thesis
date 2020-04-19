@@ -95,8 +95,8 @@ class AlignmentUtils:
         identity_grid = torch.nn.functional.affine_grid(identity_theta, image.size())
 
         # Add normalized x and y displacement
-        identity_grid[:, :, :, 0] += estimated_flow[:, 0] / 256
-        identity_grid[:, :, :, 1] += estimated_flow[:, 1] / 256
+        identity_grid[:, :, :, 0] += estimated_flow[:, 0] / image.size(3)
+        identity_grid[:, :, :, 1] += estimated_flow[:, 1] / image.size(2)
 
         # Apply transformation to the image
         return torch.nn.functional.grid_sample(image, identity_grid, mode=mode)
