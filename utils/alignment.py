@@ -64,14 +64,16 @@ class AlignmentUtils:
         target_frame = target_frame.transpose(1, 2).reshape(-1, c, h, w)
         aux_frames = aux_frames.transpose(1, 2).reshape(-1, c, h, w)
 
-        print(target_frame.size())
-        print(aux_frames.size())
-        exit()
+        # Estimate the flows
         with torch.no_grad():
             estimated_flow = self.model.estimate_flow(aux_frames, target_frame, self.device, mode='channel_first')
 
+        # Get aligned images
+        x_aligned = self._align_glunet_transform((aux_frames / 255).float(), estimated_flow)
+        print(x_aligned.size())
+
         # Testing with torch
-        warped_source_image = self._align_glunet_transform(x[:, :, t], estimated_flow)
+        # warped_source_image = self._align_glunet_transform(x[:, :, t], estimated_flow)
 
         # fig, (axis1, axis2, axis3) = plt.subplots(1, 3, figsize=(30, 30))
         # axis1.imshow(aux_frames[0].permute(1, 2, 0).cpu().numpy())
