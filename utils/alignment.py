@@ -55,4 +55,5 @@ class AlignmentUtils:
         return self.model(x, m, y, t, r_list)
 
     def _align_glunet(self, x, m, y, t, r_list):
-        pass
+        print(self.model)
+        exit()

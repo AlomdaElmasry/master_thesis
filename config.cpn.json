@@ -18,7 +18,7 @@
   },
   "model": {
     "mode": "full",
-    "trained_aligner": null,
+    "trained_aligner": "cpn",
     "loss_constant_normalization": true,
     "loss_lambdas": [2, 10, 20, 6, 0.01, 24, 0.1]
   },
