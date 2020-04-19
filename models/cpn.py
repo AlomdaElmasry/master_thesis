@@ -226,41 +226,31 @@ class CPNet(nn.Module):
         return y_hat, y_hat_comp, c_mask
 
     def forward(self, x, m, y, t, r_list):
-        # Normalize input data
-        x = (x - self.mean) / self.std
+        # Align the frames
+        if self.utils_alignment is None:
+            x = (x - self.mean) / self.std
+            x_aligned, v_aligned, _ = self.align(x, m, y, t, r_list)
+        elif self.utils_alignment.model_name == 'cpn':
+            x = (x - self.mean) / self.std
+            x_aligned, v_aligned, _ = self.utils_alignment.align(x, m, y, t, r_list)
+        else:
+            x_aligned, v_aligned, _ = self.utils_alignment.align(x, m, y, t, r_list)
+            x_aligned = (x_aligned - self.mean) / self.std
 
         # Propagate using appropiate mode
         if self.mode == 'full':
-            y_hat, y_hat_comp, c_mask, (x_aligned, v_aligned) = self._forward_full(x, m, y, t, r_list)
-        elif self.mode == 'aligner':
-            y_hat, y_hat_comp, c_mask, (x_aligned, v_aligned) = self._forward_aligner(x, m, y, t, r_list)
+            y_hat, y_hat_comp, c_mask = self.copy_and_paste(x[:, :, t], m[:, :, t], y[:, :, t], x_aligned, v_aligned)
+        elif self.mode == 'encdec':
+            c_feats = self.encoder(x[:, :, t], 1 - m[:, :, t])
+            y_hat = self.decoder(c_feats)
+            y_hat = torch.clamp((y_hat * self.std.squeeze(4)) + self.mean.squeeze(4), 0, 1)
+            y_hat_comp = y_hat * m[:, :, t] + y[:, :, t] * (1 - m[:, :, t])
+            return y_hat, y_hat_comp, m.squeeze(2), (x, 1 - m)
         else:
-            y_hat, y_hat_comp, c_mask, (x_aligned, v_aligned) = self._forward_encdec(x, m, y, t)
+            y_hat, y_hat_comp, c_mask = None, None, None
 
         # De-normalize x_aligned, which has been computed using normalized x
         x_aligned = x_aligned * self.std + self.mean if x_aligned is not None else x_aligned
 
         # Return data
         return y_hat, y_hat_comp, c_mask, (x_aligned, v_aligned)
-
-    def _forward_full(self, x, m, y, t, r_list):
-        if self.utils_alignment is None:
-            x_aligned, v_aligned, _ = self.align(x, m, y, t, r_list)
-        else:
-            x_aligned, v_aligned, _ = self.utils_alignment.align(x, m, y, t, r_list)
-        y_hat, y_hat_comp, c_mask = self.copy_and_paste(x[:, :, t], m[:, :, t], y[:, :, t], x_aligned, v_aligned)
-        return y_hat, y_hat_comp, c_mask, (x_aligned, v_aligned)
-
-    def _forward_aligner(self, x, m, y, t, r_list):
-        if self.utils_alignment is None:
-            x_aligned, v_aligned, _ = self.align(x, m, y, t, r_list)
-        else:
-            x_aligned, v_aligned, _ = self.utils_alignment.align(x, m, y, t, r_list)
-        return None, None, None, (x_aligned, v_aligned)
-
-    def _forward_encdec(self, x, m, y, t):
-        c_feats = self.encoder(x[:, :, t], 1 - m[:, :, t])
-        y_hat = self.decoder(c_feats)
-        y_hat = torch.clamp((y_hat * self.std.squeeze(4)) + self.mean.squeeze(4), 0, 1)
-        y_hat_comp = y_hat * m[:, :, t] + y[:, :, t] * (1 - m[:, :, t])
-        return y_hat, y_hat_comp, m.squeeze(2), (x, 1 - m)
