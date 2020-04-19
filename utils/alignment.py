@@ -11,10 +11,12 @@ class AlignmentUtils:
     _models_align_handlers = {}
     model_name = None
     model = None
+    device = None
 
     def __init__(self, model_name, device):
         assert model_name in self._models_names
         self.model_name = model_name
+        self.device = device
         self._models_init_handlers = {'cpn': self._init_cpn, 'glu-net': self._init_glunet}
         self._models_align_handlers = {'cpn': self._align_cpn, 'glu-net': self._align_glunet}
         self._models_init_handlers[model_name](device)
@@ -55,5 +57,8 @@ class AlignmentUtils:
         return self.model(x, m, y, t, r_list)
 
     def _align_glunet(self, x, m, y, t, r_list):
-        print(self.model)
+        source_images = x[:, :, t] * 255
+        dest_images = x[:, :, t + 1] * 255
+        warping = self.model.estimate_flow(source_images, dest_images, self.device, mode='channel_first')
+        print(warping)
         exit()
