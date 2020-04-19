@@ -79,7 +79,7 @@ class AlignmentUtils:
         dest_images = (x[:, :, t + 1] * 255).byte()
         with torch.no_grad():
             estimated_flow = self.model.estimate_flow(source_images, dest_images, self.device, mode='channel_first')
-        warped_source_image = self.map_torch(source_images, estimated_flow)
+        warped_source_image = self.map_torch(x[:, :, t], estimated_flow)
 
         # warped_source_image = self.remap(
         #     source_images[0].permute(1, 2, 0).cpu().numpy(), estimated_flow[0, 0].cpu().numpy(), estimated_flow[0, 1].cpu().numpy()
