@@ -81,7 +81,7 @@ class AlignmentUtils:
 
     def _align_glunet(self, x, m, y, t, r_list):
         source_images = (x[:, :, t] * 255).byte()
-        dest_images = (x[:, :, t + 1] * 255).byte()
+        dest_images = (x[:, :, t + 2] * 255).byte()
         with torch.no_grad():
             estimated_flow = self.model.estimate_flow(source_images, dest_images, self.device, mode='channel_first')
 
