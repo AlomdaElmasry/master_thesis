@@ -3,6 +3,7 @@ import cv2
 import torch
 import models.cpn_original
 import numpy as np
+import matplotlib.pyplot as plt
 
 
 class AlignmentUtils:
@@ -42,8 +43,8 @@ class AlignmentUtils:
             apply_flipping_condition=False
         )
 
-    def remap_using_flow_fields(self, image, disp_x, disp_y, interpolation=cv2.INTER_LINEAR,
-                                border_mode=cv2.BORDER_CONSTANT):
+    def remap(self, image, disp_x, disp_y, interpolation=cv2.INTER_LINEAR,
+              border_mode=cv2.BORDER_CONSTANT):
         h_scale, w_scale = image.shape[:2]
         X, Y = np.meshgrid(np.linspace(0, w_scale - 1, w_scale), np.linspace(0, h_scale - 1, h_scale))
         map_x = (X + disp_x).astype(np.float32)
@@ -59,6 +60,19 @@ class AlignmentUtils:
     def _align_glunet(self, x, m, y, t, r_list):
         source_images = x[:, :, t] * 255
         dest_images = x[:, :, t + 1] * 255
-        warping = self.model.estimate_flow(source_images, dest_images, self.device, mode='channel_first')
-        print(warping)
+        estimated_flow = self.model.estimate_flow(source_images, dest_images, self.device, mode='channel_first')
+        warped_source_image = self.remap(
+            source_images, estimated_flow.squeeze()[0].cpu().numpy(), estimated_flow.squeeze()[1].cpu().numpy()
+        )
+
+        fig, (axis1, axis2, axis3) = plt.subplots(1, 3, figsize=(30, 30))
+        axis1.imshow(source_images[0])
+        axis1.set_title('Source image')
+        axis2.imshow(dest_images[0])
+        axis2.set_title('Target image')
+        axis3.imshow(warped_source_image)
+        axis3.set_title('Warped source image according to estimated flow by GLU-Net')
+        fig.savefig(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'Warped_source_image.png'),
+                    bbox_inches='tight')
+        plt.close(fig)
         exit()
