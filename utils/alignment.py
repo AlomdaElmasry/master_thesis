@@ -71,7 +71,6 @@ class AlignmentUtils:
         # Align x
         x_aligned = self._align_glunet_transform((aux_frames / 255).float(), estimated_flow)
         x_aligned = x_aligned.reshape(b, f - 1, c, h, w).transpose(1, 2)
-        print(x_aligned.size())
 
         # Align v
         v_aligned = self._align_glunet_transform(
@@ -79,12 +78,8 @@ class AlignmentUtils:
         )
         v_aligned = v_aligned.reshape(b, f - 1, 1, h, w).transpose(1, 2)
 
-        print(v_aligned)
-        print(v_aligned.size())
-
         # Return x_aligned, v_aligned, y_aligned
-        exit()
-        return x_aligned, None, None
+        return x_aligned, v_aligned, None
 
     def _align_glunet_transform(self, image, estimated_flow, mode='bilinear'):
         # Image is FloatTensor of size (16, 3, 256, 256)
