@@ -53,8 +53,17 @@ class AlignmentUtils:
         return self.model(x, m, y, t, r_list)
 
     def _align_glunet(self, x, m, y, t, r_list):
-        target_frame = (x[:, :, t] * 255).byte()
+        # Get input dimensions
+        b, c, f, h, w = x.size()
+
+        # Define target and aux frames of shape (b, 3, f - 1, h, w)
+        target_frame = (x[:, :, t] * 255).byte().unsqueeze(2).repeat(1, 1, f - 1, 1, 1)
         aux_frames = (x[:, :, r_list] * 255).byte()
+
+        # Expand to batch dimension
+        target_frame = target_frame.transpose(1, 2).reshape(-1, c, h, w)
+        aux_frames = aux_frames.transpose(1, 2).reshape(-1, c, h, w)
+
         print(target_frame.size())
         print(aux_frames.size())
         exit()
