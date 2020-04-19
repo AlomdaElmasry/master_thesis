@@ -58,8 +58,8 @@ class AlignmentUtils:
         return self.model(x, m, y, t, r_list)
 
     def _align_glunet(self, x, m, y, t, r_list):
-        source_images = (x[:, :, t] * 255).uint()
-        dest_images = (x[:, :, t + 1] * 255).uint()
+        source_images = (x[:, :, t] * 255).byte()
+        dest_images = (x[:, :, t + 1] * 255).byte()
         print(source_images.type())
         print(source_images.size())
         print(dest_images.size())
