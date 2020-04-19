@@ -84,12 +84,9 @@ class AlignmentUtils:
         dest_images = (x[:, :, t + 1] * 255).byte()
         with torch.no_grad():
             estimated_flow = self.model.estimate_flow(source_images, dest_images, self.device, mode='channel_first')
+
+        # Testing with torch
         warped_source_image = self.map_torch(x[:, :, t], estimated_flow)
-
-        # warped_source_image = self.remap(
-        #     source_images[0].permute(1, 2, 0).cpu().numpy(), estimated_flow[0, 0].cpu().numpy(), estimated_flow[0, 1].cpu().numpy()
-        # )
-
         fig, (axis1, axis2, axis3) = plt.subplots(1, 3, figsize=(30, 30))
         axis1.imshow(source_images[0].permute(1, 2, 0).cpu().numpy())
         axis1.set_title('Source image')
@@ -100,4 +97,22 @@ class AlignmentUtils:
         fig.savefig(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'Warped_source_image.png'),
                     bbox_inches='tight')
         plt.close(fig)
+
+        # Testing with default method
+        warped_source_image = self.remap(
+            source_images[0].permute(1, 2, 0).cpu().numpy(), estimated_flow[0, 0].cpu().numpy(),
+            estimated_flow[0, 1].cpu().numpy()
+        )
+        fig, (axis1, axis2, axis3) = plt.subplots(1, 3, figsize=(30, 30))
+        axis1.imshow(source_images[0].permute(1, 2, 0).cpu().numpy())
+        axis1.set_title('Source image')
+        axis2.imshow(dest_images[0].permute(1, 2, 0).cpu().numpy())
+        axis2.set_title('Target image')
+        axis3.imshow(warped_source_image)
+        axis3.set_title('Warped source image according to estimated flow by GLU-Net')
+        fig.savefig(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'Warped_source_image_original.png'),
+                    bbox_inches='tight')
+        plt.close(fig)
+
+
         exit()
