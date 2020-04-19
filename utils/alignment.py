@@ -70,9 +70,9 @@ class AlignmentUtils:
         )
 
         fig, (axis1, axis2, axis3) = plt.subplots(1, 3, figsize=(30, 30))
-        axis1.imshow(source_images[0])
+        axis1.imshow(source_images[0].permute(1, 2, 0).cpu().numpy())
         axis1.set_title('Source image')
-        axis2.imshow(dest_images[0])
+        axis2.imshow(dest_images[0].permute(1, 2, 0).cpu().numpy())
         axis2.set_title('Target image')
         axis3.imshow(warped_source_image)
         axis3.set_title('Warped source image according to estimated flow by GLU-Net')
