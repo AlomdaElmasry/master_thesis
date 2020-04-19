@@ -68,25 +68,21 @@ class AlignmentUtils:
         with torch.no_grad():
             estimated_flow = self.model.estimate_flow(aux_frames, target_frame, self.device, mode='channel_first')
 
-        # Get aligned images
+        # Align x
         x_aligned = self._align_glunet_transform((aux_frames / 255).float(), estimated_flow)
+        x_aligned = x_aligned.reshape(b, f - 1, c, h, w).transpose(1, 2)
         print(x_aligned.size())
 
-        # Testing with torch
-        # warped_source_image = self._align_glunet_transform(x[:, :, t], estimated_flow)
+        # Align v
+        v_aligned = self._align_glunet_transform(
+            (1 - m[:, :, r_list]).transpose(1, 2).reshape(-1, 1, h, w).float(), estimated_flow
+        )
+        print(v_aligned)
+        print(v_aligned.size())
 
-        # fig, (axis1, axis2, axis3) = plt.subplots(1, 3, figsize=(30, 30))
-        # axis1.imshow(aux_frames[0].permute(1, 2, 0).cpu().numpy())
-        # axis1.set_title('Source image')
-        # axis2.imshow(target_frame[0].permute(1, 2, 0).cpu().numpy())
-        # axis2.set_title('Target image')
-        # axis3.imshow(warped_source_image[0].permute(1, 2, 0).cpu())
-        # axis3.set_title('Warped source image according to estimated flow by GLU-Net')
-        # fig.savefig(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'Warped_source_image.png'),
-        #             bbox_inches='tight')
-        # plt.close(fig)
-
+        # Return x_aligned, v_aligned, y_aligned
         exit()
+        return x_aligned, None, None
 
     def _align_glunet_transform(self, image, estimated_flow):
         # Image is FloatTensor of size (16, 3, 256, 256)
