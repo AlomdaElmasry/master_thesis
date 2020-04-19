@@ -133,14 +133,20 @@ class ContentProvider(torch.utils.data.Dataset):
         sequence_last_frame_index = self.items_limits[sequence_item] - 1
         frame_indexes_candidates_pre = list(range(frame_index - (frames_n // 2) * frames_spacing, frame_index))
         frame_indexes_candidates_post = list(range(frame_index + 1, frame_index + (frames_n // 2) * frames_spacing + 1))
+        frame_indexes_candidates_pre = [max(i, sequence_first_frame_index) for i in frame_indexes_candidates_pre]
+        frame_indexes_candidates_post = [min(i, sequence_last_frame_index) for i in frame_indexes_candidates_post]
         if randomize_frames:
-            frames_indexes_before = sorted(random.sample(frame_indexes_candidates_pre, frames_n // 2))
-            frames_indexes_after = sorted(random.sample(frame_indexes_candidates_post, frames_n // 2))
+            # In randomize mode there is no symmetry between past and future frames. Indexes are not sorted, and it may
+            # be possible that indexes on the left of the target (middle element) are bigger.
+            frame_indexes_candidates = set(frame_indexes_candidates_pre).union(set(frame_indexes_candidates_post))
+            if frame_index in frame_indexes_candidates:
+                frame_indexes_candidates.remove(frame_index)
+            frames_indexes = sorted(random.sample(frame_indexes_candidates, 2 * (frames_n // 2)))
+            frames_indexes.insert(frames_n // 2, frame_index)
         else:
             frames_indexes_before = frame_indexes_candidates_pre[::frames_spacing]
             frames_indexes_after = frame_indexes_candidates_post[1::frames_spacing]
-        frames_indexes = frames_indexes_before + [frame_index] + frames_indexes_after
-        frames_indexes = np.clip(frames_indexes, sequence_first_frame_index, sequence_last_frame_index)
+            frames_indexes = frames_indexes_before + [frame_index] + frames_indexes_after
         y, m = self.get_items(frames_indexes)
         return y, m, (self.items_names[sequence_item], 0)
 
