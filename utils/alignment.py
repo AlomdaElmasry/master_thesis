@@ -75,7 +75,7 @@ class AlignmentUtils:
 
         # Align v
         v_aligned = self._align_glunet_transform(
-            (1 - m[:, :, r_list]).transpose(1, 2).reshape(-1, 1, h, w).float(), estimated_flow
+            (1 - m[:, :, r_list]).transpose(1, 2).reshape(-1, 1, h, w).float(), estimated_flow, mode='nearest'
         )
         v_aligned = v_aligned.reshape(b, f - 1, 1, h, w).transpose(1, 2)
 
@@ -86,7 +86,7 @@ class AlignmentUtils:
         exit()
         return x_aligned, None, None
 
-    def _align_glunet_transform(self, image, estimated_flow):
+    def _align_glunet_transform(self, image, estimated_flow, mode='bilinear'):
         # Image is FloatTensor of size (16, 3, 256, 256)
         # EstimatedFlow is FloatTensor of size (16, 2, 256, 256)
         # IdentityGrid is FloatTensor of size (16, 256, 256, 2)
@@ -99,4 +99,4 @@ class AlignmentUtils:
         identity_grid[:, :, :, 1] += estimated_flow[:, 1] / 256
 
         # Apply transformation to the image
-        return torch.nn.functional.grid_sample(image, identity_grid)
+        return torch.nn.functional.grid_sample(image, identity_grid, mode=mode)
