@@ -46,19 +46,38 @@ class AlignmentUtils:
             apply_flipping_condition=False
         )
 
-    def remap(self, image, disp_x, disp_y, interpolation=cv2.INTER_LINEAR,
-              border_mode=cv2.BORDER_CONSTANT):
+    def align(self, x, m, y, t, r_list):
+        return self._models_align_handlers[self.model_name](x, m, y, t, r_list)
 
-        # h_scale = 256, w_scale = 256
-        h_scale, w_scale = image.shape[:2]
+    def _align_cpn(self, x, m, y, t, r_list):
+        return self.model(x, m, y, t, r_list)
 
-        # Linspace between 0 and 255, 256 points
-        X, Y = np.meshgrid(np.linspace(0, w_scale - 1, w_scale), np.linspace(0, h_scale - 1, h_scale))
-        map_x = (X + disp_x).astype(np.float32)
-        map_y = (Y + disp_y).astype(np.float32)
-        return cv2.remap(image, map_x, map_y, interpolation=interpolation, borderMode=border_mode)
+    def _align_glunet(self, x, m, y, t, r_list):
+        target_frame = (x[:, :, t] * 255).byte()
+        aux_frames = (x[:, :, r_list] * 255).byte()
+        print(target_frame.size())
+        print(aux_frames.size())
+        exit()
+        with torch.no_grad():
+            estimated_flow = self.model.estimate_flow(aux_frames, target_frame, self.device, mode='channel_first')
 
-    def map_torch(self, image, estimated_flow):
+        # Testing with torch
+        warped_source_image = self._align_glunet_transform(x[:, :, t], estimated_flow)
+
+        # fig, (axis1, axis2, axis3) = plt.subplots(1, 3, figsize=(30, 30))
+        # axis1.imshow(aux_frames[0].permute(1, 2, 0).cpu().numpy())
+        # axis1.set_title('Source image')
+        # axis2.imshow(target_frame[0].permute(1, 2, 0).cpu().numpy())
+        # axis2.set_title('Target image')
+        # axis3.imshow(warped_source_image[0].permute(1, 2, 0).cpu())
+        # axis3.set_title('Warped source image according to estimated flow by GLU-Net')
+        # fig.savefig(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'Warped_source_image.png'),
+        #             bbox_inches='tight')
+        # plt.close(fig)
+
+        exit()
+
+    def _align_glunet_transform(self, image, estimated_flow):
         # Image is FloatTensor of size (16, 3, 256, 256)
         # EstimatedFlow is FloatTensor of size (16, 2, 256, 256)
         # IdentityGrid is FloatTensor of size (16, 256, 256, 2)
@@ -72,46 +91,3 @@ class AlignmentUtils:
 
         # Apply transformation to the image
         return torch.nn.functional.grid_sample(image, identity_grid)
-
-    def align(self, x, m, y, t, r_list):
-        return self._models_align_handlers[self.model_name](x, m, y, t, r_list)
-
-    def _align_cpn(self, x, m, y, t, r_list):
-        return self.model(x, m, y, t, r_list)
-
-    def _align_glunet(self, x, m, y, t, r_list):
-        source_images = (x[:, :, t - 2] * 255).byte()
-        dest_images = (x[:, :, t + 2] * 255).byte()
-        with torch.no_grad():
-            estimated_flow = self.model.estimate_flow(source_images, dest_images, self.device, mode='channel_first')
-
-        # Testing with torch
-        warped_source_image = self.map_torch(x[:, :, t], estimated_flow)
-        fig, (axis1, axis2, axis3) = plt.subplots(1, 3, figsize=(30, 30))
-        axis1.imshow(source_images[0].permute(1, 2, 0).cpu().numpy())
-        axis1.set_title('Source image')
-        axis2.imshow(dest_images[0].permute(1, 2, 0).cpu().numpy())
-        axis2.set_title('Target image')
-        axis3.imshow(warped_source_image[0].permute(1, 2, 0).cpu())
-        axis3.set_title('Warped source image according to estimated flow by GLU-Net')
-        fig.savefig(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'Warped_source_image.png'),
-                    bbox_inches='tight')
-        plt.close(fig)
-
-        # Testing with default method
-        warped_source_image = self.remap(
-            source_images[0].permute(1, 2, 0).cpu().numpy(), estimated_flow[0, 0].cpu().numpy(),
-            estimated_flow[0, 1].cpu().numpy()
-        )
-        fig, (axis1, axis2, axis3) = plt.subplots(1, 3, figsize=(30, 30))
-        axis1.imshow(source_images[0].permute(1, 2, 0).cpu().numpy())
-        axis1.set_title('Source image')
-        axis2.imshow(dest_images[0].permute(1, 2, 0).cpu().numpy())
-        axis2.set_title('Target image')
-        axis3.imshow(warped_source_image)
-        axis3.set_title('Warped source image according to estimated flow by GLU-Net')
-        fig.savefig(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'Warped_source_image_original.png'),
-                    bbox_inches='tight')
-        plt.close(fig)
-
-        exit()
