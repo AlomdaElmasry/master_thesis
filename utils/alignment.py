@@ -31,7 +31,7 @@ class AlignmentUtils:
         for param in self.model.parameters():
             param.requires_grad = False
 
-    def _init_glunet(self):
+    def _init_glunet(self, device):
         import models.glunet
         checkpoint_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'weights', 'glunet')
         self.fmodel = models.glunet.GLU_Net(
