@@ -77,6 +77,8 @@ class AlignmentUtils:
         v_aligned = self._align_glunet_transform(
             (1 - m[:, :, r_list]).transpose(1, 2).reshape(-1, 1, h, w).float(), estimated_flow
         )
+        v_aligned = v_aligned.reshape(b, f - 1, 1, h, w).transpose(1, 2)
+
         print(v_aligned)
         print(v_aligned.size())
 
