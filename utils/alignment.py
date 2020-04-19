@@ -61,7 +61,9 @@ class AlignmentUtils:
     def map_torch(self, image, estimated_flow):
         # Image is FloatTensor of size (16, 3, 256, 256)
         # EstimatedFlow is FloatTensor of size (16, 2, 256, 256)
-        identity_theta = self.movement_simulator.identity_theta(image.size(2), image.size(3))
+        identity_theta = self.movement_simulator.identity_theta(image.size(2), image.size(3))\
+            .unsqueeze(0).expand(image.size(0), 2, 3)
+        print(identity_theta.size())
         identity_grid = torch.nn.functional.affine_grid(identity_theta, image.size())
         print(identity_grid)
         # x_flow = torch.linspace()
