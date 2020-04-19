@@ -27,6 +27,10 @@ class MovementSimulator:
         affine_matrix = np.linalg.inv(AffineTransform(translation=(0, 0), scale=(1, 1), rotation=0).params)
         return torch.from_numpy(affine_matrix).float()
 
+    def identity_theta(self, h, w):
+        identity_affine = self.empty_affine()
+        return self.affine2theta(identity_affine, h, w)
+
     def simulate_movement(self, data_in, n, random_affines=None):
         """Simulates a moving sequence of ``n` frames using ``frame`` as starting point.
 

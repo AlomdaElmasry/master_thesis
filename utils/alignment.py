@@ -4,6 +4,7 @@ import torch
 import models.cpn_original
 import numpy as np
 import matplotlib.pyplot as plt
+import utils.movement
 
 
 class AlignmentUtils:
@@ -13,11 +14,13 @@ class AlignmentUtils:
     model_name = None
     model = None
     device = None
+    movement_simulator = None
 
     def __init__(self, model_name, device):
         assert model_name in self._models_names
         self.model_name = model_name
         self.device = device
+        self.movement_simulator = utils.movement.MovementSimulator()
         self._models_init_handlers = {'cpn': self._init_cpn, 'glu-net': self._init_glunet}
         self._models_align_handlers = {'cpn': self._align_cpn, 'glu-net': self._align_glunet}
         self._models_init_handlers[model_name](device)
@@ -58,6 +61,9 @@ class AlignmentUtils:
     def map_torch(self, image, estimated_flow):
         # Image is FloatTensor of size (16, 3, 256, 256)
         # EstimatedFlow is FloatTensor of size (16, 2, 256, 256)
+        identity_theta = self.movement_simulator.identity_theta(image.size(2), image.size(3))
+        print(identity_theta)
+        # x_flow = torch.linspace()
         print(image.size())
         print(estimated_flow.size())
         exit()
@@ -72,14 +78,10 @@ class AlignmentUtils:
     def _align_glunet(self, x, m, y, t, r_list):
         source_images = (x[:, :, t] * 255).byte()
         dest_images = (x[:, :, t + 1] * 255).byte()
-        print(source_images.type())
-        print(source_images.size())
-        print(dest_images.size())
         with torch.no_grad():
             estimated_flow = self.model.estimate_flow(source_images, dest_images, self.device, mode='channel_first')
-            print(estimated_flow.size())
-
         warped_source_image = self.map_torch(source_images, estimated_flow)
+
         # warped_source_image = self.remap(
         #     source_images[0].permute(1, 2, 0).cpu().numpy(), estimated_flow[0, 0].cpu().numpy(), estimated_flow[0, 1].cpu().numpy()
         # )
