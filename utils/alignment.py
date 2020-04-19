@@ -61,16 +61,12 @@ class AlignmentUtils:
     def map_torch(self, image, estimated_flow):
         # Image is FloatTensor of size (16, 3, 256, 256)
         # EstimatedFlow is FloatTensor of size (16, 2, 256, 256)
-        identity_theta = self.movement_simulator.identity_theta(image.size(2), image.size(3))\
+        identity_theta = self.movement_simulator.identity_theta(image.size(2), image.size(3)) \
             .unsqueeze(0).expand(image.size(0), 2, 3)
-        print(identity_theta.size())
         identity_grid = torch.nn.functional.affine_grid(identity_theta, image.size())
-        print(identity_grid)
-        # x_flow = torch.linspace()
-        print(image.size())
-        print(estimated_flow.size())
-        exit()
-        pass
+
+        # Apply transformation to the image
+        return torch.nn.functional.grid_sample(image, identity_grid)
 
     def align(self, x, m, y, t, r_list):
         return self._models_align_handlers[self.model_name](x, m, y, t, r_list)
@@ -94,7 +90,7 @@ class AlignmentUtils:
         axis1.set_title('Source image')
         axis2.imshow(dest_images[0].permute(1, 2, 0).cpu().numpy())
         axis2.set_title('Target image')
-        axis3.imshow(warped_source_image)
+        axis3.imshow(warped_source_image[0].permute(1, 2, 0).cpu())
         axis3.set_title('Warped source image according to estimated flow by GLU-Net')
         fig.savefig(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'Warped_source_image.png'),
                     bbox_inches='tight')
