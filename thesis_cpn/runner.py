@@ -102,7 +102,8 @@ class ThesisCPNRunner(thesis.runner.ThesisRunner):
         self._test_frames(device)
 
         # Inpaint entire sequences given by self.experiment.data.test_sequences_indexes
-        if self.experiment.configuration.get('model', 'mode') in ['full']:
+        if self.experiment.configuration.get('model', 'mode') in ['full'] and \
+                self.experiment.configuration.get('model', 'trained_aligner') != 'glu-net':
             self._test_sequences(device)
 
     def _test_objective_measures(self, device):
