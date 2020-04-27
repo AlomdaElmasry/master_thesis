@@ -1,6 +1,7 @@
 from models.vgg_16 import get_pretrained_model
 import torch
 import torch.nn.functional as F
+import matplotlib.pyplot as plt
 
 
 class LossesUtils:
@@ -37,3 +38,20 @@ class LossesUtils:
         loss_tv_w = (x_hat[:, :, :, 1:] - x_hat[:, :, :, :-1]).pow(2).sum()
         loss_tv = (loss_tv_h + loss_tv_w) / (x_hat.size(0) * x_hat.size(1) * x_hat.size(2) * x_hat.size(3))
         return loss_tv * weight
+
+    def grad(self, x, x_hat, mask, reduction, weight):
+        x_grads = torch.cat((self._grad_horizontal(x), self._grad_vertical(x)), dim=1)
+        x_hat_grads = torch.cat((self._grad_horizontal(x_hat), self._grad_vertical(x_hat)), dim=1)
+        return self.masked_l1(x_grads, x_hat_grads, mask, reduction, weight)
+
+    def _grad_horizontal(self, x):
+        weight = torch.tensor(
+            [[-1, 2, -1], [-1, 2, -1], [-1, 2, -1]], dtype=torch.float32
+        ).unsqueeze(0).unsqueeze(0).repeat((3, 1, 1, 1))
+        return F.conv2d(x, padding=1, weight=weight, groups=3)
+
+    def _grad_vertical(self, x):
+        weight = torch.tensor(
+            [[-1, -1, -1], [2, 2, 2], [-1, -1, -1]], dtype=torch.float32
+        ).unsqueeze(0).unsqueeze(0).repeat((3, 1, 1, 1))
+        return F.conv2d(x, padding=1, weight=weight, groups=3)

@@ -20,7 +20,7 @@
     "mode": "full",
     "trained_aligner": null,
     "loss_constant_normalization": true,
-    "loss_lambdas": [2, 10, 20, 6, 0.01, 24, 0.1]
+    "loss_lambdas": [2, 10, 20, 6, 0.01, 24, 0.1, 10]
   },
   "training": {
     "batch_size": 16,
