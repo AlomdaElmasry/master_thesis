@@ -11,19 +11,19 @@
     "train_size": [256, 256],
     "test_size": [240, 480],
     "frames_n": 5,
-    "frames_spacing": 2,
-    "frames_randomize": false,
+    "frames_spacing": 10,
+    "frames_randomize": true,
     "dilatation_filter_size": [3, 3],
     "dilatation_iterations": 4
   },
   "model": {
     "mode": "full",
-    "trained_aligner": null,
+    "trained_aligner": "cpn",
     "loss_constant_normalization": true,
-    "loss_lambdas": [2, 10, 20, 6, 0.01, 24, 0.1, 10]
+    "loss_lambdas": [2, 100, 100, 6, 1, 500, 0.1, 10]
   },
   "training": {
-    "batch_size": 16,
+    "batch_size": 12,
     "train_max_iterations": 5000,
     "validation_max_iterations": 500,
     "lr": 1e-4,
