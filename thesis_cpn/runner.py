@@ -1,7 +1,7 @@
 import torch.optim
 import numpy as np
 import thesis.runner
-import models.cpn
+import models.cpn_resnet
 import torch.utils.data
 import copy
 import utils.measures
@@ -19,7 +19,7 @@ class ThesisCPNRunner(thesis.runner.ThesisRunner):
         trained_aligner = self.experiment.configuration.get('model', 'trained_aligner')
         utils_alignment = utils.alignment.AlignmentUtils(trained_aligner, device) if trained_aligner is not None else \
             None
-        self.model = models.cpn.CPNet(self.experiment.configuration.get('model', 'mode'), utils_alignment).to(device)
+        self.model = models.cpn_resnet.CPNet(self.experiment.configuration.get('model', 'mode'), utils_alignment).to(device)
         self.utils_losses = utils.losses.LossesUtils()
         self.utils_losses.init_vgg(device)
         self.utils_measures = utils.measures.UtilsMeasures()
