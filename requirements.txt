@@ -11,5 +11,5 @@ tensorboardX
 jsonschema
 torchvision
 progressbar2
-skeltorch
+skeltorch==1.1.0b2
 jpeg4py

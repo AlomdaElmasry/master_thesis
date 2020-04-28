@@ -1,69 +1,9 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
-
-def init_weights(m):
-    if type(m) == nn.Conv2d:
-        nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
-
-
-class CPNAlignmentEncoder(nn.Module):
-    def __init__(self):
-        super(CPNAlignmentEncoder, self).__init__()
-        self.convs = nn.Sequential(
-            nn.Conv2d(4, 64, kernel_size=5, stride=2, padding=2), nn.ReLU(),
-            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1), nn.ReLU(),
-            nn.Conv2d(64, 128, kernel_size=3, stride=2, padding=1), nn.ReLU(),
-            nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1), nn.ReLU(),
-            nn.Conv2d(128, 256, kernel_size=3, stride=2, padding=1), nn.ReLU(),
-            nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1), nn.ReLU(),
-            nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1), nn.ReLU(),
-        )
-        self.convs.apply(init_weights)
-
-    def forward(self, in_f, in_v):
-        x = torch.cat([in_f, in_v], dim=1)
-        x = F.interpolate(x, size=(224, 224), mode='bilinear', align_corners=False)
-        return self.convs(x)
-
-
-class CPNAlignmentRegressor(nn.Module):
-    def __init__(self):
-        super(CPNAlignmentRegressor, self).__init__()
-        self.convs = nn.Sequential(
-            nn.Conv2d(512, 512, kernel_size=3, stride=2, padding=1), nn.ReLU(),
-            nn.Conv2d(512, 512, kernel_size=3, stride=1, padding=1), nn.ReLU(),
-            nn.Conv2d(512, 512, kernel_size=3, stride=1, padding=1), nn.ReLU(),
-            nn.Conv2d(512, 512, kernel_size=3, stride=2, padding=1), nn.ReLU(),
-            nn.Conv2d(512, 512, kernel_size=3, stride=1, padding=1), nn.ReLU(),
-            nn.Conv2d(512, 512, kernel_size=3, stride=1, padding=1), nn.ReLU(),
-        )
-        self.fc = nn.Linear(512, 6)
-        self.fc.bias.data.copy_(torch.tensor([1, 0, 0, 0, 1, 0], dtype=torch.float32))
-        self.convs.apply(init_weights)
-
-    def forward(self, feat1, feat2):
-        x = torch.cat([feat1, feat2], dim=1)
-        x = self.convs(x)
-        x = F.avg_pool2d(x, x.shape[2])
-        x = x.view(-1, x.shape[1])
-        return self.fc(x).view(-1, 2, 3)
-
-
-class CPNEncoder(nn.Module):
-    def __init__(self):
-        super(CPNEncoder, self).__init__()
-        self.convs = nn.Sequential(
-            nn.Conv2d(4, 64, kernel_size=5, stride=2, padding=2), nn.ReLU(),
-            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1), nn.ReLU(),
-            nn.Conv2d(64, 128, kernel_size=3, stride=2, padding=1), nn.ReLU(),
-            nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1), nn.ReLU(),
-            nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1)
-        )
-
-    def forward(self, in_f, in_v):
-        return self.convs(torch.cat([in_f, in_v], dim=1))
+import models.cpn_alignment
+import models.cpn_encoders
+import models.cpn_decoders
 
 
 class CPNContextMatching(nn.Module):
@@ -119,35 +59,6 @@ class CPNContextMatching(nn.Module):
         return torch.cat([c_feats[:, :, 0], c_out, c_mask], dim=1), c_mask
 
 
-class CPNDecoder(nn.Module):
-    def __init__(self, single_frame=False):
-        super(CPNDecoder, self).__init__()
-        self.convs = nn.Sequential(
-            nn.Conv2d(128 if single_frame else 257, 257, kernel_size=3, stride=1, padding=1), nn.ReLU(),
-            nn.Conv2d(257, 257, kernel_size=3, stride=1, padding=1), nn.ReLU(),
-            nn.Conv2d(257, 257, kernel_size=3, stride=1, padding=1), nn.ReLU(),
-            nn.Conv2d(257, 257, kernel_size=3, stride=1, padding=2, dilation=2), nn.ReLU(),
-            nn.Conv2d(257, 257, kernel_size=3, stride=1, padding=4, dilation=4), nn.ReLU(),
-            nn.Conv2d(257, 257, kernel_size=3, stride=1, padding=8, dilation=8), nn.ReLU(),
-            nn.Conv2d(257, 257, kernel_size=3, stride=1, padding=16, dilation=16), nn.ReLU(),
-            nn.Conv2d(257, 257, kernel_size=3, stride=1, padding=1), nn.ReLU(),
-            nn.Conv2d(257, 128, kernel_size=3, stride=1, padding=1), nn.ReLU(),
-            nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1), nn.ReLU()
-        )
-        self.convs_2 = nn.Sequential(
-            nn.Conv2d(128, 64, kernel_size=3, stride=1, padding=1), nn.ReLU(),
-            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1), nn.ReLU()
-        )
-        self.convs_3 = nn.Conv2d(64, 3, kernel_size=5, stride=1, padding=2)
-
-    def forward(self, x):
-        x = self.convs(x)
-        x = F.interpolate(x, scale_factor=2, mode='nearest')
-        x = self.convs_2(x)
-        x = F.interpolate(x, scale_factor=2, mode='nearest')
-        return self.convs_3(x)
-
-
 class CPNet(nn.Module):
     _modes_all = ['full', 'aligner', 'encdec']
 
@@ -157,14 +68,17 @@ class CPNet(nn.Module):
         self.mode = mode
         self.utils_alignment = utils_alignment
         if utils_alignment is None and mode in ['full', 'aligner']:
-            self.alignment_encoder = CPNAlignmentEncoder()
-            self.alignment_regressor = CPNAlignmentRegressor()
+            self.alignment_encoder = models.cpn_alignment.CPNAlignmentEncoder()
+            self.alignment_regressor = models.cpn_alignment.CPNAlignmentRegressor()
         if mode in ['full', 'encdec']:
-            self.encoder = CPNEncoder()
             self.context_matching = CPNContextMatching()
-            self.decoder = CPNDecoder(mode == 'encdec')
+            self._init_encoder_decoder()
         self.register_buffer('mean', torch.as_tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1, 1))
         self.register_buffer('std', torch.as_tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1, 1))
+
+    def _init_encoder_decoder(self, version='cpn'):
+        self.encoder = models.cpn_encoders.CPNEncoderU()
+        self.decoder = models.cpn_decoders.CPNDecoderU(self.mode == 'encdec')
 
     def align(self, x, m, y, t, r_list):
         b, c, f, h, w = x.size()  # B C H W
@@ -204,11 +118,19 @@ class CPNet(nn.Module):
         b, c, f_ref, h, w = x_aligned.size()
 
         # Get c_features of everything
-        c_feats = self.encoder(
+        c_feats, c_feats_mid = self.encoder(
             torch.cat([x_t.unsqueeze(2), x_aligned], dim=2).transpose(1, 2).reshape(-1, c, h, w),
             torch.cat([1 - m_t.unsqueeze(2), v_aligned], dim=2).transpose(1, 2).reshape(-1, 1, h, w)
         )
         c_feats = c_feats.reshape(b, f_ref + 1, c_feats.size(1), c_feats.size(2), c_feats.size(3)).transpose(1, 2)
+
+        # Reshape and average mid features, if available
+        if c_feats_mid is not None:
+            c_feats_mid = [
+                c_mid.reshape(b, f_ref + 1, c_mid.size(1), c_mid.size(2), c_mid.size(3)).transpose(1, 2)
+                for c_mid in c_feats_mid
+            ]
+            c_feats_mid = [F.avg_pool3d(c_mid, (f_ref + 1, 1, 1)).squeeze(2) for c_mid in c_feats_mid]
 
         # Apply Content-Matching Module
         p_in, c_mask = self.context_matching(c_feats, 1 - m_t, v_aligned)
@@ -217,7 +139,7 @@ class CPNet(nn.Module):
         c_mask = (F.interpolate(c_mask, size=(h, w), mode='bilinear', align_corners=False)).detach()
 
         # Obtain the predicted output y_hat. Clip the output to be between [0, 1]
-        y_hat = torch.clamp(self.decoder(p_in) * self.std.squeeze(4) + self.mean.squeeze(4), 0, 1)
+        y_hat = torch.clamp(self.decoder(p_in, c_feats_mid) * self.std.squeeze(4) + self.mean.squeeze(4), 0, 1)
 
         # Combine prediction with GT of the frame.
         y_hat_comp = y_hat * m_t + y_t * (1 - m_t)
@@ -226,7 +148,6 @@ class CPNet(nn.Module):
         return y_hat, y_hat_comp, c_mask
 
     def forward(self, x, m, y, t, r_list):
-        # Align the frames
         if self.utils_alignment is None:
             x = (x - self.mean) / self.std
             x_aligned, v_aligned, _ = self.align(x, m, y, t, r_list)

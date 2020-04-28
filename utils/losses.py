@@ -1,11 +1,20 @@
 from models.vgg_16 import get_pretrained_model
 import torch
 import torch.nn.functional as F
-import matplotlib.pyplot as plt
 
 
 class LossesUtils:
     model_vgg = None
+    grad_horz = None
+    grad_vert = None
+
+    def __init__(self, device):
+        self.grad_horz = torch.tensor(
+            [[-1, 2, -1], [-1, 2, -1], [-1, 2, -1]], dtype=torch.float32
+        ).unsqueeze(0).unsqueeze(0).repeat((3, 1, 1, 1)).to(device)
+        self.grad_vert = torch.tensor(
+            [[-1, -1, -1], [2, 2, 2], [-1, -1, -1]], dtype=torch.float32
+        ).unsqueeze(0).unsqueeze(0).repeat((3, 1, 1, 1)).to(device)
 
     def init_vgg(self, device):
         self.model_vgg = get_pretrained_model(device)
@@ -45,13 +54,7 @@ class LossesUtils:
         return self.masked_l1(x_grads, x_hat_grads, mask, reduction, weight)
 
     def _grad_horizontal(self, x):
-        weight = torch.tensor(
-            [[-1, 2, -1], [-1, 2, -1], [-1, 2, -1]], dtype=torch.float32
-        ).unsqueeze(0).unsqueeze(0).repeat((3, 1, 1, 1)).to(x.device)
-        return F.conv2d(x, padding=1, weight=weight, groups=3)
+        return F.conv2d(x, padding=1, weight=self.grad_horz, groups=3)
 
     def _grad_vertical(self, x):
-        weight = torch.tensor(
-            [[-1, -1, -1], [2, 2, 2], [-1, -1, -1]], dtype=torch.float32
-        ).unsqueeze(0).unsqueeze(0).repeat((3, 1, 1, 1)).to(x.device)
-        return F.conv2d(x, padding=1, weight=weight, groups=3)
+        return F.conv2d(x, padding=1, weight=self.grad_vert, groups=3)

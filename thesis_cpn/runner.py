@@ -20,7 +20,7 @@ class ThesisCPNRunner(thesis.runner.ThesisRunner):
         utils_alignment = utils.alignment.AlignmentUtils(trained_aligner, device) if trained_aligner is not None else \
             None
         self.model = models.cpn.CPNet(self.experiment.configuration.get('model', 'mode'), utils_alignment).to(device)
-        self.utils_losses = utils.losses.LossesUtils()
+        self.utils_losses = utils.losses.LossesUtils(device)
         self.utils_losses.init_vgg(device)
         self.utils_measures = utils.measures.UtilsMeasures()
 
@@ -257,7 +257,7 @@ class ThesisCPNRunner(thesis.runner.ThesisRunner):
         loss_perceptual, vgg_y, vgg_y_hat_comp = self.utils_losses.perceptual(y_t, y_hat_comp, loss_weights[4])
         loss_style = self.utils_losses.style(vgg_y, vgg_y_hat_comp, loss_weights[5])
         loss_tv = self.utils_losses.tv(y_hat, loss_weights[6])
-        loss_grad = self.utils_losses.grad(y_t, y_hat, m, reduction, loss_weights[7])
+        loss_grad = self.utils_losses.grad(y_t, y_hat, 1, reduction, loss_weights[7])
         loss = loss_alignment + loss_vh + loss_nvh + loss_nh + loss_perceptual + loss_style + loss_tv + loss_grad
         return loss, [loss_alignment, loss_vh, loss_nvh, loss_nh, loss_perceptual, loss_style, loss_tv, loss_grad]
 
