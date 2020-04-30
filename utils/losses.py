@@ -1,6 +1,7 @@
 from models.vgg_16 import get_pretrained_model
 import torch
 import torch.nn.functional as F
+import matplotlib.pyplot as plt
 
 
 class LossesUtils:
@@ -10,10 +11,10 @@ class LossesUtils:
 
     def __init__(self, device):
         self.grad_horz = torch.tensor(
-            [[-1, 2, -1], [-1, 2, -1], [-1, 2, -1]], dtype=torch.float32
+            [[1, 0, -1], [2, 0, -2], [1, 0, -1]], dtype=torch.float32
         ).unsqueeze(0).unsqueeze(0).repeat((3, 1, 1, 1)).to(device)
         self.grad_vert = torch.tensor(
-            [[-1, -1, -1], [2, 2, 2], [-1, -1, -1]], dtype=torch.float32
+            [[1, 2, 1], [0, 0, 0], [-1, -2, -1]], dtype=torch.float32
         ).unsqueeze(0).unsqueeze(0).repeat((3, 1, 1, 1)).to(device)
 
     def init_vgg(self, device):

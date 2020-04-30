@@ -79,6 +79,16 @@ class CPNet(nn.Module):
     def _init_encoder_decoder(self, version='cpn'):
         self.encoder = models.cpn_encoders.CPNEncoderU()
         self.decoder = models.cpn_decoders.CPNDecoderU(self.mode == 'encdec')
+        print(self.get_n_params(self))
+
+    def get_n_params(self, model):
+        pp = 0
+        for p in list(model.parameters()):
+            nn = 1
+            for s in list(p.size()):
+                nn = nn * s
+            pp += nn
+        return pp
 
     def align(self, x, m, y, t, r_list):
         b, c, f, h, w = x.size()  # B C H W
