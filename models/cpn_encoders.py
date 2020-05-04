@@ -18,7 +18,7 @@ class CPNEncoderDefault(nn.Module):
     def forward(self, x, v):
         # Input size: (b, 3, 256, 256)
         # Output size: (b, 128, 64, 64)
-        return self.convs(torch.cat([x, v], dim=1))
+        return self.convs(torch.cat([x, v], dim=1)), None
 
 
 class CPNEncoderU(nn.Module):
@@ -118,7 +118,6 @@ class RRDBNet(nn.Module):
         self.upconv2 = nn.Conv2d(nf, nf, 3, 1, 1, bias=True)
         self.HRconv = nn.Conv2d(nf, nf, 3, 1, 1, bias=True)
         self.conv_last = nn.Conv2d(nf, out_nc, 3, 1, 1, bias=True)
-
         self.lrelu = nn.LeakyReLU(negative_slope=0.2, inplace=True)
 
         # 4569616

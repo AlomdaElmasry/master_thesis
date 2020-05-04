@@ -34,13 +34,15 @@ masks_meta = utils.paths.DatasetPaths.get_items(
 # Create ContentProviders
 movement_null = utils.movement.MovementSimulator(0, 0, 0)
 movement_simulator = utils.movement.MovementSimulator()
-gts_dataset = ContentProvider(args.data_path, gts_meta, movement_null, None)
-masks_dataset = ContentProvider(args.data_path, masks_meta, movement_simulator, None)
+gts_dataset = ContentProvider(args.data_path, gts_meta, None)
+masks_dataset = ContentProvider(args.data_path, masks_meta, None)
 
 # Create ContentProviders
 dataset = MaskedSequenceDataset(
     gts_dataset=gts_dataset,
     masks_dataset=masks_dataset,
+    gts_simulator=movement_null,
+    masks_simulator=movement_simulator,
     image_size=[256, 256],
     frames_n=5,
     frames_spacing=2,
@@ -48,17 +50,21 @@ dataset = MaskedSequenceDataset(
     dilatation_filter_size=(3, 3),
     dilatation_iterations=4,
     force_resize=False,
-    keep_ratio=True
+    keep_ratio=True,
+    p_simulator=0.5
 )
-loader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=False)
+loader = torch.utils.data.DataLoader(dataset, batch_size=4, shuffle=False)
 
 # Iterate over the data sets
 for i, data in enumerate(loader):
     (x, m), y, info = data
 
+    # Check if it's simulated
+    a = 1
     for i in range(x.size(2)):
-        plt.imshow(x[0, :, i].permute(1, 2, 0))
+        plt.imshow(x[1, :, i].permute(1, 2, 0))
         plt.show()
+        a = 1
 
     # random_affines_stacked = [torch.inverse(random_affines_stacked[0, i]) for i in range(5)]
     # random_thetas_stacked = torch.stack([

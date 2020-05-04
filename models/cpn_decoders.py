@@ -24,7 +24,7 @@ class CPNDecoderDefault(nn.Module):
         )
         self.convs_3 = nn.Conv2d(64, 3, kernel_size=5, stride=1, padding=2)
 
-    def forward(self, x):
+    def forward(self, x, c_feats_mid):
         x = self.convs(x)
         x = F.interpolate(x, scale_factor=2, mode='nearest')
         x = self.convs_2(x)

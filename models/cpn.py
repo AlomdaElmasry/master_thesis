@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import models.cpn_alignment
 import models.cpn_encoders
 import models.cpn_decoders
+import matplotlib.pyplot as plt
 
 
 class CPNContextMatching(nn.Module):
@@ -35,12 +36,13 @@ class CPNContextMatching(nn.Module):
 
             # Computer visibility maps
             vmap = v_t * v_r
+
             v_sum = vmap[:, 0].sum(-1).sum(-1)
             v_sum_zeros = (v_sum < 1e-4)
             v_sum += v_sum_zeros.float()
 
             # Computer cosine similarity
-            gs = (vmap * c_feats[:, :, 0] * c_feats[:, :, r + 1]).sum(-1).sum(-1).sum(-1) / (v_sum * c_c)
+            gs = (vmap * c_feats[:, :, 0] * c_feats[:, :, r + 1]).sum(-1).sum(-1).sum(-1) / (1)
             gs[v_sum_zeros] = 0
             cos_sim.append(torch.ones((b, c_c, h, w)).to(c_feats.device) * gs.view(b, 1, 1, 1))
 
@@ -77,9 +79,8 @@ class CPNet(nn.Module):
         self.register_buffer('std', torch.as_tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1, 1))
 
     def _init_encoder_decoder(self, version='cpn'):
-        self.encoder = models.cpn_encoders.CPNEncoderU()
-        self.decoder = models.cpn_decoders.CPNDecoderU(self.mode == 'encdec')
-        print(self.get_n_params(self))
+        self.encoder = models.cpn_encoders.CPNEncoderDefault()
+        self.decoder = models.cpn_decoders.CPNDecoderDefault(self.mode == 'encdec')
 
     def get_n_params(self, model):
         pp = 0

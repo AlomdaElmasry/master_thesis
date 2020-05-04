@@ -14,7 +14,9 @@
     "frames_spacing": 10,
     "frames_randomize": true,
     "dilatation_filter_size": [3, 3],
-    "dilatation_iterations": 4
+    "dilatation_iterations": 4,
+    "p_simulator": 0,
+    "p_repeat": 0
   },
   "model": {
     "mode": "full",

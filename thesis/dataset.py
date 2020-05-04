@@ -10,16 +10,14 @@ import utils.transforms
 class ContentProvider(torch.utils.data.Dataset):
     data_folder = None
     dataset_meta = None
-    movement_simulator = None
     logger = None
     items_names = None
     items_limits = None
     _ram_data = None
 
-    def __init__(self, data_folder, dataset_meta, movement_simulator, logger, load_in_ram=False):
+    def __init__(self, data_folder, dataset_meta, logger, load_in_ram=False):
         self.data_folder = data_folder
         self.dataset_meta = dataset_meta
-        self.movement_simulator = movement_simulator
         self.logger = logger
         self.items_names = list(self.dataset_meta.keys())
         self.items_limits = np.cumsum([
@@ -111,20 +109,22 @@ class ContentProvider(torch.utils.data.Dataset):
         sequence_last_frame_index = self.items_limits[sequence_index] - 1
         frames_indexes = list(range(sequence_first_frame_index, sequence_last_frame_index + 1))
         y, m = self.get_items(frames_indexes)
-        return y, m, (self.items_names[sequence_index], 0)
+        return y, m, self.items_names[sequence_index]
 
     def len_sequences(self):
         """Return the number of different sequences."""
         return len(self.items_names)
 
-    def get_patch(self, frame_index, frames_n, frames_spacing, randomize_frames):
-        if self.movement_simulator is None:
-            return self._get_patch_contiguous(frame_index, frames_n, frames_spacing, randomize_frames)
+    def get_patch(self, frame_index, frames_n, frames_spacing, randomize_frames, movement_simulator):
+        if movement_simulator is not None:
+            return self._get_patch_simulated(frame_index, frames_n, movement_simulator)
         else:
-            return self._get_patch_simulated(frame_index, frames_n)
+            return self._get_patch_contiguous(frame_index, frames_n, frames_spacing, randomize_frames)
 
-    def get_patch_random(self, frames_n, frames_spacing, get_patch_random):
-        return self.get_patch(random.randint(0, self.__len__() - 1), frames_n, frames_spacing, get_patch_random)
+    def get_patch_random(self, frames_n, frames_spacing, randomize_frames, movement_simulator):
+        return self.get_patch(
+            random.randint(0, self.__len__() - 1), frames_n, frames_spacing, randomize_frames, movement_simulator
+        )
 
     def _get_patch_contiguous(self, frame_index, frames_n, frames_spacing, randomize_frames):
         assert frames_n % 2 == 1
@@ -148,21 +148,18 @@ class ContentProvider(torch.utils.data.Dataset):
             frames_indexes_after = frame_indexes_candidates_post[1::frames_spacing]
             frames_indexes = frames_indexes_before + [frame_index] + frames_indexes_after
         y, m = self.get_items(frames_indexes)
-        return y, m, (self.items_names[sequence_item], 0)
+        return y, m, self.items_names[sequence_item], torch.zeros((len(frames_indexes), 3, 3)), \
+               torch.zeros((len(frames_indexes), 3, 3))
 
-    def _get_patch_simulated(self, frame_index, frames_n):
-        y, m, info = self.__getitem__(frame_index)
+    def _get_patch_simulated(self, frame_index, frames_n, movement_simulator):
+        y, m, item_name = self.__getitem__(frame_index)
         m = m.unsqueeze(0) if m is not None and len(m.size()) == 2 else m
-        transformation_matrices = None
+        gt_movement, m_movement = None, None
         if y is not None:
-            y, transformation_matrices = self.movement_simulator.simulate_movement(
-                y, frames_n, transformation_matrices
-            )
+            y, gt_movement = movement_simulator.simulate_movement(y, frames_n, gt_movement)
         if m is not None:
-            m, transformation_matrices = self.movement_simulator.simulate_movement(
-                m, frames_n, transformation_matrices
-            )
-        return y, m, (info, transformation_matrices)
+            m, m_movement = movement_simulator.simulate_movement(m, frames_n, gt_movement)
+        return y, m, item_name, gt_movement, m_movement
 
     def _load_data_in_ram(self):
         self._ram_data = {}
@@ -189,6 +186,8 @@ class ContentProvider(torch.utils.data.Dataset):
 class MaskedSequenceDataset(torch.utils.data.Dataset):
     gts_dataset = None
     masks_dataset = None
+    gts_simulator = None
+    masks_simulator = None
     image_size = None
     frames_n = None
     frames_spacing = None
@@ -198,11 +197,16 @@ class MaskedSequenceDataset(torch.utils.data.Dataset):
     force_resize = None
     keep_ratio = None
     fill_color = None
+    p_simulator = None
+    p_repeat = None
 
-    def __init__(self, gts_dataset, masks_dataset, image_size, frames_n, frames_spacing, frames_randomize,
-                 dilatation_filter_size, dilatation_iterations, force_resize, keep_ratio):
+    def __init__(self, gts_dataset, masks_dataset, gts_simulator, masks_simulator, image_size, frames_n, frames_spacing,
+                 frames_randomize, dilatation_filter_size, dilatation_iterations, force_resize, keep_ratio,
+                 p_simulator=0, p_repeat=0):
         self.gts_dataset = gts_dataset
         self.masks_dataset = masks_dataset
+        self.gts_simulator = gts_simulator
+        self.masks_simulator = masks_simulator
         self.image_size = image_size
         self.frames_n = frames_n
         self.frames_spacing = frames_spacing
@@ -211,17 +215,38 @@ class MaskedSequenceDataset(torch.utils.data.Dataset):
         self.keep_ratio = keep_ratio
         self.dilatation_filter_size = dilatation_filter_size
         self.dilatation_iterations = dilatation_iterations
+        self.p_simulator = p_simulator
+        self.p_repeat = p_repeat
         self.fill_color = torch.as_tensor([0.485, 0.456, 0.406], dtype=torch.float32)
+        assert 0 <= self.p_simulator <= 1
 
     def __getitem__(self, item):
-        # Get the data associated to the GT
-        y, m, info = self.gts_dataset.get_sequence(item) if self.frames_n == -1 \
-            else self.gts_dataset.get_patch(item, self.frames_n, self.frames_spacing, self.frames_randomize)
+        # Define if the current item is going to be a real video or a simulated one
+        use_simulator = np.random.choice([False, True], p=[1 - self.p_simulator, self.p_simulator])
+        gts_simulator_item = self.gts_simulator if use_simulator == 1 else None
+        masks_simulator_item = self.masks_simulator if use_simulator == 1 else None
 
-        # If self.gts_dataset and self.masks_dataset are not the same, obtain new mask
-        if self.masks_dataset is not None:
-            masks_n = self.frames_n if self.frames_n != -1 else y.size(1)
-            _, m, _ = self.masks_dataset.get_patch_random(masks_n, self.frames_spacing, False)
+        # Define if the current item should be re-used in further iterations
+        repeat_item = np.random.choice([False, True], p=[1 - self.p_repeat, self.p_repeat])
+
+        # Return entire sequence. Used only in the test.
+        if self.frames_n == -1:
+            y, m, gt_name = self.gts_dataset.get_sequence(item)
+            gt_movement = None
+            m_movement = None
+
+        # Return patches of training data
+        else:
+            y, m, gt_name, gt_movement, m_movement = self.gts_dataset.get_patch(
+                item, self.frames_n, self.frames_spacing, self.frames_randomize, gts_simulator_item
+            )
+
+            # If self.gts_dataset and self.masks_dataset are not the same, obtain new mask
+            if self.masks_dataset is not None:
+                masks_n = self.frames_n if self.frames_n != -1 else y.size(1)
+                _, m, m_name, _, m_movement = self.masks_dataset.get_patch_random(
+                    masks_n, self.frames_spacing, False, masks_simulator_item
+                )
 
         # Apply GT transformations
         if self.force_resize:
@@ -236,7 +261,9 @@ class MaskedSequenceDataset(torch.utils.data.Dataset):
 
         # Compute x
         x = (1 - m) * y + (m.permute(3, 2, 1, 0) * self.fill_color).permute(3, 2, 1, 0)
-        return (x, m), y, info
+
+        # Return data
+        return (x, m), y, (gt_name, use_simulator, repeat_item, gt_movement, m_movement)
 
     def __len__(self):
         return self.gts_dataset.len_sequences() if self.frames_n == -1 else len(self.gts_dataset)
