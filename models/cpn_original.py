@@ -112,13 +112,120 @@ class A_Regressor(nn.Module):
         return theta
 
 
+# Decoder (Paste network)
+class Decoder(nn.Module):
+    def __init__(self):
+        super(Decoder, self).__init__()
+        self.conv4 = Conv2d(257, 257, kernel_size=3, stride=1, padding=1, activation=nn.ReLU())
+        self.conv5_1 = Conv2d(257, 257, kernel_size=3, stride=1, padding=1, activation=nn.ReLU())
+        self.conv5_2 = Conv2d(257, 257, kernel_size=3, stride=1, padding=1, activation=nn.ReLU())
+
+        # dilated convolution blocks
+        self.convA4_1 = Conv2d(257, 257, kernel_size=3, stride=1, padding=2, D=2, activation=nn.ReLU())
+        self.convA4_2 = Conv2d(257, 257, kernel_size=3, stride=1, padding=4, D=4, activation=nn.ReLU())
+        self.convA4_3 = Conv2d(257, 257, kernel_size=3, stride=1, padding=8, D=8, activation=nn.ReLU())
+        self.convA4_4 = Conv2d(257, 257, kernel_size=3, stride=1, padding=16, D=16, activation=nn.ReLU())
+
+        self.conv3c = Conv2d(257, 257, kernel_size=3, stride=1, padding=1, activation=nn.ReLU())  # 4
+        self.conv3b = Conv2d(257, 128, kernel_size=3, stride=1, padding=1, activation=nn.ReLU())  # 4
+        self.conv3a = Conv2d(128, 128, kernel_size=3, stride=1, padding=1, activation=nn.ReLU())  # 4
+        self.conv32 = Conv2d(128, 64, kernel_size=3, stride=1, padding=1, activation=nn.ReLU())  # 2
+        self.conv2 = Conv2d(64, 64, kernel_size=3, stride=1, padding=1, activation=nn.ReLU())  # 2
+        self.conv21 = Conv2d(64, 3, kernel_size=5, stride=1, padding=2, activation=None)  # 1
+
+        self.register_buffer('mean', torch.FloatTensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1))
+        self.register_buffer('std', torch.FloatTensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1))
+
+    def forward(self, x):
+        x = self.conv4(x)
+        x = self.conv5_1(x)
+        x = self.conv5_2(x)
+
+        x = self.convA4_1(x)
+        x = self.convA4_2(x)
+        x = self.convA4_3(x)
+        x = self.convA4_4(x)
+
+        x = self.conv3c(x)
+        x = self.conv3b(x)
+        x = self.conv3a(x)
+        x = F.upsample(x, scale_factor=2, mode='nearest')  # 2
+        x = self.conv32(x)
+        x = self.conv2(x)
+        x = F.upsample(x, scale_factor=2, mode='nearest')  # 2
+        x = self.conv21(x)
+
+        p = (x * self.std) + self.mean
+        return p
+
+
+# Context Matching Module
+class CM_Module(nn.Module):
+    def __init__(self):
+        super(CM_Module, self).__init__()
+
+    def masked_softmax(self, vec, mask, dim):
+        masked_vec = vec * mask.float()
+        max_vec = torch.max(masked_vec, dim=dim, keepdim=True)[0]
+        exps = torch.exp(masked_vec - max_vec)
+        masked_exps = exps * mask.float()
+        masked_sums = masked_exps.sum(dim, keepdim=True)
+        zeros = (masked_sums < 1e-4)
+        masked_sums += zeros.float()
+        return masked_exps / masked_sums
+
+    def forward(self, values, tvmap, rvmaps):
+        B, C, T, H, W = values.size()
+        # t_feat: target feature
+        t_feat = values[:, :, 0]
+        # r_feats: refetence features
+        r_feats = values[:, :, 1:]
+
+        B, Cv, T, H, W = r_feats.size()
+        # vmap: visibility map
+        # tvmap: target visibility map
+        # rvmap: reference visibility map
+        # gs: cosine similarity
+        # c_m: c_match
+        gs_, vmap_ = [], []
+        tvmap_t = (F.upsample(tvmap, size=(H, W), mode='bilinear', align_corners=False) > 0.5).float()
+        for r in range(T):
+            rvmap_t = (F.upsample(rvmaps[:, :, r], size=(H, W), mode='bilinear', align_corners=False) > 0.5).float()
+            # vmap: visibility map
+            vmap = tvmap_t * rvmap_t
+            gs = (vmap * t_feat * r_feats[:, :, r]).sum(-1).sum(-1).sum(-1)
+            # valid sum
+            v_sum = vmap[:, 0].sum(-1).sum(-1)
+            zeros = (v_sum < 1e-4)
+            gs[zeros] = 0
+            v_sum += zeros.float()
+            gs = gs / v_sum / C
+            gs = torch.ones(t_feat.shape).float().cuda() * gs.view(B, 1, 1, 1)
+            gs_.append(gs)
+            vmap_.append(rvmap_t)
+
+        gss = torch.stack(gs_, dim=2)
+        vmaps = torch.stack(vmap_, dim=2)
+
+        # weighted pixelwise masked softmax
+        c_match = self.masked_softmax(gss, vmaps, dim=2)
+        c_out = torch.sum(r_feats * c_match, dim=2)
+
+        # c_mask
+        c_mask = (c_match * vmaps)
+        c_mask = torch.sum(c_mask, 2)
+        c_mask = 1. - (torch.mean(c_mask, 1, keepdim=True))
+
+        return torch.cat([t_feat, c_out, c_mask], dim=1), c_mask
+
+
 class CPNOriginalAligner(nn.Module):
     def __init__(self):
         super(CPNOriginalAligner, self).__init__()
         self.A_Encoder = A_Encoder()  # Align
         self.A_Regressor = A_Regressor()  # output: alignment network
-        self.register_buffer('mean', torch.FloatTensor([0.485, 0.456, 0.406]).view(1,3,1,1))
-        self.register_buffer('mean3d', torch.FloatTensor([0.485, 0.456, 0.406]).view(1,3,1,1,1))
+        self.register_buffer('mean', torch.FloatTensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1))
+        self.register_buffer('mean3d', torch.FloatTensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1, 1))
 
     def encoding(self, frames, holes):
         batch_size, _, num_frames, height, width = frames.size()

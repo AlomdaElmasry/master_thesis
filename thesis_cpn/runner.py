@@ -258,7 +258,7 @@ class ThesisCPNRunner(thesis.runner.ThesisRunner):
         loss_style = self.utils_losses.style(vgg_y, vgg_y_hat_comp, loss_weights[5])
         loss_tv = self.utils_losses.tv(y_hat, loss_weights[6])
         loss_grad = self.utils_losses.grad(y_t, y_hat, 1, reduction, loss_weights[7])
-        loss = loss_alignment + loss_vh + loss_nvh + loss_nh + loss_perceptual + loss_style + loss_tv + loss_grad
+        loss = loss_vh + loss_nvh + loss_nh + loss_perceptual + loss_style + loss_tv + loss_grad
         return loss, [loss_alignment, loss_vh, loss_nvh, loss_nh, loss_perceptual, loss_style, loss_tv, loss_grad]
 
     def _compute_loss_aligner(self, y_t, y_hat, y_hat_comp, x_t, x_aligned, v_map, m, c_mask):
