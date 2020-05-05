@@ -42,7 +42,7 @@ class CPNContextMatching(nn.Module):
             v_sum += v_sum_zeros.float()
 
             # Computer cosine similarity
-            gs = (vmap * c_feats[:, :, 0] * c_feats[:, :, r + 1]).sum(-1).sum(-1).sum(-1) / (1)
+            gs = (vmap * c_feats[:, :, 0] * c_feats[:, :, r + 1]).sum(-1).sum(-1).sum(-1) / (v_sum * c_c)
             gs[v_sum_zeros] = 0
             cos_sim.append(torch.ones((b, c_c, h, w)).to(c_feats.device) * gs.view(b, 1, 1, 1))
 
@@ -55,8 +55,8 @@ class CPNContextMatching(nn.Module):
         c_out = torch.sum(c_feats[:, :, 1:] * c_match, dim=2)
 
         # c_mask
-        c_mask = torch.sum(c_match * vr_map, 2)
-        c_mask = 1 - torch.mean(c_mask, 1, keepdim=True)
+        c_mask = torch.sum(c_match * vr_map, 2)  # The multiplication * vr_map is useless
+        c_mask = 1 - torch.mean(c_mask, 1, keepdim=True)  # Used to reduce the channel dimension.
 
         return torch.cat([c_feats[:, :, 0], c_out, c_mask], dim=1), c_mask
 

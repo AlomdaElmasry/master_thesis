@@ -78,7 +78,7 @@ class ThesisData(skeltorch.Data):
             gts_dataset=gts_datasets[0],
             masks_dataset=masks_datasets[0],
             gts_simulator=utils.movement.MovementSimulator(),
-            masks_simulator=utils.movement.MovementSimulator(),
+            masks_simulator=utils.movement.MovementSimulator(0, 0, 0),
             image_size=tuple(self.experiment.configuration.get('data', 'train_size')),
             frames_n=self.experiment.configuration.get('data', 'frames_n'),
             frames_spacing=self.experiment.configuration.get('data', 'frames_spacing'),

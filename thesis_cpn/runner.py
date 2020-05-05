@@ -7,7 +7,7 @@ import copy
 import utils.measures
 import utils.losses
 import utils.alignment
-
+import matplotlib.pyplot as plt
 
 class ThesisCPNRunner(thesis.runner.ThesisRunner):
     scheduler = None
