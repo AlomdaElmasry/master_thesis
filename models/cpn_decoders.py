@@ -4,10 +4,10 @@ import torch.nn.functional as F
 
 
 class CPNDecoderDefault(nn.Module):
-    def __init__(self, single_frame=False):
+    def __init__(self, in_c=257):
         super(CPNDecoderDefault, self).__init__()
         self.convs = nn.Sequential(
-            nn.Conv2d(128 if single_frame else 257, 257, kernel_size=3, stride=1, padding=1), nn.ReLU(),
+            nn.Conv2d(in_c, 257, kernel_size=3, stride=1, padding=1), nn.ReLU(),
             nn.Conv2d(257, 257, kernel_size=3, stride=1, padding=1), nn.ReLU(),
             nn.Conv2d(257, 257, kernel_size=3, stride=1, padding=1), nn.ReLU(),
             nn.Conv2d(257, 257, kernel_size=3, stride=1, padding=2, dilation=2), nn.ReLU(),

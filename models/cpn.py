@@ -4,61 +4,18 @@ import torch.nn.functional as F
 import models.cpn_alignment
 import models.cpn_encoders
 import models.cpn_decoders
+import models.cpn_matching
 import matplotlib.pyplot as plt
 
 
-class CPNContextMatching(nn.Module):
-    def __init__(self):
-        super(CPNContextMatching, self).__init__()
-
-    def masked_softmax(self, vec, mask, dim):
-        masked_vec = vec * mask.float()
-        max_vec = torch.max(masked_vec, dim=dim, keepdim=True)[0]
-        exps = torch.exp(masked_vec - max_vec)
-        masked_exps = exps * mask.float()
-        masked_sums = masked_exps.sum(dim, keepdim=True)
-        zeros = (masked_sums < 1e-4)
-        masked_sums += zeros.float()
-        return masked_exps / masked_sums
-
-    def forward(self, c_feats, v_t, v_aligned):
-        b, c_c, f, h, w = c_feats.size()
-
-        # Resize the size of the target visibility map
-        v_t = (F.interpolate(v_t, size=(h, w), mode='bilinear', align_corners=False) > 0.5).float()
-
-        # Compute visibility map and cosine similarity for each reference frame
-        cos_sim, vr_map = [], []
-        for r in range(f - 1):
-            # Resize the size of the reference visibilty map
-            v_r = (F.interpolate(v_aligned[:, :, r], size=(h, w), mode='bilinear', align_corners=False) > 0.5).float()
-            vr_map.append(v_r)
-
-            # Computer visibility maps
-            vmap = v_t * v_r
-
-            v_sum = vmap[:, 0].sum(-1).sum(-1)
-            v_sum_zeros = (v_sum < 1e-4)
-            v_sum += v_sum_zeros.float()
-
-            # Computer cosine similarity
-            gs = (vmap * c_feats[:, :, 0] * c_feats[:, :, r + 1]).sum(-1).sum(-1).sum(-1) / (v_sum * c_c)
-            gs[v_sum_zeros] = 0
-            cos_sim.append(torch.ones((b, c_c, h, w)).to(c_feats.device) * gs.view(b, 1, 1, 1))
-
-        # Stack lists into Tensors
-        cos_sim = torch.stack(cos_sim, dim=2)
-        vr_map = torch.stack(vr_map, dim=2)
-
-        # weighted pixelwise masked softmax
-        c_match = self.masked_softmax(cos_sim, vr_map, dim=2)
-        c_out = torch.sum(c_feats[:, :, 1:] * c_match, dim=2)
-
-        # c_mask
-        c_mask = torch.sum(c_match * vr_map, 2)  # The multiplication * vr_map is useless
-        c_mask = 1 - torch.mean(c_mask, 1, keepdim=True)  # Used to reduce the channel dimension.
-
-        return torch.cat([c_feats[:, :, 0], c_out, c_mask], dim=1), c_mask
+def get_n_params(model):
+    pp = 0
+    for p in list(model.parameters()):
+        nn = 1
+        for s in list(p.size()):
+            nn = nn * s
+        pp += nn
+    return pp
 
 
 class CPNet(nn.Module):
@@ -73,23 +30,15 @@ class CPNet(nn.Module):
             self.alignment_encoder = models.cpn_alignment.CPNAlignmentEncoder()
             self.alignment_regressor = models.cpn_alignment.CPNAlignmentRegressor()
         if mode in ['full', 'encdec']:
-            self.context_matching = CPNContextMatching()
+            self.context_matching = models.cpn_matching.CPNContextMatchingComplete()
             self._init_encoder_decoder()
         self.register_buffer('mean', torch.as_tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1, 1))
         self.register_buffer('std', torch.as_tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1, 1))
 
     def _init_encoder_decoder(self, version='cpn'):
+        # decoder_channels = 128 if single_frame else 257
         self.encoder = models.cpn_encoders.CPNEncoderDefault()
-        self.decoder = models.cpn_decoders.CPNDecoderDefault(self.mode == 'encdec')
-
-    def get_n_params(self, model):
-        pp = 0
-        for p in list(model.parameters()):
-            nn = 1
-            for s in list(p.size()):
-                nn = nn * s
-            pp += nn
-        return pp
+        self.decoder = models.cpn_decoders.CPNDecoderDefault(129)
 
     def align(self, x, m, y, t, r_list):
         b, c, f, h, w = x.size()  # B C H W
