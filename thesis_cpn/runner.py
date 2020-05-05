@@ -203,6 +203,9 @@ class ThesisCPNRunner(thesis.runner.ThesisRunner):
                 )
 
     def _test_sequences(self, device):
+        # Set training parameters to the original test dataset
+        self.experiment.data.datasets['test'].frames_n = -1
+
         # Iterate over the set of sequences
         for sequence_index in self.experiment.data.test_sequences_indexes:
             (x, m), y, info = self.experiment.data.datasets['test'][sequence_index]
