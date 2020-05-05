@@ -104,9 +104,12 @@ class ThesisCPNRunner(thesis.runner.ThesisRunner):
 
         # Inpaint individual frames given by self.experiment.data.test_frames_indexes
         self._test_frames(
-            self.experiment.data.datasets['validation'], self.experiment.data.validation_frames_indexes, device
+            self.experiment.data.datasets['validation'], self.experiment.data.validation_frames_indexes, 'validation',
+            device
         )
-        self._test_frames(self.experiment.data.datasets['test'], self.experiment.data.test_frames_indexes, device)
+        self._test_frames(
+            self.experiment.data.datasets['test'], self.experiment.data.test_frames_indexes, 'test', device
+        )
 
         # Inpaint entire sequences given by self.experiment.data.test_sequences_indexes
         if self.experiment.configuration.get('model', 'mode') in ['full'] and \
@@ -145,7 +148,7 @@ class ThesisCPNRunner(thesis.runner.ThesisRunner):
         self.experiment.tbx.add_scalar('test_measures/ssim', np.mean(ssim), global_step=self.counters['epoch'])
         self.experiment.tbx.add_scalar('test_measures/lpips', np.mean(lpips), global_step=self.counters['epoch'])
 
-    def _test_frames(self, samples_dataset, samples_indexes, device):
+    def _test_frames(self, samples_dataset, samples_indexes, label, device):
         # Set training parameters to the original test dataset
         samples_dataset.frames_n = self.experiment.configuration.get('data', 'frames_n')
 
@@ -186,7 +189,8 @@ class ThesisCPNRunner(thesis.runner.ThesisRunner):
             if self.experiment.configuration.get('model', 'mode') in ['full', 'encdec']:
                 test_frames = [x_tbx[b, :, t], y_hat_tbx[b], y_hat_comp_tbx[b], y_tbx[b, :, t]]
                 self.experiment.tbx.add_images(
-                    'test_frames/{}'.format(b + 1), test_frames, global_step=self.counters['epoch'], dataformats='CHW'
+                    '{}_frames/{}'.format(label, b + 1), test_frames, global_step=self.counters['epoch'],
+                    dataformats='CHW'
                 )
             if self.experiment.configuration.get('model', 'mode') in ['full', 'aligner']:
                 test_alignment_x = x_tbx[b].transpose(1, 0, 2, 3)
@@ -195,7 +199,7 @@ class ThesisCPNRunner(thesis.runner.ThesisRunner):
                 )
                 test_alignment = np.concatenate((test_alignment_x, test_alignment_x_aligned), axis=2)
                 self.experiment.tbx.add_images(
-                    'test_alignment/{}'.format(b), test_alignment, global_step=self.counters['epoch']
+                    '{}_alignment/{}'.format(label, b), test_alignment, global_step=self.counters['epoch']
                 )
 
     def _test_sequences(self, device):
