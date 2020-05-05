@@ -15,7 +15,8 @@
     "frames_randomize": true,
     "dilatation_filter_size": [3, 3],
     "dilatation_iterations": 4,
-    "p_simulator": 1,
+    "p_simulator_gts": 1,
+    "p_simulator_masks": 1,
     "p_repeat": 0
   },
   "model": {

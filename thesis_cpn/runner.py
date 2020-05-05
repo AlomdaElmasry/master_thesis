@@ -9,6 +9,7 @@ import utils.losses
 import utils.alignment
 import matplotlib.pyplot as plt
 
+
 class ThesisCPNRunner(thesis.runner.ThesisRunner):
     scheduler = None
     utils_losses = None
@@ -96,22 +97,24 @@ class ThesisCPNRunner(thesis.runner.ThesisRunner):
 
         # Compute objective quality measures
         if self.experiment.configuration.get('model', 'mode') in ['full', 'encdec']:
-            self._test_objective_measures(device)
+            self._test_objective_measures(
+                self.experiment.data.datasets['validation'], self.experiment.data.validation_objective_measures_indexes,
+                device
+            )
 
         # Inpaint individual frames given by self.experiment.data.test_frames_indexes
-        self._test_frames(device)
+        self._test_frames(
+            self.experiment.data.datasets['validation'], self.experiment.data.validation_frames_indexes, device
+        )
+        self._test_frames(self.experiment.data.datasets['test'], self.experiment.data.test_frames_indexes, device)
 
         # Inpaint entire sequences given by self.experiment.data.test_sequences_indexes
         if self.experiment.configuration.get('model', 'mode') in ['full'] and \
                 self.experiment.configuration.get('model', 'trained_aligner') != 'glu-net':
             self._test_sequences(device)
 
-    def _test_objective_measures(self, device):
-        # Create a Subset using self.experiment.data.test_objective_measures_indexes defined frames
-        subset_dataset = torch.utils.data.Subset(
-            self.experiment.data.datasets['validation'],
-            self.experiment.data.test_objective_measures_indexes
-        )
+    def _test_objective_measures(self, samples_dataset, samples_indexes, device):
+        subset_dataset = torch.utils.data.Subset(samples_dataset, samples_indexes)
         loader = torch.utils.data.DataLoader(
             subset_dataset, self.experiment.configuration.get('training', 'batch_size')
         )
@@ -142,13 +145,12 @@ class ThesisCPNRunner(thesis.runner.ThesisRunner):
         self.experiment.tbx.add_scalar('test_measures/ssim', np.mean(ssim), global_step=self.counters['epoch'])
         self.experiment.tbx.add_scalar('test_measures/lpips', np.mean(lpips), global_step=self.counters['epoch'])
 
-    def _test_frames(self, device):
+    def _test_frames(self, samples_dataset, samples_indexes, device):
         # Set training parameters to the original test dataset
-        samples_dataset = copy.deepcopy(self.experiment.data.datasets['test'])
         samples_dataset.frames_n = self.experiment.configuration.get('data', 'frames_n')
 
         # Create a Subset using self.experiment.data.test_frames_indexes defined frames
-        subset_dataset = torch.utils.data.Subset(samples_dataset, self.experiment.data.test_frames_indexes)
+        subset_dataset = torch.utils.data.Subset(samples_dataset, samples_indexes)
         loader = torch.utils.data.DataLoader(
             subset_dataset, self.experiment.configuration.get('training', 'batch_size')
         )
@@ -184,7 +186,7 @@ class ThesisCPNRunner(thesis.runner.ThesisRunner):
             if self.experiment.configuration.get('model', 'mode') in ['full', 'encdec']:
                 test_frames = [x_tbx[b, :, t], y_hat_tbx[b], y_hat_comp_tbx[b], y_tbx[b, :, t]]
                 self.experiment.tbx.add_images(
-                    'test_frames/{}'.format(b), test_frames, global_step=self.counters['epoch'], dataformats='CHW'
+                    'test_frames/{}'.format(b + 1), test_frames, global_step=self.counters['epoch'], dataformats='CHW'
                 )
             if self.experiment.configuration.get('model', 'mode') in ['full', 'aligner']:
                 test_alignment_x = x_tbx[b].transpose(1, 0, 2, 3)
