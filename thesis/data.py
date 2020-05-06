@@ -80,8 +80,8 @@ class ThesisData(skeltorch.Data):
         self.datasets['train'] = MaskedSequenceDataset(
             gts_dataset=gts_datasets[0],
             masks_dataset=masks_datasets[0],
-            gts_simulator=utils.movement.MovementSimulator(0, 0, 0),
-            masks_simulator=utils.movement.MovementSimulator(),
+            gts_simulator=utils.movement.MovementSimulator(),
+            masks_simulator=utils.movement.MovementSimulator(0, 0, 0),
             image_size=tuple(self.experiment.configuration.get('data', 'train_size')),
             frames_n=self.experiment.configuration.get('data', 'frames_n'),
             frames_spacing=self.experiment.configuration.get('data', 'frames_spacing'),
@@ -97,8 +97,8 @@ class ThesisData(skeltorch.Data):
         self.datasets['validation'] = MaskedSequenceDataset(
             gts_dataset=gts_datasets[1],
             masks_dataset=masks_datasets[1],
-            gts_simulator=utils.movement.MovementSimulator(0, 0, 0),
-            masks_simulator=utils.movement.MovementSimulator(),
+            gts_simulator=utils.movement.MovementSimulator(),
+            masks_simulator=utils.movement.MovementSimulator(0, 0, 0),
             image_size=tuple(self.experiment.configuration.get('data', 'train_size')),
             frames_n=self.experiment.configuration.get('data', 'frames_n'),
             frames_spacing=self.experiment.configuration.get('data', 'frames_spacing'),
@@ -127,8 +127,11 @@ class ThesisData(skeltorch.Data):
         )
 
     def _load_datasets_gts(self, data_path):
-        train_gts_dataset = ContentProvider(data_path, self.train_gts_meta, self.logger)
-        validation_gts_dataset = ContentProvider(data_path, self.validation_gts_meta, self.logger,)
+        train_gts_movement_min_height = self.experiment.configuration.get('data', 'train_size')[0] * 2
+        train_gts_dataset = ContentProvider(data_path, self.train_gts_meta, self.logger, train_gts_movement_min_height)
+        validation_gts_dataset = ContentProvider(
+            data_path, self.validation_gts_meta, self.logger, train_gts_movement_min_height
+        )
         test_gts_dataset = ContentProvider(data_path, self.test_meta, self.logger)
         return train_gts_dataset, validation_gts_dataset, test_gts_dataset
 

@@ -10,15 +10,17 @@ import utils.transforms
 class ContentProvider(torch.utils.data.Dataset):
     data_folder = None
     dataset_meta = None
+    gts_movement_min_height = None
     logger = None
     items_names = None
     items_limits = None
     _ram_data = None
 
-    def __init__(self, data_folder, dataset_meta, logger, load_in_ram=False):
+    def __init__(self, data_folder, dataset_meta, logger, gts_movement_min_height=-1, load_in_ram=False):
         self.data_folder = data_folder
         self.dataset_meta = dataset_meta
         self.logger = logger
+        self.gts_movement_min_height = gts_movement_min_height
         self.items_names = list(self.dataset_meta.keys())
         self.items_limits = np.cumsum([
             len(self.dataset_meta[item_name][0]) if self.dataset_meta[item_name][0] is not None
@@ -156,6 +158,9 @@ class ContentProvider(torch.utils.data.Dataset):
         m = m.unsqueeze(0) if m is not None and len(m.size()) == 2 else m
         gt_movement, m_movement = None, None
         if y is not None:
+            if self.gts_movement_min_height != -1 and y.size(1) < self.gts_movement_min_height:
+                y = utils.transforms.ImageTransforms.resize(y.unsqueeze(1), (self.gts_movement_min_height, -1))
+                y = y.squeeze(1)
             y, gt_movement = movement_simulator.simulate_movement(y, frames_n, gt_movement)
         if m is not None:
             m, m_movement = movement_simulator.simulate_movement(m, frames_n, gt_movement)

@@ -27,7 +27,7 @@ class ImageTransforms:
             return F.interpolate(image.transpose(0, 1), size, mode=mode).transpose(0, 1)
 
     @staticmethod
-    def crop(image, size, crop_position=None):
+    def crop(image, size, crop_center=True, crop_position=None):
         """Crop a patch from the image.
 
         Args:
@@ -39,7 +39,9 @@ class ImageTransforms:
         Returns:
             torch.FloatTensor: patch of the image.
         """
-        if crop_position is None:
+        if crop_position is None and crop_center:
+            crop_position = ((image.size(2) - size[0]) // 2, (image.size(3) - size[1]) // 2)
+        elif crop_position is None:
             crop_position = (random.randint(0, image.size(2) - size[0]), random.randint(0, image.size(3) - size[1]))
         return image[:, :, crop_position[0]:crop_position[0] + size[0], crop_position[1]:crop_position[1] + size[1]], \
                crop_position
