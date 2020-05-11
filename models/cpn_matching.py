@@ -34,7 +34,7 @@ def add_match_border(v_t, c_match):
 
 def add_border(x, mask):
     border = ((utils.transforms.ImageTransforms.dilatate(mask.transpose(0, 1).cpu(), (3, 3), 1)
-               .transpose(0, 1) - mask) > 0).float()
+               .transpose(0, 1).to(x.device) - mask) > 0).float()
     b1 = x * (1 - border.unsqueeze(2))
     b2 = border.unsqueeze(2).repeat(1, 3, 1, 1, 1) * torch.tensor([1, 0, 0]).view(1, 3, 1, 1, 1).to(x.device)
     return b1 + b2
