@@ -113,7 +113,6 @@ class ThesisCPNRunner(thesis.runner.ThesisRunner):
             self.experiment.data.datasets['test'], self.experiment.data.test_frames_indexes, 'test', device
         )
 
-
         # Inpaint entire sequences given by self.experiment.data.test_sequences_indexes
         if self.experiment.configuration.get('model', 'mode') in ['full'] and \
                 self.experiment.configuration.get('model', 'trained_aligner') != 'glu-net':
@@ -246,7 +245,7 @@ class ThesisCPNRunner(thesis.runner.ThesisRunner):
 
                     # Replace input_frames and input_masks with previous predictions to improve quality
                     with torch.no_grad():
-                        _, x_copy[:, :, t], _, _ = self.model(x_copy, m_copy, y, t, r_list)
+                        _, x_copy[:, :, t], _, _, _ = self.model(x_copy, m_copy, y, t, r_list)
                         m_copy[:, :, t] = 0
                         y_hat_comp[d, :, t] = x_copy[:, :, t].squeeze(0).detach().cpu().numpy()
 
