@@ -5,6 +5,7 @@ import jpeg4py as jpeg
 import cv2
 import os.path
 import utils.transforms
+import matplotlib.pyplot as plt
 
 
 class ContentProvider(torch.utils.data.Dataset):
@@ -150,7 +151,7 @@ class ContentProvider(torch.utils.data.Dataset):
             frames_indexes_after = frame_indexes_candidates_post[1::frames_spacing]
             frames_indexes = frames_indexes_before + [frame_index] + frames_indexes_after
         y, m = self.get_items(frames_indexes)
-        return y, m, self.items_names[sequence_item], torch.zeros((len(frames_indexes), 3, 3)), \
+        return y, m, self.items_names[sequence_item], frames_indexes, torch.zeros((len(frames_indexes), 3, 3)), \
                torch.zeros((len(frames_indexes), 3, 3))
 
     def _get_patch_simulated(self, frame_index, frames_n, movement_simulator):
@@ -164,7 +165,7 @@ class ContentProvider(torch.utils.data.Dataset):
             y, gt_movement = movement_simulator.simulate_movement(y, frames_n, gt_movement)
         if m is not None:
             m, m_movement = movement_simulator.simulate_movement(m, frames_n, gt_movement)
-        return y, m, item_name, gt_movement, m_movement
+        return y, m, item_name, None, gt_movement, m_movement
 
     def _load_data_in_ram(self):
         self._ram_data = {}
@@ -241,19 +242,20 @@ class MaskedSequenceDataset(torch.utils.data.Dataset):
         # Return entire sequence. Used only in the test.
         if self.frames_n == -1:
             y, m, gt_name = self.gts_dataset.get_sequence(item)
+            gt_indexes = None
             gt_movement = None
             m_movement = None
 
         # Return patches of training data
         else:
-            y, m, gt_name, gt_movement, m_movement = self.gts_dataset.get_patch(
+            y, m, gt_name, gt_indexes, gt_movement, m_movement = self.gts_dataset.get_patch(
                 item, self.frames_n, self.frames_spacing, self.frames_randomize, gts_simulator_item
             )
 
             # If self.gts_dataset and self.masks_dataset are not the same, obtain new mask
             if self.masks_dataset is not None:
                 masks_n = self.frames_n if self.frames_n != -1 else y.size(1)
-                _, m, m_name, _, m_movement = self.masks_dataset.get_patch_random(
+                _, m, m_name, m_indexes, _, m_movement = self.masks_dataset.get_patch_random(
                     masks_n, self.frames_spacing, False, masks_simulator_item
                 )
 
@@ -271,8 +273,12 @@ class MaskedSequenceDataset(torch.utils.data.Dataset):
         # Compute x
         x = (1 - m) * y + (m.permute(3, 2, 1, 0) * self.fill_color).permute(3, 2, 1, 0)
 
+        # Prepare gt_indexes, which represents relative spacing between the frames
+        gt_indexes = ','.join([str(gti - gt_indexes[len(gt_indexes) // 2]) for gti in gt_indexes])
+
         # Return data
-        return (x, m), y, (gt_name, use_simulator_gts, use_simulator_masks, repeat_item, gt_movement, m_movement)
+        return (x, m), y, (gt_name, gt_indexes, use_simulator_gts, use_simulator_masks, repeat_item, gt_movement,
+                           m_movement)
 
     def __len__(self):
         return self.gts_dataset.len_sequences() if self.frames_n == -1 else len(self.gts_dataset)

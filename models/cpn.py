@@ -30,7 +30,7 @@ class CPNet(nn.Module):
             self.alignment_encoder = models.cpn_alignment.CPNAlignmentEncoder()
             self.alignment_regressor = models.cpn_alignment.CPNAlignmentRegressor()
         if mode in ['full', 'encdec']:
-            self.context_matching = models.cpn_matching.CPNContextMatchingDefault()
+            self.context_matching = models.cpn_matching.CPNContextMatchingComplete()
             self._init_encoder_decoder()
         self.register_buffer('mean', torch.as_tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1, 1))
         self.register_buffer('std', torch.as_tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1, 1))
@@ -38,7 +38,7 @@ class CPNet(nn.Module):
     def _init_encoder_decoder(self, version='cpn'):
         # decoder_channels = 128 if single_frame else 257
         self.encoder = models.cpn_encoders.CPNEncoderDefault()
-        self.decoder = models.cpn_decoders.CPNDecoderDefault()
+        self.decoder = models.cpn_decoders.CPNDecoderDefault(129)
 
     def align(self, x, m, y, t, r_list):
         b, c, f, h, w = x.size()  # B C H W
@@ -93,7 +93,7 @@ class CPNet(nn.Module):
             c_feats_mid = [F.avg_pool3d(c_mid, (f_ref + 1, 1, 1)).squeeze(2) for c_mid in c_feats_mid]
 
         # Apply Content-Matching Module
-        p_in, c_mask = self.context_matching(c_feats, 1 - m_t, v_aligned)
+        p_in, c_mask, ref_importance = self.context_matching(c_feats, 1 - m_t, v_aligned, normalize=False)
 
         # Upscale c_mask to match the size of the mask
         c_mask = (F.interpolate(c_mask, size=(h, w), mode='bilinear', align_corners=False)).detach()
@@ -105,7 +105,7 @@ class CPNet(nn.Module):
         y_hat_comp = y_hat * m_t + y_t * (1 - m_t)
 
         # Return everything
-        return y_hat, y_hat_comp, c_mask
+        return y_hat, y_hat_comp, c_mask, ref_importance
 
     def forward(self, x, m, y, t, r_list):
         if self.utils_alignment is None:
@@ -120,18 +120,21 @@ class CPNet(nn.Module):
 
         # Propagate using appropiate mode
         if self.mode == 'full':
-            y_hat, y_hat_comp, c_mask = self.copy_and_paste(x[:, :, t], m[:, :, t], y[:, :, t], x_aligned, v_aligned)
+            y_hat, y_hat_comp, c_mask, ref_importance = self.copy_and_paste(
+                x[:, :, t], m[:, :, t], y[:, :, t], x_aligned, v_aligned
+            )
         elif self.mode == 'encdec':
             c_feats = self.encoder(x[:, :, t], 1 - m[:, :, t])
             y_hat = self.decoder(c_feats)
             y_hat = torch.clamp((y_hat * self.std.squeeze(4)) + self.mean.squeeze(4), 0, 1)
             y_hat_comp = y_hat * m[:, :, t] + y[:, :, t] * (1 - m[:, :, t])
+            ref_importance = None
             return y_hat, y_hat_comp, m.squeeze(2), (x, 1 - m)
         else:
-            y_hat, y_hat_comp, c_mask = None, None, None
+            y_hat, y_hat_comp, c_mask, ref_importance = None, None, None, None
 
         # De-normalize x_aligned, which has been computed using normalized x
         x_aligned = x_aligned * self.std + self.mean if x_aligned is not None else x_aligned
 
         # Return data
-        return y_hat, y_hat_comp, c_mask, (x_aligned, v_aligned)
+        return y_hat, y_hat_comp, c_mask, ref_importance, (x_aligned, v_aligned)

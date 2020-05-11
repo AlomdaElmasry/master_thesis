@@ -76,10 +76,11 @@ class ImageTransforms:
         Returns:
             torch.FloatTensor: dilatated image.
         """
+        images_dilated = torch.zeros(images.size())
         for f in range(images.size(1)):
-            images[:, f] = torch.from_numpy(cv2.dilate(
+            images_dilated[:, f] = torch.from_numpy(cv2.dilate(
                 images[:, f].permute(1, 2, 0).numpy(),
                 cv2.getStructuringElement(cv2.MORPH_CROSS, filter_size),
                 iterations=iterations
             )).unsqueeze(0).float()
-        return images
+        return images_dilated

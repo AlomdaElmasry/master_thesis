@@ -7,7 +7,7 @@ import copy
 import utils.measures
 import utils.losses
 import utils.alignment
-import matplotlib.pyplot as plt
+import utils.draws
 
 
 class ThesisCPNRunner(thesis.runner.ThesisRunner):
@@ -51,6 +51,7 @@ class ThesisCPNRunner(thesis.runner.ThesisRunner):
             self.loss_function = self._compute_loss_encdec
 
     def train_step(self, it_data, device):
+        self.test(None, device)
         # Decompose iteration data
         (x, m), y, info = it_data
 
@@ -60,7 +61,9 @@ class ThesisCPNRunner(thesis.runner.ThesisRunner):
         y = y.to(device)
 
         # Propagate through the model
-        (y_hat, y_hat_comp, c_mask, (x_aligned, v_aligned)), t, r_list = self.train_step_propagate(x, m, y)
+        (y_hat, y_hat_comp, c_mask, _, (x_aligned, v_aligned)), t, r_list = self.train_step_propagate(
+            x, m, y
+        )
 
         # Get visibility map of aligned frames and target frame
         visibility_maps = (1 - m[:, :, t].unsqueeze(2)) * v_aligned
@@ -96,20 +99,23 @@ class ThesisCPNRunner(thesis.runner.ThesisRunner):
         self.model.eval()
 
         # Compute objective quality measures
-        if self.experiment.configuration.get('model', 'mode') in ['full', 'encdec']:
-            self._test_objective_measures(
-                self.experiment.data.datasets['validation'], self.experiment.data.validation_objective_measures_indexes,
-                device
-            )
+        # if self.experiment.configuration.get('model', 'mode') in ['full', 'encdec']:
+        #     self._test_objective_measures(
+        #         self.experiment.data.datasets['validation'], self.experiment.data.validation_objective_measures_indexes,
+        #         device
+        #     )
 
         # Inpaint individual frames given by self.experiment.data.test_frames_indexes
         self._test_frames(
             self.experiment.data.datasets['validation'], self.experiment.data.validation_frames_indexes, 'validation',
             device
         )
+        exit()
+
         self._test_frames(
             self.experiment.data.datasets['test'], self.experiment.data.test_frames_indexes, 'test', device
         )
+
 
         # Inpaint entire sequences given by self.experiment.data.test_sequences_indexes
         if self.experiment.configuration.get('model', 'mode') in ['full'] and \
@@ -135,7 +141,7 @@ class ThesisCPNRunner(thesis.runner.ThesisRunner):
             m = m.to(device)
             y = y.to(device)
             with torch.no_grad():
-                (_, y_hat_comp, _, (_, _)), t, _ = self.train_step_propagate(x, m, y)
+                (_, y_hat_comp, _, _, (_, _)), t, _ = self.train_step_propagate(x, m, y)
                 psnr += self.utils_measures.psnr(y[:, :, t].cpu(), y_hat_comp.cpu())
                 ssim += self.utils_measures.ssim(y[:, :, t].cpu(), y_hat_comp.cpu())
                 lpips += self.utils_measures.lpips(y[:, :, t], y_hat_comp)
@@ -159,16 +165,17 @@ class ThesisCPNRunner(thesis.runner.ThesisRunner):
         )
 
         # Create variables with the images to log inside TensorBoard -> (b,c,h,w)
-        x_tbx, y_tbx, y_hat_tbx, y_hat_comp_tbx, x_aligned_tbx = [], [], [], [], []
+        x_tbx, y_tbx, y_hat_tbx, y_hat_comp_tbx, x_aligned_tbx, x_aligned_match, x_aligned_spacing = [], [], [], [], \
+                                                                                                     [], [], []
 
         # Iterate over the samples
         for it_data in loader:
-            (x, m), y, _ = it_data
+            (x, m), y, info = it_data
             x = x.to(device)
             m = m.to(device)
             y = y.to(device)
             with torch.no_grad():
-                (y_hat, y_hat_comp, _, (x_aligned, _)), t, _ = self.train_step_propagate(x, m, y)
+                (y_hat, y_hat_comp, _, ref_importance, (x_aligned, _)), t, _ = self.train_step_propagate(x, m, y)
             x_tbx.append(x.cpu().numpy())
             if self.experiment.configuration.get('model', 'mode') in ['full', 'encdec']:
                 y_tbx.append(y.cpu().numpy())
@@ -176,12 +183,16 @@ class ThesisCPNRunner(thesis.runner.ThesisRunner):
                 y_hat_comp_tbx.append(y_hat_comp.cpu().numpy())
             if self.experiment.configuration.get('model', 'mode') in ['full', 'aligner']:
                 x_aligned_tbx.append(x_aligned.cpu().numpy())
+            if self.experiment.configuration.get('model', 'mode') in ['full']:
+                x_aligned_match.append(ref_importance.cpu().numpy())
+                x_aligned_spacing.extend(list(info[1]))
 
         # Concatenate the results along dim=0
         x_tbx = np.concatenate(x_tbx) if len(x_tbx) > 0 else x_tbx
         y_tbx = np.concatenate(y_tbx) if len(y_tbx) > 0 else y_tbx
         y_hat_tbx = np.concatenate(y_hat_tbx) if len(y_hat_tbx) > 0 else y_hat_tbx
         y_hat_comp_tbx = np.concatenate(y_hat_comp_tbx) if len(y_hat_comp_tbx) > 0 else y_hat_comp_tbx
+        x_aligned_match = np.concatenate(x_aligned_match) if len(x_aligned_match) > 0 else x_aligned_match
         x_aligned_tbx = np.concatenate(x_aligned_tbx) if len(x_aligned_tbx) > 0 else y_tbx
 
         # Save group image for each sample
@@ -197,7 +208,14 @@ class ThesisCPNRunner(thesis.runner.ThesisRunner):
                 test_alignment_x_aligned = np.insert(
                     x_aligned_tbx[b].transpose(1, 0, 2, 3), x_tbx[b].shape[1] // 2, x_tbx[b, :, t], 0
                 )
-                test_alignment = np.concatenate((test_alignment_x, test_alignment_x_aligned), axis=2)
+                text_alignment_x_aligned_match = x_aligned_match[b].transpose(1, 0, 2, 3)
+                test_alignment_spacing = utils.draws.text_to_image(
+                    ['t = {}'.format(spa) for spa in x_aligned_spacing[b].split(',')], test_alignment_x.shape[3]
+                )
+                test_alignment = np.concatenate(
+                    (test_alignment_x, test_alignment_x_aligned, text_alignment_x_aligned_match, test_alignment_spacing
+                     ), axis=2
+                )
                 self.experiment.tbx.add_images(
                     '{}_alignment/{}'.format(label, b), test_alignment, global_step=self.counters['epoch']
                 )
