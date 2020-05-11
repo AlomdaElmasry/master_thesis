@@ -51,7 +51,6 @@ class ThesisCPNRunner(thesis.runner.ThesisRunner):
             self.loss_function = self._compute_loss_encdec
 
     def train_step(self, it_data, device):
-        self.test(None, device)
         # Decompose iteration data
         (x, m), y, info = it_data
 
@@ -99,19 +98,17 @@ class ThesisCPNRunner(thesis.runner.ThesisRunner):
         self.model.eval()
 
         # Compute objective quality measures
-        # if self.experiment.configuration.get('model', 'mode') in ['full', 'encdec']:
-        #     self._test_objective_measures(
-        #         self.experiment.data.datasets['validation'], self.experiment.data.validation_objective_measures_indexes,
-        #         device
-        #     )
+        if self.experiment.configuration.get('model', 'mode') in ['full', 'encdec']:
+            self._test_objective_measures(
+                self.experiment.data.datasets['validation'], self.experiment.data.validation_objective_measures_indexes,
+                device
+            )
 
         # Inpaint individual frames given by self.experiment.data.test_frames_indexes
         self._test_frames(
             self.experiment.data.datasets['validation'], self.experiment.data.validation_frames_indexes, 'validation',
             device
         )
-        exit()
-
         self._test_frames(
             self.experiment.data.datasets['test'], self.experiment.data.test_frames_indexes, 'test', device
         )

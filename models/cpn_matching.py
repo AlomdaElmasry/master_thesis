@@ -124,7 +124,7 @@ class CPNContextMatchingComplete(nn.Module):
 
         # Weighted pixelwise masked softmax. Use only inside the region of the hole
         c_match = masked_softmax(cos_sim, vr_map, dim=2)
-        c_match *= (1 - v_t_resized).unsqueeze(2).repeat(1, 1, 6, 1, 1)
+        c_match *= (1 - v_t_resized).unsqueeze(2).repeat(1, 1, c_match.size(2), 1, 1)
         c_out = torch.sum(c_feats[:, :, 1:] * c_match, dim=2)
 
         # Lala

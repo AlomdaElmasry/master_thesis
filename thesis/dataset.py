@@ -274,7 +274,10 @@ class MaskedSequenceDataset(torch.utils.data.Dataset):
         x = (1 - m) * y + (m.permute(3, 2, 1, 0) * self.fill_color).permute(3, 2, 1, 0)
 
         # Prepare gt_indexes, which represents relative spacing between the frames
-        gt_indexes = ','.join([str(gti - gt_indexes[len(gt_indexes) // 2]) for gti in gt_indexes])
+        if gt_indexes:
+            gt_indexes = ','.join([str(gti - gt_indexes[len(gt_indexes) // 2]) for gti in gt_indexes])
+        else:
+            gt_indexes = ','.join(['-' for _ in range(self.frames_n)])
 
         # Return data
         return (x, m), y, (gt_name, gt_indexes, use_simulator_gts, use_simulator_masks, repeat_item, gt_movement,
