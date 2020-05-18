@@ -56,6 +56,9 @@ class ThesisAttentionRunner(skeltorch.Runner):
         self.test(None, device)
 
     def test(self, epoch, device):
+        if epoch is not None:
+            self.load_states(epoch, device)
+
         subset_dataset = torch.utils.data.Subset(
             self.experiment.data.datasets['train'], self.experiment.data.validation_frames_indexes
         )
