@@ -34,6 +34,17 @@ class ThesisAttentionRunner(skeltorch.Runner):
         # Propagate both x and m through the model
         attention = self.model(x[:, :, 0], m[:, :, 0], x[:, :, 1], m[:, :, 1])
 
+        plt.imshow(np.concatenate((x[0, :, 0].permute(1, 2, 0), x[0, :, 1].permute(1, 2, 0)), axis=1))
+        plt.show()
+
+        plt.imshow(np.concatenate((m[0, 0, 0], m[0, 0, 1]), axis=1))
+        plt.show()
+
+        plt.imshow(attention_target[0, 0])
+        plt.show()
+        # plt.imshow(np.concatenate((attention[0, 0].detach().numpy(), attention_target[0, 0].numpy()), axis=1))
+        # plt.show()
+
         # Lala
         return F.binary_cross_entropy_with_logits(attention, attention_target)
 
@@ -63,6 +74,8 @@ class ThesisAttentionRunner(skeltorch.Runner):
             attention_target = self.compute_objective_section(m, info[5], info[6])
             with torch.no_grad():
                 attention = self.model(x[:, :, 0], m[:, :, 0], x[:, :, 1], m[:, :, 1])
+                loss = F.binary_cross_entropy_with_logits(attention, attention_target)
+                self.logger.info('Loss {}'.format(loss))
             x_tbx.append(x.cpu().numpy())
             m_tbx.append(m.repeat(1, 3, 1, 1, 1).cpu().numpy())
             attention_tbx.append(attention.repeat(1, 3, 1, 1).cpu().numpy())
