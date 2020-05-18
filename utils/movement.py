@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 
 class MovementSimulator:
 
-    def __init__(self, max_displacement=50, max_scaling=0.05, max_rotation=np.pi / 36):
+    def __init__(self, max_displacement=20, max_scaling=0.05, max_rotation=np.pi / 36):
         self.max_displacement = max_displacement
         self.max_scaling = max_scaling
         self.max_rotation = max_rotation

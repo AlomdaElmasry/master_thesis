@@ -8,6 +8,7 @@ import utils.measures
 import utils.losses
 import utils.alignment
 import utils.draws
+import matplotlib.pyplot as plt
 
 
 class ThesisCPNRunner(thesis.runner.ThesisRunner):
