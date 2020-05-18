@@ -82,7 +82,7 @@ class ThesisAttentionRunner(skeltorch.Runner):
             x_tbx.append(x.cpu().numpy())
             m_tbx.append(m.repeat(1, 3, 1, 1, 1).cpu().numpy())
             attention_tbx.append(attention.repeat(1, 3, 1, 1).cpu().numpy())
-            attention_target_tbx.append(attention_target.repeat(1, 3, 1, 1).cpu().numpy())
+            attention_target_tbx.append(attention_target.repeat(1, 3, 1, 1).round().cpu().numpy())
 
         # Concatenate the results along dim=0
         x_tbx = np.concatenate(x_tbx)
