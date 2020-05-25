@@ -16,7 +16,7 @@ import models.cpn_corr
 class ThesisCorrelationRunner(skeltorch.Runner):
 
     def init_model(self, device):
-        self.model = models.cpn_corr.CPNetMatching()
+        self.model = models.cpn_corr.CPNetMatching().to(device)
 
     def init_optimizer(self, device):
         self.optimizer = torch.optim.Adam(
