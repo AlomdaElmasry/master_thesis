@@ -28,7 +28,7 @@ class CPNEncoderPartialConv(nn.Module):
             models.part_conv.PartialConv2d(4, 64, kernel_size=5, stride=2, padding=2), nn.ReLU(),
             models.part_conv.PartialConv2d(64, 64, kernel_size=3, stride=1, padding=1), nn.ReLU(),
             models.part_conv.PartialConv2d(64, 128, kernel_size=3, stride=2, padding=1), nn.ReLU(),
-            models.part_conv.PartialConv2d(128, 128, kernel_size=3, stride=1, padding=1), nn.ReLU(),
+            models.part_conv.PartialConv2d(128, 128, kernel_size=3, stride=2, padding=1), nn.ReLU(),
             models.part_conv.PartialConv2d(128, 128, kernel_size=3, stride=2, padding=1)
         )
 

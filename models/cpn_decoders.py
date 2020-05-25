@@ -36,7 +36,7 @@ class CPNDecoderDefault(nn.Module):
 class CPNDecoderPartialConv(nn.Module):
     def __init__(self, in_c=128):
         super(CPNDecoderPartialConv, self).__init__()
-        n_filt = 64
+        n_filt = 128
         self.convs = nn.Sequential(
             models.part_conv.PartialConv2d(in_c, n_filt, kernel_size=3, stride=1, padding=1), nn.ReLU(),
             models.part_conv.PartialConv2d(n_filt, n_filt, kernel_size=3, stride=1, padding=1), nn.ReLU(),
@@ -59,7 +59,7 @@ class CPNDecoderPartialConv(nn.Module):
         x = self.convs(x)
         x = F.interpolate(x, scale_factor=4, mode='nearest')
         x = self.convs_2(x)
-        x = F.interpolate(x, scale_factor=2, mode='nearest')
+        x = F.interpolate(x, scale_factor=4, mode='nearest')
         return self.convs_3(x)
 
 

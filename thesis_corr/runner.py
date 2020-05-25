@@ -40,7 +40,7 @@ class ThesisCorrelationRunner(skeltorch.Runner):
         t = x.size(2) // 2
         r_list = list(range(x.size(2)))
         r_list.pop(t)
-        y_hat, y_hat_comp = self.model(x, m, y, t, r_list)
+        y_hat, y_hat_comp, *_ = self.model(x, m, y, t, r_list)
 
         # Compute loss and return
         loss, loss_items = self.loss_function(y[:, :, t], y_hat, y_hat_comp, m[:, :, t])
