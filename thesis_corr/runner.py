@@ -38,5 +38,7 @@ class ThesisCorrelationRunner(skeltorch.Runner):
         r_list.pop(t)
         y_hat, y_hat_comp = self.model(x, m, y, t, r_list)
 
+        print('one step')
+
     def test(self, epoch, device):
         pass
