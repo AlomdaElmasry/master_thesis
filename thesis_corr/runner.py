@@ -53,7 +53,7 @@ class ThesisCorrelationRunner(skeltorch.Runner):
 
     def loss_function(self, y_t, y_hat, y_hat_comp, m_t):
         reduction = 'mean'
-        loss_v = self.utils_losses.masked_l1(y_t, y_hat_comp, 1 - m_t, reduction, 1)
-        loss_nv = self.utils_losses.masked_l1(y_t, y_hat_comp, m_t, reduction, 1)
-        loss = loss_v + loss_nv
-        return loss, [loss_v, loss_nv]
+        loss_h = self.utils_losses.masked_l1(y_t, y_hat, m_t, reduction, 1)
+        loss_nh = self.utils_losses.masked_l1(y_t, y_hat, 1 - m_t, reduction, 1)
+        loss = loss_h + loss_nh
+        return loss, [loss_h, loss_nh]
