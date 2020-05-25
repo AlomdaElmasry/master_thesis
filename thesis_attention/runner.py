@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import skeltorch
 import torch.utils.data
 import numpy as np
+import utils
 
 
 class ThesisAttentionRunner(skeltorch.Runner):
@@ -38,6 +39,24 @@ class ThesisAttentionRunner(skeltorch.Runner):
         return F.binary_cross_entropy_with_logits(attention, attention_target)
 
     def compute_objective_section(self, m, gt_movement, m_movement):
+        # Apply GT transformation to the mask
+        attention_target = []
+        for b in range(m.size(0)):
+            attention_target.append(utils.MovementSimulator.transform_single(m[b, :, 0], gt_movement[b, :, 1]))
+        attention_target = torch.stack(attention_target)
+
+        plt.imshow(m[0, 0, 0])
+        plt.show()
+
+        plt.imshow(m[0, 0, 1])
+        plt.show()
+
+        plt.imshow(attention_target[0, 0])
+        plt.show()
+
+
+        a = 1
+
         return (m[:, 0, 0] - m[:, 0, 1]).clamp(0, 1).unsqueeze(1)
 
     def train_after_epoch_tasks(self, device):
@@ -61,6 +80,12 @@ class ThesisAttentionRunner(skeltorch.Runner):
         # Iterate over the samples
         for it_data in loader:
             (x, m), y, info = it_data
+
+            plt.imshow(x[0, :, 0].permute(1, 2, 0))
+            plt.show()
+
+            exit()
+
             x = x.to(device)
             m = m.to(device)
             attention_target = self.compute_objective_section(m, info[5], info[6])

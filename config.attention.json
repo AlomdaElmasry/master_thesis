@@ -10,7 +10,7 @@
     "validation_split": 0.2,
     "train_size": [256, 256],
     "test_size": [240, 480],
-    "frames_n": 5,
+    "frames_n": 2,
     "frames_spacing": 3,
     "frames_randomize": false,
     "dilatation_filter_size": [3, 3],
@@ -22,10 +22,6 @@
     "p_repeat": 0
   },
   "model": {
-    "mode": "full",
-    "trained_aligner": "cpn",
-    "loss_constant_normalization": true,
-    "loss_lambdas": [2, 100, 100, 6, 1, 500, 0.1, 2]
   },
   "training": {
     "batch_size": 4,

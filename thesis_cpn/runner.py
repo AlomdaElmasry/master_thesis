@@ -61,9 +61,7 @@ class ThesisCPNRunner(thesis.runner.ThesisRunner):
         y = y.to(device)
 
         # Propagate through the model
-        (y_hat, y_hat_comp, c_mask, _, (x_aligned, v_aligned)), t, r_list = self.train_step_propagate(
-            x, m, y
-        )
+        (y_hat, y_hat_comp, c_mask, _, (x_aligned, v_aligned)), t, r_list = self.train_step_propagate(x, m, y)
 
         # Get visibility map of aligned frames and target frame
         visibility_maps = (1 - m[:, :, t].unsqueeze(2)) * v_aligned

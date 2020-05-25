@@ -18,6 +18,10 @@ ENV/
 # Pycharm Project
 .idea/
 
+# Data
+data/
+!data/.gitkeep
+
 # Experiments
 experiments/
 !experiments/.gitkeep

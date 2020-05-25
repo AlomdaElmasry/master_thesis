@@ -20,7 +20,7 @@ class AlignmentUtils:
         assert model_name in self._models_names
         self.model_name = model_name
         self.device = device
-        self.movement_simulator = utils.movement.MovementSimulator()
+        self.movement_simulator = utils.movement.MovementSimulator(0, 0, 0)
         self._models_init_handlers = {'cpn': self._init_cpn, 'glu-net': self._init_glunet}
         self._models_align_handlers = {'cpn': self._align_cpn, 'glu-net': self._align_glunet}
         self._models_init_handlers[model_name](device)

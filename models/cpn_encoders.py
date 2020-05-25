@@ -2,13 +2,13 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import functools
-
+import models.part_conv
 
 class CPNEncoderDefault(nn.Module):
-    def __init__(self):
+    def __init__(self, input_channels=4):
         super(CPNEncoderDefault, self).__init__()
         self.convs = nn.Sequential(
-            nn.Conv2d(4, 64, kernel_size=5, stride=2, padding=2), nn.ReLU(),
+            nn.Conv2d(input_channels, 64, kernel_size=5, stride=2, padding=2), nn.ReLU(),
             nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1), nn.ReLU(),
             nn.Conv2d(64, 128, kernel_size=3, stride=2, padding=1), nn.ReLU(),
             nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1), nn.ReLU(),
@@ -18,6 +18,21 @@ class CPNEncoderDefault(nn.Module):
     def forward(self, x, v):
         # Input size: (b, 3, 256, 256)
         # Output size: (b, 128, 64, 64)
+        return self.convs(torch.cat([x, v], dim=1)), None
+
+
+class CPNEncoderPartialConv(nn.Module):
+    def __init__(self):
+        super(CPNEncoderPartialConv, self).__init__()
+        self.convs = nn.Sequential(
+            models.part_conv.PartialConv2d(4, 64, kernel_size=5, stride=2, padding=2), nn.ReLU(),
+            models.part_conv.PartialConv2d(64, 64, kernel_size=3, stride=1, padding=1), nn.ReLU(),
+            models.part_conv.PartialConv2d(64, 128, kernel_size=3, stride=2, padding=1), nn.ReLU(),
+            models.part_conv.PartialConv2d(128, 128, kernel_size=3, stride=1, padding=1), nn.ReLU(),
+            models.part_conv.PartialConv2d(128, 128, kernel_size=3, stride=1, padding=1)
+        )
+
+    def forward(self, x, v):
         return self.convs(torch.cat([x, v], dim=1)), None
 
 

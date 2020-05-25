@@ -5,17 +5,6 @@ import models.cpn_alignment
 import models.cpn_encoders
 import models.cpn_decoders
 import models.cpn_matching
-import matplotlib.pyplot as plt
-
-
-def get_n_params(model):
-    pp = 0
-    for p in list(model.parameters()):
-        nn = 1
-        for s in list(p.size()):
-            nn = nn * s
-        pp += nn
-    return pp
 
 
 class CPNet(nn.Module):
@@ -30,7 +19,7 @@ class CPNet(nn.Module):
             self.alignment_encoder = models.cpn_alignment.CPNAlignmentEncoder()
             self.alignment_regressor = models.cpn_alignment.CPNAlignmentRegressor()
         if mode in ['full', 'encdec']:
-            self.context_matching = models.cpn_matching.CPNContextMatchingComplete()
+            self.context_matching = models.cpn_matching.CorrelationMatrix()
             self._init_encoder_decoder()
         self.register_buffer('mean', torch.as_tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1, 1))
         self.register_buffer('std', torch.as_tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1, 1))
@@ -38,7 +27,7 @@ class CPNet(nn.Module):
     def _init_encoder_decoder(self, version='cpn'):
         # decoder_channels = 128 if single_frame else 257
         self.encoder = models.cpn_encoders.CPNEncoderDefault()
-        self.decoder = models.cpn_decoders.CPNDecoderDefault(129)
+        self.decoder = models.cpn_decoders.CPNDecoderDefault()
 
     def align(self, x, m, y, t, r_list):
         b, c, f, h, w = x.size()  # B C H W

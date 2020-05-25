@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 
 class MovementSimulator:
 
-    def __init__(self, max_displacement=20, max_scaling=0.05, max_rotation=np.pi / 36):
+    def __init__(self, max_displacement, max_scaling, max_rotation):
         self.max_displacement = max_displacement
         self.max_scaling = max_scaling
         self.max_rotation = max_rotation
@@ -15,9 +15,6 @@ class MovementSimulator:
     def random_affine(self):
         tx, ty = np.random.randint(low=-self.max_displacement, high=self.max_displacement,
                                    size=2) if self.max_displacement > 0 else (0, 0)
-        if self.max_displacement == 50:
-            tx = 50
-            ty = 0
         sx, sy = np.random.uniform(low=1 - self.max_scaling, high=1 + self.max_scaling, size=2)
         rot = np.random.uniform(low=-self.max_rotation, high=self.max_rotation)
         affine_matrix = AffineTransform(translation=(tx, ty), scale=(sx, sy), rotation=rot).params
@@ -43,7 +40,7 @@ class MovementSimulator:
         """
         c, h, w = data_in.size()
 
-        # Create a Tensor with n affine transformations
+        # Create a Tensor with n affine transformations. random_affine \in (n_frames, 3, 3)
         if random_affines is None:
             random_affines = [self.random_affine() for _ in range(n - 1)]
             random_affines = random_affines[:(n - 1) // 2] + [self.empty_affine()] + random_affines[(n - 1) // 2:]
@@ -59,6 +56,13 @@ class MovementSimulator:
 
         # Return both data_out and random_thetas_stacked
         return data_out.permute(1, 0, 2, 3), random_affines
+
+    @staticmethod
+    def transform_single(image, transformation_affine):
+        c, h, w = image.size()
+        transformation_theta = MovementSimulator.affine2theta(transformation_affine, h, w).unsqueeze(0)
+        affine_grid = F.affine_grid(transformation_theta, [1, c, h, w])
+        return F.grid_sample(image.unsqueeze(0), affine_grid).squeeze(0)
 
     @staticmethod
     def stack_transformations(affine_matrices, t):
