@@ -30,7 +30,7 @@ class CorrelationMatrix(nn.Module):
 
         # Compute the correlation with target frame.
         # corr is (b, t, h, w, h, w)
-        corr_1 = feats_t.reshape(b, c, -1).transpose(-1, -2)
+        corr_1 = feats_t.reshape(b, c, -1).transpose(-1, -2).unsqueeze(1)
         corr_2 = feats_ref.reshape(b, c, ref_n, -1).permute(0, 2, 1, 3)
         corr = torch.matmul(corr_1, corr_2).reshape(b, ref_n, h, w, h, w)
 
