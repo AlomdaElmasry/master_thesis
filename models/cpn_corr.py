@@ -52,7 +52,7 @@ class CPNetMatching(nn.Module):
         super(CPNetMatching, self).__init__()
         self.encoder = models.cpn_encoders.CPNEncoderPartialConv()
         self.context_matching = CorrelationMatrix()
-        self.decoder = models.cpn_decoders.CPNDecoderDefault(in_c=128)
+        self.decoder = models.cpn_decoders.CPNDecoderPartialConv(in_c=128)
         self.register_buffer('mean', torch.as_tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1, 1))
         self.register_buffer('std', torch.as_tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1, 1))
 

@@ -29,7 +29,7 @@ class CPNEncoderPartialConv(nn.Module):
             models.part_conv.PartialConv2d(64, 64, kernel_size=3, stride=1, padding=1), nn.ReLU(),
             models.part_conv.PartialConv2d(64, 128, kernel_size=3, stride=2, padding=1), nn.ReLU(),
             models.part_conv.PartialConv2d(128, 128, kernel_size=3, stride=1, padding=1), nn.ReLU(),
-            models.part_conv.PartialConv2d(128, 128, kernel_size=3, stride=1, padding=1)
+            models.part_conv.PartialConv2d(128, 128, kernel_size=3, stride=2, padding=1)
         )
 
     def forward(self, x, v):
