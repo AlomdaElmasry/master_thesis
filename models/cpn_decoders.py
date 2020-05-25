@@ -36,23 +36,24 @@ class CPNDecoderDefault(nn.Module):
 class CPNDecoderPartialConv(nn.Module):
     def __init__(self, in_c=128):
         super(CPNDecoderPartialConv, self).__init__()
+        n_filt = 64
         self.convs = nn.Sequential(
-            models.part_conv.PartialConv2d(in_c, 128, kernel_size=3, stride=1, padding=1), nn.ReLU(),
-            models.part_conv.PartialConv2d(128, 128, kernel_size=3, stride=1, padding=1), nn.ReLU(),
-            models.part_conv.PartialConv2d(128, 128, kernel_size=3, stride=1, padding=1), nn.ReLU(),
-            models.part_conv.PartialConv2d(128, 128, kernel_size=3, stride=1, padding=2, dilation=2), nn.ReLU(),
-            models.part_conv.PartialConv2d(128, 128, kernel_size=3, stride=1, padding=4, dilation=4), nn.ReLU(),
-            models.part_conv.PartialConv2d(128, 128, kernel_size=3, stride=1, padding=8, dilation=8), nn.ReLU(),
-            models.part_conv.PartialConv2d(128, 128, kernel_size=3, stride=1, padding=16, dilation=16), nn.ReLU(),
-            models.part_conv.PartialConv2d(128, 128, kernel_size=3, stride=1, padding=1), nn.ReLU(),
-            models.part_conv.PartialConv2d(128, 64, kernel_size=3, stride=1, padding=1), nn.ReLU(),
-            models.part_conv.PartialConv2d(64, 64, kernel_size=3, stride=1, padding=1), nn.ReLU()
+            models.part_conv.PartialConv2d(in_c, n_filt, kernel_size=3, stride=1, padding=1), nn.ReLU(),
+            models.part_conv.PartialConv2d(n_filt, n_filt, kernel_size=3, stride=1, padding=1), nn.ReLU(),
+            models.part_conv.PartialConv2d(n_filt, n_filt, kernel_size=3, stride=1, padding=1), nn.ReLU(),
+            models.part_conv.PartialConv2d(n_filt, n_filt, kernel_size=3, stride=1, padding=2, dilation=2), nn.ReLU(),
+            models.part_conv.PartialConv2d(n_filt, n_filt, kernel_size=3, stride=1, padding=4, dilation=4), nn.ReLU(),
+            models.part_conv.PartialConv2d(n_filt, n_filt, kernel_size=3, stride=1, padding=8, dilation=8), nn.ReLU(),
+            models.part_conv.PartialConv2d(n_filt, n_filt, kernel_size=3, stride=1, padding=16, dilation=16), nn.ReLU(),
+            models.part_conv.PartialConv2d(n_filt, n_filt, kernel_size=3, stride=1, padding=1), nn.ReLU(),
+            models.part_conv.PartialConv2d(n_filt, n_filt // 2, kernel_size=3, stride=1, padding=1), nn.ReLU(),
+            models.part_conv.PartialConv2d(n_filt // 2, n_filt // 2, kernel_size=3, stride=1, padding=1), nn.ReLU()
         )
         self.convs_2 = nn.Sequential(
-            models.part_conv.PartialConv2d(64, 64, kernel_size=3, stride=1, padding=1), nn.ReLU(),
-            models.part_conv.PartialConv2d(64, 64, kernel_size=3, stride=1, padding=1), nn.ReLU()
+            models.part_conv.PartialConv2d(n_filt // 2, n_filt // 2, kernel_size=3, stride=1, padding=1), nn.ReLU(),
+            models.part_conv.PartialConv2d(n_filt // 2, n_filt // 2, kernel_size=3, stride=1, padding=1), nn.ReLU()
         )
-        self.convs_3 = models.part_conv.PartialConv2d(64, 3, kernel_size=5, stride=1, padding=2)
+        self.convs_3 = models.part_conv.PartialConv2d(n_filt // 2, 3, kernel_size=5, stride=1, padding=2)
 
     def forward(self, x, c_feats_mid):
         x = self.convs(x)
