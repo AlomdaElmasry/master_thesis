@@ -28,7 +28,6 @@ class ThesisCorrelationRunner(skeltorch.Runner):
         self.utils_losses = utils.losses.LossesUtils(device)
 
     def train_step(self, it_data, device):
-        self.test(None, device)
         # Decompose iteration data
         (x, m), y, info = it_data
 
