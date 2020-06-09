@@ -54,7 +54,7 @@ class Softmax3d(torch.nn.Module):
 
 class CorrelationVGG(nn.Module):
 
-    def __init__(self, target_size=16):
+    def __init__(self, device, target_size=16):
         super(CorrelationVGG, self).__init__()
         self.target_size = target_size
         self.model_vgg = models.vgg_16.get_pretrained_model(device)
