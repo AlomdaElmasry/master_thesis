@@ -133,7 +133,7 @@ class CPNetMatching(nn.Module):
         # feats = torch.matmul(c1, c2).reshape(b, c, h, w)
 
         # Mix the features using corr as weight
-        decoder_input = torch.zeros((b, feats.size(1), feats.size(3), feats.size(4)))
+        decoder_input = torch.zeros((b, feats.size(1), feats.size(3), feats.size(4))).to(x.device)
         for i in range(corr.size(2)):
             for j in range(corr.size(3)):
                 pixel_corr = F.interpolate(corr[:, :, i, j], size=(feats.size(3), feats.size(4))).unsqueeze(1)
