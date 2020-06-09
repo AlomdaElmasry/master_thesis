@@ -260,8 +260,8 @@ class MaskedSequenceDataset(torch.utils.data.Dataset):
                 )
 
         # Apply GT transformations
-        if self.force_resize:
-            y = utils.transforms.ImageTransforms.resize(y, self.image_size, keep_ratio=self.keep_ratio)
+        if not self.force_resize:
+            y = utils.transforms.ImageTransforms.resize(y, self.image_size, keep_ratio=False)
         else:
             y, _ = utils.transforms.ImageTransforms.crop(y, self.image_size)
 

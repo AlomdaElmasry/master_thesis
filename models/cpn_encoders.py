@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import functools
 import models.part_conv
 
+
 class CPNEncoderDefault(nn.Module):
     def __init__(self, input_channels=4):
         super(CPNEncoderDefault, self).__init__()

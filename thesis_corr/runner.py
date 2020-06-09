@@ -11,13 +11,13 @@ import utils.draws
 import matplotlib.pyplot as plt
 import skeltorch
 import utils.losses
-import models.cpn_corr
+import models.corr
 
 
 class ThesisCorrelationRunner(skeltorch.Runner):
 
     def init_model(self, device):
-        self.model = models.cpn_corr.CPNetMatching().to(device)
+        self.model = models.corr.CPNetMatching().to(device)
 
     def init_optimizer(self, device):
         self.optimizer = torch.optim.Adam(

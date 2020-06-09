@@ -1,11 +1,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import matplotlib.pyplot as plt
 import utils.transforms
 import matplotlib.pyplot as plt
-import models.softmax3d
-import models.test
 
 
 def masked_softmax(vec, mask, dim):
@@ -151,54 +148,54 @@ class CPNContextMatchingComplete(nn.Module):
         return torch.cat([decoder_input, c_mask], dim=1), c_mask, ref_importance
 
 
-class CorrelationMatrix(nn.Module):
-
-    def __init__(self):
-        super(CorrelationMatrix, self).__init__()
-        self.conv = models.test.SeparableConv4d()
-        self.softmax = models.softmax3d.Softmax3d()
-
-    def forward(self, c_feats, v_t, v_aligned, normalize=True):
-        b, c, f, h, w = c_feats.size()
-
-        # Resize v_t and v_aligned to be h x w
-        v_t = F.interpolate(v_t, size=(h, w), mode='nearest')
-        v_aligned = F.interpolate(
-            v_aligned.transpose(1, 2).reshape(-1, 1, v_aligned.size(3), v_aligned.size(4)), size=(h, w), mode='nearest'
-        ).reshape(b, f - 1, 1, h, w).transpose(1, 2)
-
-        # Mask the features
-        c_feats[:, :, 0] = c_feats[:, :, 0] * v_t
-        c_feats[:, :, 1:] = c_feats[:, :, 1:] * v_aligned
-
-        # Compute the correlation with target frame. Mask references first (v_aligned).
-        # The features of the target frame are at c_feats[b,c,0]
-        # corr is (b, t, h, w, h, w)
-        corr_1 = c_feats[:, :, 0].reshape(b, c, -1).transpose(-1, -2)
-        corr_2 = c_feats[:, :, 1:].reshape(b, c, f - 1, -1).permute(0, 2, 1, 3)
-        corr = torch.matmul(corr_1, corr_2).reshape(b, f - 1, h, w, h, w)
-
-        # Fill holes in the correlation matrix using a NN
-        corr = self.conv(corr)
-
-        # Compute the softmax over each pixel (b, t, h, w, h, w)
-        corr = self.softmax(corr)
-
-        # Verify that the implementation of Softmax is correct. Sum over b=0, h=0, w=0
-        # sum_pixelwise = torch.sum(corr[0, :, 0, 0])  # Output: 1.0000
-
-        # Expand c_feats to be (b, c, t, h, w, h, w)
-        c1 = c_feats[:, :, 1:].permute(0, 1, 3, 4, 2).reshape(b, c, h * w * (f - 1)).unsqueeze(3).permute(0, 1, 3, 2)
-        c2 = corr.permute(0, 2, 3, 4, 5, 1).reshape(b, h * w, h * w * (f - 1)).permute(0, 2, 1).unsqueeze(1)
-        decoder_input = torch.matmul(c1, c2).reshape(b, c, h, w)
-
-        # Combine the features using corr to get the input of the decoder
-        # decoder_input = torch.zeros((b, c, h, w))
-        # for i in range(h):
-        #     for j in range(w):
-        #         decoder_input[:, :, i, j] = torch.sum(
-        #             c_feats[:, :, 1:] * corr[:, :, i, j].unsqueeze(1), dim=(2, 3, 4)
-        #         )
-
-        # Return decoder_input (b, c, h, w)
-        return decoder_input
+# class CorrelationMatrix(nn.Module):
+#
+#     def __init__(self):
+#         super(CorrelationMatrix, self).__init__()
+#         self.conv = models.test.SeparableConv4d()
+#         self.softmax = models.softmax3d.Softmax3d()
+#
+#     def forward(self, c_feats, v_t, v_aligned, normalize=True):
+#         b, c, f, h, w = c_feats.size()
+#
+#         # Resize v_t and v_aligned to be h x w
+#         v_t = F.interpolate(v_t, size=(h, w), mode='nearest')
+#         v_aligned = F.interpolate(
+#             v_aligned.transpose(1, 2).reshape(-1, 1, v_aligned.size(3), v_aligned.size(4)), size=(h, w), mode='nearest'
+#         ).reshape(b, f - 1, 1, h, w).transpose(1, 2)
+#
+#         # Mask the features
+#         c_feats[:, :, 0] = c_feats[:, :, 0] * v_t
+#         c_feats[:, :, 1:] = c_feats[:, :, 1:] * v_aligned
+#
+#         # Compute the correlation with target frame. Mask references first (v_aligned).
+#         # The features of the target frame are at c_feats[b,c,0]
+#         # corr is (b, t, h, w, h, w)
+#         corr_1 = c_feats[:, :, 0].reshape(b, c, -1).transpose(-1, -2)
+#         corr_2 = c_feats[:, :, 1:].reshape(b, c, f - 1, -1).permute(0, 2, 1, 3)
+#         corr = torch.matmul(corr_1, corr_2).reshape(b, f - 1, h, w, h, w)
+#
+#         # Fill holes in the correlation matrix using a NN
+#         corr = self.conv(corr)
+#
+#         # Compute the softmax over each pixel (b, t, h, w, h, w)
+#         corr = self.softmax(corr)
+#
+#         # Verify that the implementation of Softmax is correct. Sum over b=0, h=0, w=0
+#         # sum_pixelwise = torch.sum(corr[0, :, 0, 0])  # Output: 1.0000
+#
+#         # Expand c_feats to be (b, c, t, h, w, h, w)
+#         c1 = c_feats[:, :, 1:].permute(0, 1, 3, 4, 2).reshape(b, c, h * w * (f - 1)).unsqueeze(3).permute(0, 1, 3, 2)
+#         c2 = corr.permute(0, 2, 3, 4, 5, 1).reshape(b, h * w, h * w * (f - 1)).permute(0, 2, 1).unsqueeze(1)
+#         decoder_input = torch.matmul(c1, c2).reshape(b, c, h, w)
+#
+#         # Combine the features using corr to get the input of the decoder
+#         # decoder_input = torch.zeros((b, c, h, w))
+#         # for i in range(h):
+#         #     for j in range(w):
+#         #         decoder_input[:, :, i, j] = torch.sum(
+#         #             c_feats[:, :, 1:] * corr[:, :, i, j].unsqueeze(1), dim=(2, 3, 4)
+#         #         )
+#
+#         # Return decoder_input (b, c, h, w)
+#         return decoder_input

@@ -13,3 +13,4 @@ torchvision
 progressbar2
 skeltorch==1.1.0b2
 jpeg4py
+tqdm
