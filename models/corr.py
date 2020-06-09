@@ -57,7 +57,7 @@ class CorrelationVGG(nn.Module):
     def __init__(self, target_size=16):
         super(CorrelationVGG, self).__init__()
         self.target_size = target_size
-        self.model_vgg = models.vgg_16.get_pretrained_model('cpu')
+        self.model_vgg = models.vgg_16.get_pretrained_model(device)
         self.conv = SeparableConv4d()
         self.softmax = Softmax3d()
 
@@ -103,10 +103,10 @@ class CorrelationVGG(nn.Module):
 
 class CPNetMatching(nn.Module):
 
-    def __init__(self):
+    def __init__(self, device):
         super(CPNetMatching, self).__init__()
         self.encoder = models.cpn_encoders.CPNEncoderDefault()
-        self.correlation = CorrelationVGG()
+        self.correlation = CorrelationVGG(device)
         self.decoder = models.cpn_decoders.CPNDecoderDefault(in_c=256)
         self.register_buffer('mean', torch.as_tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1, 1))
         self.register_buffer('std', torch.as_tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1, 1))
