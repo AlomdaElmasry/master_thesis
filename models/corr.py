@@ -65,7 +65,8 @@ class CorrelationVGG(nn.Module):
         b, c, ref_n, h, w = x.size()
 
         # Get the features of the frames from VGG
-        x_vgg_feats = self.model_vgg(x.transpose(1, 2).reshape(b * ref_n, c, h, w))
+        with torch.no_grad():
+            x_vgg_feats = self.model_vgg(x.transpose(1, 2).reshape(b * ref_n, c, h, w))
         x_vgg_feats = x_vgg_feats[3].reshape(b, ref_n, -1, 16, 16).transpose(1, 2)
 
         # Update the parameters to the VGG features
