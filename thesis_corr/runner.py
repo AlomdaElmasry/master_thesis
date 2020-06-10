@@ -3,21 +3,22 @@ import numpy as np
 import thesis.runner
 import models.cpn
 import torch.utils.data
-import copy
 import utils.measures
 import utils.losses
 import utils.alignment
 import utils.draws
-import matplotlib.pyplot as plt
-import skeltorch
 import utils.losses
 import models.corr
 
 
-class ThesisCorrelationRunner(skeltorch.Runner):
+class ThesisCorrelationRunner(thesis.runner.ThesisRunner):
+    scheduler = None
+    utils_losses = None
+    utils_measures = None
+    losses_items_ids = None
 
     def init_model(self, device):
-        self.model = models.corr.CPNetMatching(device).to(device)
+        self.model = models.corr.CorrelationModel(device).to(device)
 
     def init_optimizer(self, device):
         self.optimizer = torch.optim.Adam(
@@ -25,7 +26,15 @@ class ThesisCorrelationRunner(skeltorch.Runner):
         )
 
     def init_others(self, device):
+        self.scheduler = torch.optim.lr_scheduler.StepLR(
+            self.optimizer,
+            step_size=self.experiment.configuration.get('training', 'lr_scheduler_step_size'),
+            gamma=self.experiment.configuration.get('training', 'lr_scheduler_gamma')
+        )
         self.utils_losses = utils.losses.LossesUtils(device)
+        self.utils_losses.init_vgg(device)
+        self.losses_items_ids = ['h', 'nh', 'perceptual']
+        super().init_others(device)
 
     def train_step(self, it_data, device):
         # Decompose iteration data
@@ -45,8 +54,16 @@ class ThesisCorrelationRunner(skeltorch.Runner):
         # Compute loss and return
         loss, loss_items = self.loss_function(y[:, :, t], y_hat, y_hat_comp, m[:, :, t])
 
+        # Append loss items to epoch dictionary
+        e_losses_items = self.e_train_losses_items if self.model.training else self.e_validation_losses_items
+        for i, loss_item in enumerate(self.losses_items_ids):
+            e_losses_items[loss_item].append(loss_items[i].item())
+
         # Return the total loss
         return loss
+
+    def train_after_epoch_tasks(self, device):
+        self.test(None, device)
 
     def test(self, epoch, device):
         # Load state if epoch is set
@@ -56,14 +73,16 @@ class ThesisCorrelationRunner(skeltorch.Runner):
         # Set model in evaluation mode
         self.model.eval()
 
-        # Inpaint individual frames given by self.experiment.data.test_frames_indexes
+        # Test frames from the validation split
         self._test_frames(
             self.experiment.data.datasets['validation'], self.experiment.data.validation_frames_indexes, 'validation',
             device
         )
-        self._test_frames(
-            self.experiment.data.datasets['test'], self.experiment.data.test_frames_indexes, 'test', device
-        )
+
+        # Test frames from the test split
+        # self._test_frames(
+        #     self.experiment.data.datasets['test'], self.experiment.data.test_frames_indexes, 'test', device
+        # )
 
     def _test_frames(self, samples_dataset, samples_indexes, label, device):
         # Set training parameters to the original test dataset
@@ -111,7 +130,9 @@ class ThesisCorrelationRunner(skeltorch.Runner):
 
     def loss_function(self, y_t, y_hat, y_hat_comp, m_t):
         reduction = 'mean'
-        loss_h = self.utils_losses.masked_l1(y_t, y_hat, m_t, reduction, 1)
-        loss_nh = self.utils_losses.masked_l1(y_t, y_hat, 1 - m_t, reduction, 1)
-        loss = loss_h + loss_nh
-        return loss, [loss_h, loss_nh]
+        loss_weights = self.experiment.configuration.get('model', 'loss_lambdas')
+        loss_h = self.utils_losses.masked_l1(y_t, y_hat, m_t, reduction, loss_weights[0])
+        loss_nh = self.utils_losses.masked_l1(y_t, y_hat, 1 - m_t, reduction, loss_weights[1])
+        loss_perceptual, vgg_y, vgg_y_hat_comp = self.utils_losses.perceptual(y_t, y_hat_comp, 1)
+        loss = loss_h + loss_nh + loss_perceptual
+        return loss, [loss_h, loss_nh, loss_perceptual]

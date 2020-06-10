@@ -7,13 +7,18 @@ import models.vgg_16
 
 
 class SeparableConv4d(nn.Module):
-    def __init__(self, kernel_size=3, input_dim=1, inter_dim=7, output_dim=1, bias=True, padding=None):
+    def __init__(self, kernel_size=3, input_dim=1, inter_dim=128, output_dim=1, bias=True, padding=None):
         super().__init__()
         kernel_size = (kernel_size, kernel_size) if isinstance(kernel_size, int) else kernel_size
         self.weight1 = nn.Parameter(torch.zeros(inter_dim, input_dim, *kernel_size), requires_grad=True)
         self.weight2 = nn.Parameter(torch.zeros(output_dim, inter_dim, *kernel_size), requires_grad=True)
         self.bias = nn.Parameter(torch.zeros(output_dim), requires_grad=True) if bias else None
         self.padding = [k // 2 for k in kernel_size] if padding is None else padding
+        self._init_weights()
+
+    def _init_weights(self):
+        nn.init.xavier_uniform_(self.weight1)
+        nn.init.xavier_uniform_(self.weight2)
 
     def forward(self, x):
         x = x.unsqueeze(4)
@@ -102,10 +107,10 @@ class CorrelationVGG(nn.Module):
         return self.softmax(corr)
 
 
-class CPNetMatching(nn.Module):
+class CorrelationModel(nn.Module):
 
     def __init__(self, device):
-        super(CPNetMatching, self).__init__()
+        super(CorrelationModel, self).__init__()
         self.encoder = models.cpn_encoders.CPNEncoderDefault()
         self.correlation = CorrelationVGG(device)
         self.decoder = models.cpn_decoders.CPNDecoderDefault(in_c=256)
