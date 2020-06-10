@@ -141,7 +141,7 @@ class CorrelationModel(nn.Module):
         decoder_input = torch.zeros((b, feats.size(1), feats.size(3), feats.size(4))).to(x.device)
         for i in range(corr.size(2)):
             for j in range(corr.size(3)):
-                pixel_corr = F.interpolate(corr[:, :, i, j], size=(feats.size(3), feats.size(4))).unsqueeze(1)
+                pixel_corr = F.interpolate(corr[:, :, i, j], size=(feats.size(3), feats.size(4))).unsqueeze(1) / 4**2
                 pixel_feats = torch.sum(feats[:, :, r_list] * pixel_corr, dim=(2, 3, 4)).view(b, feats.size(1), 1, 1)
                 decoder_input[:, :, 4 * i:4 * i + 4, 4 * j:4 * j + 4] = pixel_feats.repeat(1, 1, 4, 4)
 
