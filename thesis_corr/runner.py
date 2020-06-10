@@ -38,9 +38,6 @@ class ThesisCorrelationRunner(thesis.runner.ThesisRunner):
         super().init_others(device)
 
     def train_step(self, it_data, device):
-        self.test(None, device)
-        self.experiment.tbx.flush()
-        exit()
         # Decompose iteration data
         (x, m), y, info = it_data
 
@@ -114,7 +111,6 @@ class ThesisCorrelationRunner(thesis.runner.ThesisRunner):
             y_hat_tbx.append(y_hat.cpu().numpy())
             y_hat_comp_tbx.append(y_hat_comp.cpu().numpy())
             corr_tbx.append(corr.cpu().numpy())
-            break
 
         # Concatenate the results along dim=0
         x_tbx = np.concatenate(x_tbx) if len(x_tbx) > 0 else x_tbx
@@ -146,6 +142,9 @@ class ThesisCorrelationRunner(thesis.runner.ThesisRunner):
         self.experiment.tbx.add_histogram(
             '{}_corr_bins'.format(label), corr_tbx, global_step=self.counters['epoch'] + 1
         )
+
+        # Flush changes
+        self.experiment.tbx.flush()
 
     def loss_function(self, y_t, y_hat, y_hat_comp, m_t):
         reduction = 'mean'
