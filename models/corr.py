@@ -17,8 +17,8 @@ class SeparableConv4d(nn.Module):
         self._init_weights()
 
     def _init_weights(self):
-        nn.init.xavier_uniform_(self.weight1)
-        nn.init.xavier_uniform_(self.weight2)
+        nn.init.normal_(self.weight1, mean=1)
+        nn.init.normal_(self.weight2, mean=1)
 
     def forward(self, x):
         x = x.unsqueeze(4)
@@ -61,8 +61,7 @@ class CorrelationVGG(nn.Module):
 
     def __init__(self, device, target_size=16):
         super(CorrelationVGG, self).__init__()
-        self.target_size = target_size
-        self.model_vgg = models.vgg_16.get_pretrained_model(device)
+        self.model_vgg = models.vgg_16.get_pretrained_model(device, normalize_input=False)
         self.conv = SeparableConv4d()
         self.softmax = Softmax3d()
 
