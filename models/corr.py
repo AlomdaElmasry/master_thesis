@@ -154,4 +154,4 @@ class CorrelationModel(nn.Module):
         y_hat_comp = y_hat * m[:, :, t] + y[:, :, t] * (1 - m[:, :, t])
 
         # Return everything
-        return y_hat, y_hat_comp
+        return y_hat, y_hat_comp, corr

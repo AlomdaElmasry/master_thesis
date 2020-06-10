@@ -49,7 +49,7 @@ class ThesisCorrelationRunner(thesis.runner.ThesisRunner):
         t = x.size(2) // 2
         r_list = list(range(x.size(2)))
         r_list.pop(t)
-        y_hat, y_hat_comp, *_ = self.model(x, m, y, t, r_list)
+        y_hat, y_hat_comp, _ = self.model(x, m, y, t, r_list)
 
         # Compute loss and return
         loss, loss_items = self.loss_function(y[:, :, t], y_hat, y_hat_comp, m[:, :, t])
@@ -61,9 +61,6 @@ class ThesisCorrelationRunner(thesis.runner.ThesisRunner):
 
         # Return the total loss
         return loss
-
-    def train_after_epoch_tasks(self, device):
-        self.test(None, device)
 
     def test(self, epoch, device):
         # Load state if epoch is set
@@ -95,7 +92,7 @@ class ThesisCorrelationRunner(thesis.runner.ThesisRunner):
         )
 
         # Create variables with the images to log inside TensorBoard -> (b,c,h,w)
-        x_tbx, y_tbx, y_hat_tbx, y_hat_comp_tbx = [], [], [], []
+        x_tbx, y_tbx, y_hat_tbx, y_hat_comp_tbx, corr_tbx = [], [], [], [], []
 
         # Iterate over the samples
         for it_data in loader:
@@ -107,26 +104,37 @@ class ThesisCorrelationRunner(thesis.runner.ThesisRunner):
                 t = x.size(2) // 2
                 r_list = list(range(x.size(2)))
                 r_list.pop(t)
-                y_hat, y_hat_comp = self.model(x, m, y, t, r_list)
+                y_hat, y_hat_comp, corr = self.model(x, m, y, t, r_list)
             x_tbx.append(x.cpu().numpy())
             y_tbx.append(y.cpu().numpy())
             y_hat_tbx.append(y_hat.cpu().numpy())
             y_hat_comp_tbx.append(y_hat_comp.cpu().numpy())
+            corr_tbx.append(corr.cpu().numpy())
 
         # Concatenate the results along dim=0
         x_tbx = np.concatenate(x_tbx) if len(x_tbx) > 0 else x_tbx
         y_tbx = np.concatenate(y_tbx) if len(y_tbx) > 0 else y_tbx
         y_hat_tbx = np.concatenate(y_hat_tbx) if len(y_hat_tbx) > 0 else y_hat_tbx
         y_hat_comp_tbx = np.concatenate(y_hat_comp_tbx) if len(y_hat_comp_tbx) > 0 else y_hat_comp_tbx
+        corr_tbx = np.concatenate(corr_tbx) if len(corr_tbx) > 0 else corr_tbx
 
         # Save group image for each sample
-        for b in range(len(self.experiment.data.test_frames_indexes)):
-            if self.experiment.configuration.get('model', 'mode') in ['full', 'encdec']:
-                test_frames = [x_tbx[b, :, t], y_hat_tbx[b], y_hat_comp_tbx[b], y_tbx[b, :, t]]
-                self.experiment.tbx.add_images(
-                    '{}_frames/{}'.format(label, b + 1), test_frames, global_step=self.counters['epoch'],
-                    dataformats='CHW'
-                )
+        for b in range(x_tbx.shape[0]):
+            test_frames = [x_tbx[b, :, t], y_hat_tbx[b], y_hat_comp_tbx[b], y_tbx[b, :, t]]
+            self.experiment.tbx.add_images(
+                '{}_frames/{}'.format(label, b + 1), test_frames, global_step=self.counters['epoch'], dataformats='CHW'
+            )
+
+        # Save correlation visualization for each sample
+        h_index = w_index = 8
+        for b in range(corr_tbx.shape[0]):
+            corr_frames = []
+            for t in range(corr_tbx.shape[1]):
+                a = np.expand_dims(corr_tbx[b, t, h_index, w_index], axis=0).repeat(3, axis=0)
+                corr_frames.append(a)
+            self.experiment.tbx.add_images(
+                '{}_corr/{}'.format(label, b + 1), corr_frames, global_step=self.counters['epoch'], dataformats='CHW'
+            )
 
     def loss_function(self, y_t, y_hat, y_hat_comp, m_t):
         reduction = 'mean'
