@@ -140,7 +140,7 @@ class ThesisCorrelationRunner(thesis.runner.ThesisRunner):
 
         # Add the histogram of the correlations
         self.experiment.tbx.add_histogram(
-            '{}_corr_bins'.format(label), corr_tbx, global_step=self.counters['epoch'] + 1
+            '{}_corr_bins'.format(label), corr_tbx, global_step=self.counters['epoch']
         )
 
         # Flush changes
