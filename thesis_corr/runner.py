@@ -9,6 +9,7 @@ import utils.alignment
 import utils.draws
 import utils.losses
 import models.corr
+import matplotlib.pyplot as plt
 
 
 class ThesisCorrelationRunner(thesis.runner.ThesisRunner):
@@ -37,6 +38,9 @@ class ThesisCorrelationRunner(thesis.runner.ThesisRunner):
         super().init_others(device)
 
     def train_step(self, it_data, device):
+        self.test(None, device)
+        self.experiment.tbx.flush()
+        exit()
         # Decompose iteration data
         (x, m), y, info = it_data
 
@@ -110,6 +114,7 @@ class ThesisCorrelationRunner(thesis.runner.ThesisRunner):
             y_hat_tbx.append(y_hat.cpu().numpy())
             y_hat_comp_tbx.append(y_hat_comp.cpu().numpy())
             corr_tbx.append(corr.cpu().numpy())
+            break
 
         # Concatenate the results along dim=0
         x_tbx = np.concatenate(x_tbx) if len(x_tbx) > 0 else x_tbx
@@ -126,12 +131,13 @@ class ThesisCorrelationRunner(thesis.runner.ThesisRunner):
             )
 
         # Save correlation visualization for each sample
-        h_index = w_index = 8
+        h_index = w_index = 7
+        cmap = plt.get_cmap('jet')
         for b in range(corr_tbx.shape[0]):
             corr_frames = []
             for t in range(corr_tbx.shape[1]):
-                a = np.expand_dims(corr_tbx[b, t, h_index, w_index], axis=0).repeat(3, axis=0)
-                corr_frames.append(a)
+                rgba_img = np.transpose(cmap(corr_tbx[b, t, h_index, w_index]), (2, 0, 1))
+                corr_frames.append(rgba_img[:3, :, :])
             self.experiment.tbx.add_images(
                 '{}_corr/{}'.format(label, b + 1), corr_frames, global_step=self.counters['epoch'], dataformats='CHW'
             )

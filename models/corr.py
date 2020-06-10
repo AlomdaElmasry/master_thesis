@@ -100,7 +100,7 @@ class CorrelationVGG(nn.Module):
         corr = torch.matmul(corr_1, corr_2).reshape(b, ref_n - 1, h, w, h, w)
 
         # Fill holes in the correlation matrix using a NN
-        corr = self.conv(corr)
+        #corr = self.conv(corr)
 
         # Compute the softmax over each pixel (b, t, h, w, h, w)
         return self.softmax(corr)
