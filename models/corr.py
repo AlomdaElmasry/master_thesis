@@ -112,7 +112,7 @@ class CorrelationModel(nn.Module):
         super(CorrelationModel, self).__init__()
         self.encoder = models.cpn_encoders.CPNEncoderDefault()
         self.correlation = CorrelationVGG(device)
-        self.decoder = models.cpn_decoders.CPNDecoderDefault(in_c=256)
+        self.decoder = models.cpn_decoders.CPNDecoderDefault(in_c=128)
         self.register_buffer('mean', torch.as_tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1, 1))
         self.register_buffer('std', torch.as_tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1, 1))
 
@@ -146,7 +146,7 @@ class CorrelationModel(nn.Module):
                 decoder_input[:, :, 4 * i:4 * i + 4, 4 * j:4 * j + 4] = pixel_feats.repeat(1, 1, 4, 4)
 
         # Decode the output
-        y_hat = self.decoder(torch.cat((decoder_input, feats[:, :, t]), dim=1), None)
+        y_hat = self.decoder(decoder_input, None)
         y_hat = torch.clamp(y_hat * self.std.squeeze(4) + self.mean.squeeze(4), 0, 1)
 
         # Combine prediction with GT of the frame.
