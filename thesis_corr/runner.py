@@ -136,6 +136,11 @@ class ThesisCorrelationRunner(thesis.runner.ThesisRunner):
                 '{}_corr/{}'.format(label, b + 1), corr_frames, global_step=self.counters['epoch'], dataformats='CHW'
             )
 
+        # Add the histogram of the correlations
+        self.experiment.tbx.add_histogram(
+            '{}_corr_bins'.format(label), corr_tbx, global_step=self.counters['epoch'] + 1
+        )
+
     def loss_function(self, y_t, y_hat, y_hat_comp, m_t):
         reduction = 'mean'
         loss_weights = self.experiment.configuration.get('model', 'loss_lambdas')
