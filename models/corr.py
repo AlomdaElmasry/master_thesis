@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import models.cpn_encoders
 import models.cpn_decoders
 import models.vgg_16
+import matplotlib.pyplot as plt
 
 
 class SeparableConv4d(nn.Module):
@@ -102,6 +103,13 @@ class CorrelationVGG(nn.Module):
         # Fill holes in the correlation matrix using a NN
         corr = self.conv(corr)
 
+        # Upscale correlation to 64x64
+        # corr_upsampled = torch.zeros((b, ref_n - 1, 64, 64, 64, 64))
+        # for i in range(16):
+        #     for j in range(16):
+        #         corr_pix_up = F.interpolate(corr[:, :, i, j], size=(64, 64)).view(b, ref_n - 1, 1, 1, 64, 64)
+        #         corr_upsampled[:, :, 4*i:4*i + 4:, 4*j:4*j + 4] = corr_pix_up.repeat(1, 1, 4, 4, 1, 1)
+
         # Compute the softmax over each pixel (b, t, h, w, h, w)
         return self.softmax(corr)
 
@@ -133,17 +141,19 @@ class CorrelationModel(nn.Module):
         corr = self.correlation(x, m, t, r_list)
 
         # Mix the features using corr as weight
-        # c1 = feats_ref.permute(0, 1, 3, 4, 2).reshape(b, c, h * w * ref_n).unsqueeze(3).permute(0, 1, 3, 2)
-        # c2 = corr.permute(0, 2, 3, 4, 5, 1).reshape(b, h * w, h * w * ref_n).permute(0, 2, 1).unsqueeze(1)
-        # feats = torch.matmul(c1, c2).reshape(b, c, h, w)
+        c = 128
+        h = w = 64
+        c1 = feats[:, :, r_list].permute(0, 1, 3, 4, 2).reshape(b, c, h * w * (f - 1)).unsqueeze(3).permute(0, 1, 3, 2)
+        c2 = corr.permute(0, 2, 3, 4, 5, 1).reshape(b, h * w, h * w * (f - 1)).permute(0, 2, 1).unsqueeze(1)
+        decoder_input = torch.matmul(c1, c2).reshape(b, c, h, w)
 
         # Mix the features using corr as weight
-        decoder_input = torch.zeros((b, feats.size(1), feats.size(3), feats.size(4))).to(x.device)
-        for i in range(corr.size(2)):
-            for j in range(corr.size(3)):
-                pixel_corr = F.interpolate(corr[:, :, i, j], size=(feats.size(3), feats.size(4))).unsqueeze(1) / 4**2
-                pixel_feats = torch.sum(feats[:, :, r_list] * pixel_corr, dim=(2, 3, 4)).view(b, feats.size(1), 1, 1)
-                decoder_input[:, :, 4 * i:4 * i + 4, 4 * j:4 * j + 4] = pixel_feats.repeat(1, 1, 4, 4)
+        # decoder_input = torch.zeros((b, feats.size(1), feats.size(3), feats.size(4))).to(x.device)
+        # for i in range(corr.size(2)):
+        #     for j in range(corr.size(3)):
+        #         pixel_corr = F.interpolate(corr[:, :, i, j], size=(feats.size(3), feats.size(4))).unsqueeze(1) / 4 ** 2
+        #         pixel_feats = torch.sum(feats[:, :, r_list] * pixel_corr, dim=(2, 3, 4)).view(b, feats.size(1), 1, 1)
+        #         decoder_input[:, :, 4 * i:4 * i + 4, 4 * j:4 * j + 4] = pixel_feats.repeat(1, 1, 4, 4)
 
         # Decode the output
         y_hat = self.decoder(decoder_input, None)

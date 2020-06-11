@@ -11,7 +11,7 @@ class CPNEncoderDefault(nn.Module):
         self.convs = nn.Sequential(
             nn.Conv2d(input_channels, 64, kernel_size=5, stride=2, padding=2), nn.ReLU(),
             nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1), nn.ReLU(),
-            nn.Conv2d(64, 128, kernel_size=3, stride=2, padding=1), nn.ReLU(),
+            nn.Conv2d(64, 128, kernel_size=3, stride=4, padding=1), nn.ReLU(),
             nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1), nn.ReLU(),
             nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1)
         )

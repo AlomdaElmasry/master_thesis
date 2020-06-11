@@ -27,7 +27,7 @@ class CPNDecoderDefault(nn.Module):
 
     def forward(self, x, c_feats_mid):
         x = self.convs(x)
-        x = F.interpolate(x, scale_factor=2, mode='nearest')
+        x = F.interpolate(x, scale_factor=4, mode='nearest')
         x = self.convs_2(x)
         x = F.interpolate(x, scale_factor=2, mode='nearest')
         return self.convs_3(x)

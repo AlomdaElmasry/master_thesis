@@ -130,7 +130,7 @@ class ContentProvider(torch.utils.data.Dataset):
         )
 
     def _get_patch_contiguous(self, frame_index, frames_n, frames_spacing, randomize_frames):
-        assert frames_n % 2 == 1
+        assert frames_n % 2 == 1 or frames_n == 2
         sequence_item = next(x[0] for x in enumerate(self.items_limits) if x[1] > frame_index)
         sequence_first_frame_index = self.items_limits[sequence_item - 1] if sequence_item > 0 else 0
         sequence_last_frame_index = self.items_limits[sequence_item] - 1

@@ -75,12 +75,12 @@ loader = iter(torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=True))
 (x, m), y, info = next(loader)
 
 # Get correlation volume
-corr = models.corr.CorrelationVGG(target_size=64)
+corr = models.corr.CorrelationVGG('cpu')
 t, r_list = 2, [0, 1, 3, 4]
 x_corr_vol = corr(x, m, t, r_list).detach()
 
 # Ask for position to plot. x_corr_vol is (b, t, h, w, h, w)
-h_pos, w_pos = 11, 0
+h_pos, w_pos = 44, 0
 
 # Plot the target frame with a square in the pos
 plot_with_grid(x[0, :, 2].permute(1, 2, 0), h_pos, w_pos)
