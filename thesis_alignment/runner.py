@@ -61,7 +61,7 @@ class ThesisAlignmentRunner(skeltorch.Runner):
 
         # Create a Subset using self.experiment.data.test_frames_indexes defined frames
         subset_dataset = torch.utils.data.Subset(
-            self.experiment.data.datasets['validation'], self.experiment.data.validation_objective_measures_indexes
+            self.experiment.data.datasets['validation'], self.experiment.data.validation_frames_indexes
         )
         loader = torch.utils.data.DataLoader(
             subset_dataset, self.experiment.configuration.get('training', 'batch_size')
