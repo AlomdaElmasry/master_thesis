@@ -22,7 +22,6 @@ class ThesisAlignmentRunner(skeltorch.Runner):
         self.utils_losses = utils.losses.LossesUtils(device)
 
     def train_step(self, it_data, device):
-        self.test(None, device)
         # Decompose iteration data
         (x, m), y, info = it_data
         b, c, f, h, w = x.size()
@@ -42,8 +41,11 @@ class ThesisAlignmentRunner(skeltorch.Runner):
         x_down, m_down = self.resize_to_16(x, m)
         x_down_aligned, m_down_aligned = self.align_16(corr_mixed, x_down[:, :, r_list], m_down[:, :, r_list])
 
+        # Compute the visibility map
+        x_down_vmap = (1 - m_down[:, :, t].unsqueeze(2)) * (1 - m_down_aligned)
+
         # Return the loss
-        return self.loss_function(x_down[:, :, t], m_down[:, :, t], x_down_aligned, m_down_aligned)
+        return self.loss_function(x_down[:, :, t], x_down_aligned, x_down_vmap)
 
     def train_after_epoch_tasks(self, device):
         super().train_after_epoch_tasks(device)
@@ -102,9 +104,9 @@ class ThesisAlignmentRunner(skeltorch.Runner):
                 '{}_alignment_16/{}'.format('validation', b + 1), sample, global_step=self.counters['epoch']
             )
 
-    def loss_function(self, x_down, m_down, x_down_aligned, m_down_aligned):
+    def loss_function(self, x_down, x_down_aligned, x_down_vmap):
         x_down_extended = x_down.unsqueeze(2).repeat(1, 1, x_down_aligned.size(2), 1, 1)
-        return self.utils_losses.masked_l1(x_down_extended, x_down_aligned, 1 - m_down_aligned, 'mean', 1)
+        return self.utils_losses.masked_l1(x_down_extended, x_down_aligned, x_down_vmap, 'mean', 1)
 
     def resize_to_16(self, x, m):
         b, c, f, h, w = x.size()
@@ -118,6 +120,7 @@ class ThesisAlignmentRunner(skeltorch.Runner):
         b, c, f, h, w = x_down.size()
         x_down_aligned = F.grid_sample(x_down.transpose(1, 2).reshape(-1, c, 16, 16), corr_mixed.reshape(-1, 16, 16, 2)
                                        ).reshape(b, -1, 3, 16, 16).transpose(1, 2)
-        m_down_aligned = F.grid_sample(m_down.transpose(1, 2).reshape(-1, 1, 16, 16), corr_mixed.reshape(-1, 16, 16, 2)
-                                       ).reshape(b, -1, 1, 16, 16).transpose(1, 2)
+        m_down_aligned = F.grid_sample(
+            m_down.transpose(1, 2).reshape(-1, 1, 16, 16), corr_mixed.reshape(-1, 16, 16, 2), mode='nearest'
+        ).reshape(b, -1, 1, 16, 16).transpose(1, 2)
         return x_down_aligned, m_down_aligned
