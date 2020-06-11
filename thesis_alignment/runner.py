@@ -50,6 +50,13 @@ class ThesisAlignmentRunner(skeltorch.Runner):
         self.test(None, device)
 
     def test(self, epoch, device):
+        # Load state if epoch is set
+        if epoch is not None:
+            self.load_states(epoch, device)
+
+        # Set model in evaluation mode
+        self.model.eval()
+
         # Create a Subset using self.experiment.data.test_frames_indexes defined frames
         subset_dataset = torch.utils.data.Subset(
             self.experiment.data.datasets['validation'], self.experiment.data.validation_objective_measures_indexes
