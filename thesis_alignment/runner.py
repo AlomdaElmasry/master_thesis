@@ -77,8 +77,8 @@ class ThesisAlignmentRunner(skeltorch.Runner):
             x_down_aligned, m_down_aligned = self.align_16(corr_mixed, x_down[:, :, r_list], m_down[:, :, r_list])
 
             # Add items to the lists
-            x_down_tbx.append(x_down)
-            x_down_aligned_tbx.append(x_down_aligned)
+            x_down_tbx.append(x_down.cpu().numpy())
+            x_down_aligned_tbx.append(x_down_aligned.cpu().numpy())
 
         # Concatenate the results along dim=0
         x_down_tbx = np.concatenate(x_down_tbx)
