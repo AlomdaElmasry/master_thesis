@@ -91,7 +91,7 @@ class ThesisAlignmentRunner(skeltorch.Runner):
         # Iterate over the samples
         for it_data in loader:
             (x, m), y, info = it_data
-            x, m = x.to(device), m.to(device)
+            x, y, m = x.to(device), y.to(device), m.to(device)
 
             # Propagate through the model
             t, r_list = x.size(2) // 2, list(range(x.size(2)))
