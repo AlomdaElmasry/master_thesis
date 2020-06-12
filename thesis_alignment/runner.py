@@ -46,7 +46,7 @@ class ThesisAlignmentRunner(skeltorch.Runner):
         )
 
         # Compute losses over 64x64
-        y_64, m_64 = self.resize_data(x, m, 64)
+        y_64, m_64 = self.resize_data(y, m, 64)
         y_64_aligned, m_64_aligned = self.align_data(y_64[:, :, r_list], m_64[:, :, r_list], flow_64)
         loss_recons_64 = self.utils_losses.masked_l1(
             y_64[:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1), y_64_aligned, m_64[:, :, r_list], 'mean', 10
@@ -122,10 +122,6 @@ class ThesisAlignmentRunner(skeltorch.Runner):
             self.experiment.tbx.add_images(
                 '{}_alignment_256/{}'.format('validation', b + 1), sample, global_step=self.counters['epoch']
             )
-
-    def loss_function(self, x_down, x_down_aligned, x_down_vmap):
-        x_down_extended = x_down.unsqueeze(2).repeat(1, 1, x_down_aligned.size(2), 1, 1)
-        return self.utils_losses.masked_l1(x_down_extended, x_down_aligned, x_down_vmap, 'mean', 1)
 
     def resize_data(self, x, m, size):
         b, c, f, h, w = x.size()
