@@ -96,7 +96,7 @@ class AlignmentCorrelation(nn.Module):
             x.transpose(1, 2).reshape(b * f, c, h, w), (64, 64), mode='bilinear'
         ).reshape(b, f, c, 64, 64).transpose(1, 2)
         m_64 = F.interpolate(
-            m.transpose(1, 2).reshape(b * f, 1, h, w), (64, 64), mode='bilinear'
+            m.transpose(1, 2).reshape(b * f, 1, h, w), (64, 64), mode='nearest'
         ).reshape(b, f, 1, 64, 64).transpose(1, 2)
         flow_64_pre = F.interpolate(
             flow_16.reshape(b * (f - 1), 16, 16, 2).permute(0, 3, 1, 2), (64, 64), mode='bilinear'

@@ -41,22 +41,25 @@ class ThesisAlignmentRunner(skeltorch.Runner):
         # Compute losses over 16x16
         y_16, m_16 = self.resize_data(y, m, 16)
         y_16_aligned, m_16_aligned = self.align_data(y_16[:, :, r_list], m_16[:, :, r_list], flow_16)
+        x_16_vmap = (1 - m_16[:, :, t].unsqueeze(2)) * (1 - m_16_aligned)
         loss_recons_16 = self.utils_losses.masked_l1(
-            y_16[:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1), y_16_aligned, m_16[:, :, r_list], 'mean', 10
+            y_16[:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1), y_16_aligned, x_16_vmap, 'mean', 10
         )
 
         # Compute losses over 64x64
         y_64, m_64 = self.resize_data(y, m, 64)
         y_64_aligned, m_64_aligned = self.align_data(y_64[:, :, r_list], m_64[:, :, r_list], flow_64)
+        x_64_vmap = (1 - m_64[:, :, t].unsqueeze(2)) * (1 - m_64_aligned)
         loss_recons_64 = self.utils_losses.masked_l1(
-            y_64[:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1), y_64_aligned, m_64[:, :, r_list], 'mean', 10
+            y_64[:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1), y_64_aligned, x_64_vmap, 'mean', 10
         )
 
         # Compute losses over 256x256
         y_256, m_256 = y, m
         y_256_aligned, m_256_aligned = self.align_data(y_256[:, :, r_list], m_256[:, :, r_list], flow_256)
+        x_256_vmap = (1 - m_256[:, :, t].unsqueeze(2)) * (1 - m_256_aligned)
         loss_recons_256 = self.utils_losses.masked_l1(
-            y_256[:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1), y_256_aligned, m_256[:, :, r_list], 'mean', 10
+            y_256[:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1), y_256_aligned, x_256_vmap, 'mean', 10
         )
 
         # Return the loss
