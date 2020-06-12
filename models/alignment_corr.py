@@ -26,28 +26,46 @@ class AlignmentCorrelationMixer(nn.Module):
         return self.mixer(corr).reshape(b, f, 2, h, w).permute(0, 1, 3, 4, 2)
 
 
-class AlignmentCorrelationEncoder(nn.Module):
-    def __init__(self, corr_size=16):
-        super(AlignmentCorrelationEncoder, self).__init__()
-        input_c = 3 + 3 + 1 + corr_size ** 2
+class FlowEstimator(nn.Module):
+    def __init__(self, input_c=10):
+        super(FlowEstimator, self).__init__()
         self.encoder = nn.Sequential(
             nn.Conv2d(input_c, input_c, kernel_size=5, padding=2), nn.ReLU(),
             nn.Conv2d(input_c, input_c * 2, kernel_size=5, stride=2, padding=2), nn.ReLU(),
             nn.Conv2d(input_c * 2, input_c * 2, kernel_size=3, padding=1), nn.ReLU(),
             nn.Conv2d(input_c * 2, input_c * 4, kernel_size=3, stride=2, padding=1), nn.ReLU(),
             nn.Conv2d(input_c * 4, input_c * 4, kernel_size=3, padding=1), nn.ReLU(),
-            nn.Conv2d(input_c * 4, input_c * 8, kernel_size=3, stride=2, padding=1), nn.ReLU()
-        )
-        self.decod_convs_1 = nn.Sequential(
+            nn.Conv2d(input_c * 4, input_c * 8, kernel_size=3, stride=2, padding=1), nn.ReLU(),
             nn.Conv2d(input_c * 8, input_c * 8, kernel_size=3, padding=1), nn.ReLU(),
-            nn.ConvTranspose2d(input_c * 8, input_c * 4, kernel_size=3, stride=2), nn.ReLU()
+            nn.ConvTranspose2d(input_c * 8, input_c * 4, kernel_size=3, padding=1, output_padding=1, stride=2),
+            nn.ReLU(),
+            nn.Conv2d(input_c * 4, input_c * 4, kernel_size=3, padding=1), nn.ReLU(),
+            nn.ConvTranspose2d(input_c * 4, input_c * 2, kernel_size=3, padding=1, output_padding=1, stride=2),
+            nn.ReLU(),
+            nn.Conv2d(input_c * 2, input_c * 2, kernel_size=5, padding=2), nn.ReLU(),
+            nn.ConvTranspose2d(input_c * 2, input_c, kernel_size=5, padding=2, output_padding=1, stride=2), nn.ReLU()
+        )
+        self.flow_estimator = nn.Sequential(
+            nn.Conv2d(input_c, input_c, kernel_size=3, padding=1), nn.ReLU(),
+            nn.Conv2d(input_c, 2, kernel_size=3, padding=1), nn.Tanh(),
+        )
+        self.vmap_estimator = nn.Sequential(
+            nn.Conv2d(input_c, input_c, kernel_size=3, padding=1), nn.ReLU(),
+            nn.Conv2d(input_c, 1, kernel_size=3, padding=1), nn.Sigmoid(),
         )
 
-    def forward(self, target_c, reference_c):
-        x = torch.cat([target_c, reference_c], dim=1)
-        x_encoded = self.encoder(x)
-        x_decod_1 = self.decod_convs_1(x_encoded)
-        a = 1
+    def forward(self, x, m, flow, t, r_list):
+        b, c, f, h, w = x.size()
+        nn_input = torch.cat([
+            x[:, :, r_list].transpose(1, 2).reshape(b * (f - 1), c, h, w),
+            x[:, :, t].unsqueeze(1).repeat(1, f - 1, 1, 1, 1).reshape(b * (f - 1), c, h, w),
+            m[:, :, r_list].transpose(1, 2).reshape(b * (f - 1), 1, h, w),
+            m[:, :, t].unsqueeze(1).repeat(1, f - 1, 1, 1, 1).reshape(b * (f - 1), 1, h, w),
+            flow.transpose(1, 2).reshape(b * (f - 1), 2, h, w)
+        ], dim=1)
+        input_encoder = self.encoder(nn_input)
+        return self.flow_estimator(input_encoder).reshape(b, f - 1, 2, h, w).transpose(1, 2), \
+               self.vmap_estimator(input_encoder).reshape(b, f - 1, 1, h, w).transpose(1, 2)
 
 
 class AlignmentCorrelation(nn.Module):
@@ -56,7 +74,8 @@ class AlignmentCorrelation(nn.Module):
         super(AlignmentCorrelation, self).__init__()
         self.corr = models.corr.CorrelationVGG(device)
         self.corr_mixer = AlignmentCorrelationMixer()
-        # self.encoder = AlignmentCorrelationEncoder()
+        self.flow_64 = FlowEstimator()
+        self.flow_256 = FlowEstimator()
         self.register_buffer('mean', torch.as_tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1, 1))
         self.register_buffer('std', torch.as_tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1, 1))
 
@@ -70,21 +89,29 @@ class AlignmentCorrelation(nn.Module):
         corr = self.corr(x, m, t, r_list)
 
         # Mix the corr 4D volume to obtain a 16x16 dense flow estimation of size (b, t, h, w, 2)
-        corr_mixed = self.corr_mixer(corr)
+        flow_16 = self.corr_mixer(corr)
+
+        # Interpolate x, m and corr_mixed to be 64x64
+        x_64 = F.interpolate(
+            x.transpose(1, 2).reshape(b * f, c, h, w), (64, 64), mode='bilinear'
+        ).reshape(b, f, c, 64, 64).transpose(1, 2)
+        m_64 = F.interpolate(
+            m.transpose(1, 2).reshape(b * f, 1, h, w), (64, 64), mode='bilinear'
+        ).reshape(b, f, 1, 64, 64).transpose(1, 2)
+        flow_64_pre = F.interpolate(
+            flow_16.reshape(b * (f - 1), 16, 16, 2).permute(0, 3, 1, 2), (64, 64), mode='bilinear'
+        ).reshape(b, f - 1, 2, 64, 64).transpose(1, 2)
+
+        # Estimate 64x64 flow correction
+        flow_64, vmap_64 = self.flow_64(x_64, m_64, flow_64_pre, t, r_list)
+
+        # Interpolate flow_64 to be 256x256
+        flow_256_pre = F.interpolate(
+            flow_64.reshape(b * (f - 1), 64, 64, 2).permute(0, 3, 1, 2), (h, w), mode='bilinear'
+        ).reshape(b, f - 1, 2, h, w).transpose(1, 2)
+
+        # Estimate 256x256 flow correction
+        flow_256, vmap_256 = self.flow_256(x, m, flow_256_pre, t, r_list)
 
         # Return both corr and corr_mixed
-        return corr, corr_mixed
-
-        # Upscale the correlation to match (h, w)
-        # corr = corr.reshape(b * (f - 1), -1, 16, 16)
-        # corr = F.interpolate(corr, (h, w)).reshape(b, f - 1, corr.size(1), h, w).transpose(1, 2)
-        #
-        # # Concatenate
-        # encoder_ref_input = torch.cat((x[:, :, r_list], m[:, :, r_list], corr), dim=1)
-        #
-        # # Encoder every target-reference pair
-        # ref_flows = []
-        # for ref_idx in range(encoder_ref_input.size(2)):
-        #     ref_flows.append(self.encoder(x[:, :, t], encoder_ref_input[:, :, ref_idx]))
-        #
-        # a = 1
+        return corr, flow_16, flow_64, flow_256, vmap_64, vmap_256

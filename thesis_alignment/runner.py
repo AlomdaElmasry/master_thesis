@@ -5,6 +5,7 @@ import torch.nn.functional as F
 import utils.losses
 import numpy as np
 import matplotlib.pyplot as plt
+import utils.draws
 
 
 class ThesisAlignmentRunner(skeltorch.Runner):
@@ -35,17 +36,31 @@ class ThesisAlignmentRunner(skeltorch.Runner):
         t = x.size(2) // 2
         r_list = list(range(x.size(2)))
         r_list.pop(t)
-        corr, corr_mixed = self.model(x, m, t, r_list)
+        corr, flow_16, flow_64, flow_256, vmap_64, vmap_256 = self.model(x, m, t, r_list)
 
-        # Interpolate data to be 16x16 and align
-        x_down, m_down = self.resize_to_16(x, m)
-        x_down_aligned, m_down_aligned = self.align_16(corr_mixed, x_down[:, :, r_list], m_down[:, :, r_list])
+        # Compute losses over 16x16
+        y_16, m_16 = self.resize_data(y, m, 16)
+        y_16_aligned, m_16_aligned = self.align_data(y_16[:, :, r_list], m_16[:, :, r_list], flow_16)
+        loss_recons_16 = self.utils_losses.masked_l1(
+            y_16[:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1), y_16_aligned, m_16[:, :, r_list], 'mean', 10
+        )
 
-        # Compute the visibility map
-        x_down_vmap = (1 - m_down[:, :, t].unsqueeze(2)) * (1 - m_down_aligned)
+        # Compute losses over 64x64
+        y_64, m_64 = self.resize_data(x, m, 64)
+        y_64_aligned, m_64_aligned = self.align_data(y_64[:, :, r_list], m_64[:, :, r_list], flow_64)
+        loss_recons_64 = self.utils_losses.masked_l1(
+            y_64[:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1), y_64_aligned, m_64[:, :, r_list], 'mean', 10
+        )
+
+        # Compute losses over 256x256
+        y_256, m_256 = y, m
+        y_256_aligned, m_256_aligned = self.align_data(y_256[:, :, r_list], m_256[:, :, r_list], flow_256)
+        loss_recons_256 = self.utils_losses.masked_l1(
+            y_256[:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1), y_256_aligned, m_256[:, :, r_list], 'mean', 10
+        )
 
         # Return the loss
-        return self.loss_function(x_down[:, :, t], x_down_aligned, x_down_vmap)
+        return loss_recons_16 + loss_recons_64 + loss_recons_256
 
     def train_after_epoch_tasks(self, device):
         super().train_after_epoch_tasks(device)
@@ -68,7 +83,7 @@ class ThesisAlignmentRunner(skeltorch.Runner):
         )
 
         # Create variables with the images to log inside TensorBoard -> (b,c,h,w)
-        x_down_tbx, x_down_aligned_tbx = [], []
+        y_256_tbx, m_256_tbx, y_256_aligned_tbx = [], [], []
 
         # Iterate over the samples
         for it_data in loader:
@@ -79,48 +94,53 @@ class ThesisAlignmentRunner(skeltorch.Runner):
             t, r_list = x.size(2) // 2, list(range(x.size(2)))
             r_list.pop(t)
             with torch.no_grad():
-                corr, corr_mixed = self.model(x, m, t, r_list)
+                corr, flow_16, flow_64, flow_256, vmap_64, vmap_256 = self.model(x, m, t, r_list)
 
-            # Interpolate data to be 16x16 and align
-            x_down, m_down = self.resize_to_16(x, m)
-            x_down_aligned, m_down_aligned = self.align_16(corr_mixed, x_down[:, :, r_list], m_down[:, :, r_list])
+            # Compute losses over 256x256
+            y_256, m_256 = y, m
+            y_256_aligned, m_256_aligned = self.align_data(y_256[:, :, r_list], m_256[:, :, r_list], flow_256)
 
             # Add items to the lists
-            x_down_tbx.append(x_down.cpu().numpy())
-            x_down_aligned_tbx.append(x_down_aligned.cpu().numpy())
+            y_256_tbx.append(y_256.cpu().numpy())
+            m_256_tbx.append(m_256.cpu().numpy())
+            y_256_aligned_tbx.append(y_256_aligned.cpu().numpy())
 
         # Concatenate the results along dim=0
-        x_down_tbx = np.concatenate(x_down_tbx)
-        x_down_aligned_tbx = np.concatenate(x_down_aligned_tbx)
+        y_256_tbx = np.concatenate(y_256_tbx)
+        m_256_tbx = np.concatenate(m_256_tbx)
+        y_256_aligned_tbx = np.concatenate(y_256_aligned_tbx)
 
         # Add samples to TensorBoard
-        for b in range(x_down_tbx.shape[0]):
-            x_down_sample = x_down_tbx[b].transpose(1, 0, 2, 3)
-            x_down_aligned_sample = np.insert(
-                x_down_aligned_tbx[b].transpose(1, 0, 2, 3), x_down_tbx[b].shape[1] // 2, x_down_tbx[b, :, t], 0
+        for b in range(y_256_tbx.shape[0]):
+            y_256_sample = y_256_tbx[b].transpose(1, 0, 2, 3)
+            y_256_aligned_sample = np.insert(
+                arr=y_256_aligned_tbx[b], obj=y_256_tbx[b].shape[1] // 2, values=y_256_tbx[b, :, t], axis=1
             )
-            sample = np.concatenate((x_down_sample, x_down_aligned_sample), axis=2)
+            y_256_aligned_sample = utils.draws.add_border(y_256_aligned_sample, m_256_tbx[b, :, t]) \
+                .transpose(1, 0, 2, 3)
+            sample = np.concatenate((y_256_sample, y_256_aligned_sample), axis=2)
             self.experiment.tbx.add_images(
-                '{}_alignment_16/{}'.format('validation', b + 1), sample, global_step=self.counters['epoch']
+                '{}_alignment_256/{}'.format('validation', b + 1), sample, global_step=self.counters['epoch']
             )
 
     def loss_function(self, x_down, x_down_aligned, x_down_vmap):
         x_down_extended = x_down.unsqueeze(2).repeat(1, 1, x_down_aligned.size(2), 1, 1)
         return self.utils_losses.masked_l1(x_down_extended, x_down_aligned, x_down_vmap, 'mean', 1)
 
-    def resize_to_16(self, x, m):
+    def resize_data(self, x, m, size):
         b, c, f, h, w = x.size()
-        x_down = F.interpolate(x.transpose(1, 2).reshape(-1, c, h, w), (16, 16), mode='bilinear'). \
-            reshape(b, f, c, 16, 16).transpose(1, 2)
-        m_down = F.interpolate(m.transpose(1, 2).reshape(-1, 1, h, w), (16, 16)). \
-            reshape(b, f, 1, 16, 16).transpose(1, 2)
+        x_down = F.interpolate(x.transpose(1, 2).reshape(-1, c, h, w), (size, size), mode='bilinear'). \
+            reshape(b, f, c, size, size).transpose(1, 2)
+        m_down = F.interpolate(m.transpose(1, 2).reshape(-1, 1, h, w), (size, size)). \
+            reshape(b, f, 1, size, size).transpose(1, 2)
         return x_down, m_down
 
-    def align_16(self, corr_mixed, x_down, m_down):
-        b, c, f, h, w = x_down.size()
-        x_down_aligned = F.grid_sample(x_down.transpose(1, 2).reshape(-1, c, 16, 16), corr_mixed.reshape(-1, 16, 16, 2)
-                                       ).reshape(b, -1, 3, 16, 16).transpose(1, 2)
-        m_down_aligned = F.grid_sample(
-            m_down.transpose(1, 2).reshape(-1, 1, 16, 16), corr_mixed.reshape(-1, 16, 16, 2), mode='nearest'
-        ).reshape(b, -1, 1, 16, 16).transpose(1, 2)
-        return x_down_aligned, m_down_aligned
+    def align_data(self, x, m, flow):
+        b, c, f, h, w = x.size()
+        x_aligned = F.grid_sample(
+            x.transpose(1, 2).reshape(-1, c, h, w), flow.reshape(-1, h, w, 2)
+        ).reshape(b, -1, 3, h, w).transpose(1, 2)
+        m_aligned = F.grid_sample(
+            m.transpose(1, 2).reshape(-1, 1, h, w), flow.reshape(-1, h, w, 2), mode='nearest'
+        ).reshape(b, -1, 1, h, w).transpose(1, 2)
+        return x_aligned, m_aligned
