@@ -97,6 +97,7 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
         )
 
         # Create variables with the images to log inside TensorBoard -> (b,c,h,w)
+        x_64_tbx, m_64_tbx, x_64_aligned_tbx = [], [], []
         x_256_tbx, m_256_tbx, x_256_aligned_tbx = [], [], []
 
         # Iterate over the samples
@@ -111,27 +112,36 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
                 corr, flows, xs, ms, xs_aligned, ms_aligned, v_maps = self.train_step_propagate(x, m, t, r_list)
 
             # Add items to the lists
+            x_64_tbx.append(xs[1].cpu().numpy())
+            m_64_tbx.append(ms[1].cpu().numpy())
+            x_64_aligned_tbx.append(xs_aligned[1].cpu().numpy())
             x_256_tbx.append(xs[2].cpu().numpy())
             m_256_tbx.append(ms[2].cpu().numpy())
             x_256_aligned_tbx.append(xs_aligned[2].cpu().numpy())
 
         # Concatenate the results along dim=0
+        x_64_tbx = np.concatenate(x_64_tbx)
+        m_64_tbx = np.concatenate(m_64_tbx)
+        x_64_aligned_tbx = np.concatenate(x_64_aligned_tbx)
         x_256_tbx = np.concatenate(x_256_tbx)
         m_256_tbx = np.concatenate(m_256_tbx)
         x_256_aligned_tbx = np.concatenate(x_256_aligned_tbx)
 
-        # Add samples to TensorBoard
-        for b in range(x_256_tbx.shape[0]):
-            x_256_sample = x_256_tbx[b].transpose(1, 0, 2, 3)
-            x_256_aligned_sample = np.insert(
-                arr=x_256_aligned_tbx[b], obj=x_256_tbx[b].shape[1] // 2, values=x_256_tbx[b, :, t], axis=1
-            )
-            x_256_aligned_sample = utils.draws.add_border(x_256_aligned_sample, m_256_tbx[b, :, t]) \
-                .transpose(1, 0, 2, 3)
-            sample = np.concatenate((x_256_sample, x_256_aligned_sample), axis=2)
-            self.experiment.tbx.add_images(
-                '{}_alignment_256/{}'.format('validation', b + 1), sample, global_step=self.counters['epoch']
-            )
+        # Define a function to add images to TensorBoard
+        def add_to_tbx(x, m, x_aligned, res_size):
+            for b in range(x_256_tbx.shape[0]):
+                x_sample = x[b].transpose(1, 0, 2, 3)
+                x_aligned_sample = np.insert(arr=x_aligned[b], obj=x[b].shape[1] // 2, values=x[b, :, t], axis=1)
+                x_aligned_sample = utils.draws.add_border(x_aligned_sample, m[b, :, t]).transpose(1, 0, 2, 3)
+                sample = np.concatenate((x_sample, x_aligned_sample), axis=2)
+                self.experiment.tbx.add_images(
+                    '{}_alignment_{}/{}'.format('validation', res_size, b + 1), sample,
+                    global_step=self.counters['epoch']
+                )
+
+        # Add different resolutions to TensorBoard
+        add_to_tbx(x_64_tbx, m_64_tbx, x_64_aligned_tbx, '64')
+        add_to_tbx(x_256_tbx, m_256_tbx, x_256_aligned_tbx, '256')
 
     def resize_data(self, x, m, size):
         b, c, f, h, w = x.size()
