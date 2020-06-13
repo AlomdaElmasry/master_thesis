@@ -9,6 +9,7 @@ import models.corr
 import numpy as np
 import random
 import matplotlib.patches as patches
+import utils.flow
 
 parser = argparse.ArgumentParser(description='Visualize samples from the dataset')
 parser.add_argument('--data-path', required=True, help='Path where the images are stored')
@@ -77,10 +78,15 @@ loader = iter(torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=True))
 # Get correlation volume
 corr = models.corr.CorrelationVGG('cpu')
 t, r_list = 2, [0, 1, 3, 4]
-x_corr_vol = corr(x, m, t, r_list).detach()
+with torch.no_grad():
+    x_corr_vol = corr(y, m, t, r_list).detach()
+
+# Transform corr to dense flow
+corr_flow = utils.flow.corr_to_flow(x_corr_vol)
+corr_flow_relative = utils.flow.flow_abs_to_relative(corr_flow)
 
 # Ask for position to plot. x_corr_vol is (b, t, h, w, h, w)
-h_pos, w_pos = 44, 0
+h_pos, w_pos = 11, 0
 
 # Plot the target frame with a square in the pos
 plot_with_grid(x[0, :, 2].permute(1, 2, 0), h_pos, w_pos)

@@ -13,7 +13,7 @@ class AlignmentCorrelationMixer(nn.Module):
             nn.Conv2d(corr_size ** 2, corr_size, kernel_size=3, padding=1), nn.ReLU(),  # Out = 16
             nn.Conv2d(corr_size, corr_size // 2, kernel_size=3, padding=1), nn.ReLU(),  # Out = 8
             nn.Conv2d(corr_size // 2, corr_size // 4, kernel_size=3, padding=1), nn.ReLU(),  # Out = 4
-            nn.Conv2d(corr_size // 4, corr_size // 8, kernel_size=3, padding=1), nn.Tanh(),  # Out = 2
+            nn.Conv2d(corr_size // 4, corr_size // 8, kernel_size=3, padding=1)  # Out = 2
         )
 
     def forward(self, corr):
@@ -47,7 +47,7 @@ class FlowEstimator(nn.Module):
         )
         self.flow_estimator = nn.Sequential(
             nn.Conv2d(input_c, input_c, kernel_size=3, padding=1), nn.ReLU(),
-            nn.Conv2d(input_c, 2, kernel_size=3, padding=1), nn.Tanh(),
+            nn.Conv2d(input_c, 2, kernel_size=3, padding=1)
         )
         self.vmap_estimator = nn.Sequential(
             nn.Conv2d(input_c, input_c, kernel_size=3, padding=1), nn.ReLU(),

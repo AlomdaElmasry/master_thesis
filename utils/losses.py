@@ -22,7 +22,7 @@ class LossesUtils:
         for param in self.model_vgg.features.parameters():
             param.requires_grad = False
 
-    def masked_l1(self, x, x_hat, mask, reduction, weight=1):
+    def masked_l1(self, x, x_hat, mask, reduction='mean', weight=1):
         masked_l1_loss = F.l1_loss(x_hat * mask, x * mask, reduction=reduction)
         return weight * masked_l1_loss / (torch.sum(mask) if reduction == 'sum' else 1)
 
