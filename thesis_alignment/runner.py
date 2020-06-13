@@ -69,13 +69,6 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
                (v_map_16, v_map_64, v_map_256)
 
     def compute_loss(self, xs, xs_aligned, v_maps, t, r_list):
-
-        plt.imshow(xs[1][0, :, 0].permute(1, 2, 0))
-        plt.show()
-
-        plt.imshow(xs_aligned[1][0, :, 0].permute(1, 2, 0).detach())
-        plt.show()
-
         loss_recons_16 = self.utils_losses.masked_l1(
             xs[0][:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1), xs_aligned[0], v_maps[0]
         )
