@@ -1,16 +1,17 @@
-import skeltorch
 import torch.optim
 import models.alignment_corr
 import torch.nn.functional as F
 import utils.losses
 import numpy as np
-import matplotlib.pyplot as plt
 import utils.draws
 import utils.flow
+import thesis.runner
+import matplotlib.pyplot as plt
 
 
-class ThesisAlignmentRunner(skeltorch.Runner):
+class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
     utils_losses = None
+    losses_items_ids = None
 
     def init_model(self, device):
         self.model = models.alignment_corr.AlignmentCorrelation(device).to(device)
@@ -21,7 +22,14 @@ class ThesisAlignmentRunner(skeltorch.Runner):
         )
 
     def init_others(self, device):
+        self.scheduler = torch.optim.lr_scheduler.StepLR(
+            self.optimizer,
+            step_size=self.experiment.configuration.get('training', 'lr_scheduler_step_size'),
+            gamma=self.experiment.configuration.get('training', 'lr_scheduler_gamma')
+        )
         self.utils_losses = utils.losses.LossesUtils(device)
+        self.losses_items_ids = ['recons_16', 'recons_64', 'recons_256']
+        super().init_others(device)
 
     def train_step(self, it_data, device):
         # Decompose iteration data and move data to proper device
@@ -37,6 +45,11 @@ class ThesisAlignmentRunner(skeltorch.Runner):
 
         # Get both total loss and loss items
         loss, loss_items = self.compute_loss(xs, xs_aligned, v_maps, t, r_list)
+
+        # Append loss items to epoch dictionary
+        e_losses_items = self.e_train_losses_items if self.model.training else self.e_validation_losses_items
+        for i, loss_item in enumerate(self.losses_items_ids):
+            e_losses_items[loss_item].append(loss_items[i].item())
 
         # Return total loss
         return loss
@@ -56,6 +69,13 @@ class ThesisAlignmentRunner(skeltorch.Runner):
                (v_map_16, v_map_64, v_map_256)
 
     def compute_loss(self, xs, xs_aligned, v_maps, t, r_list):
+
+        plt.imshow(xs[1][0, :, 0].permute(1, 2, 0))
+        plt.show()
+
+        plt.imshow(xs_aligned[1][0, :, 0].permute(1, 2, 0).detach())
+        plt.show()
+
         loss_recons_16 = self.utils_losses.masked_l1(
             xs[0][:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1), xs_aligned[0], v_maps[0]
         )
@@ -66,10 +86,6 @@ class ThesisAlignmentRunner(skeltorch.Runner):
             xs[2][:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1), xs_aligned[2], v_maps[2]
         )
         return loss_recons_16 + loss_recons_64 + loss_recons_256, [loss_recons_16, loss_recons_64, loss_recons_256]
-
-    def train_after_epoch_tasks(self, device):
-        super().train_after_epoch_tasks(device)
-        self.test(None, device)
 
     def test(self, epoch, device):
         # Load state if epoch is set

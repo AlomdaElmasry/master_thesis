@@ -1,4 +1,7 @@
 import torch
+import cv2
+import numpy as np
+import matplotlib.pyplot as plt
 
 
 def corr_to_flow(corr):
@@ -39,9 +42,16 @@ def flow_abs_to_relative(flow):
     flow_pos_identity = torch.stack((flow_pos_grid_x, flow_pos_grid_y), dim=2).view(1, 1, s, s, 2)
 
     # Subtract flow - identity to obtain relative flow between [-2, 2]
-    flow_rel = flow - flow_pos_identity.repeat(b, f, 1, 1, 1)
-    flow_rel *= (s - 1)
-    flow_rel = flow_rel.int()
+    return flow - flow_pos_identity.repeat(b, f, 1, 1, 1)
 
-    # Lala
-    e = 1
+
+def plot_relative_flow(flow_rel):
+    mag, ang = cv2.cartToPolar(flow_rel[:, :, 0].numpy(), flow_rel[:, :, 1].numpy())
+    hsv = np.zeros((16, 16, 3), dtype=np.float32)
+    hsv[..., 0] = ang * 180 / np.pi / 2
+    hsv[..., 1] = 255
+    hsv[..., 2] = cv2.normalize(mag, None, 0, 255, cv2.NORM_MINMAX)
+    bgr = cv2.cvtColor(hsv, cv2.COLOR_HSV2RGB)
+    plt.imshow(bgr)
+    plt.show()
+    a = 1

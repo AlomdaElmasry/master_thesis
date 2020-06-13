@@ -64,7 +64,7 @@ class FlowEstimator(nn.Module):
             flow.transpose(1, 2).reshape(b * (f - 1), 2, h, w)
         ], dim=1)
         input_encoder = self.encoder(nn_input)
-        return self.flow_estimator(input_encoder).reshape(b, f - 1, 2, h, w).transpose(1, 2), \
+        return self.flow_estimator(input_encoder).reshape(b, f - 1, 2, h, w).permute(0, 1, 3, 4, 2), \
                self.vmap_estimator(input_encoder).reshape(b, f - 1, 1, h, w).transpose(1, 2)
 
 
@@ -88,7 +88,7 @@ class AlignmentCorrelation(nn.Module):
         # Apply the CorrelationVGG module. Corr is (b, t, h, w, h, w)
         corr = self.corr(x, m, t, r_list)
 
-        # Mix the corr 4D volume to obtain a 16x16 dense flow estimation of size (b, t, h, w, 2)
+        # Mix the corr 4D volume to obtain a 16x16 dense flow estimation of size (b, t, 16, 16, 2)
         flow_16 = self.corr_mixer(corr)
 
         # Interpolate x, m and corr_mixed to be 64x64
@@ -102,7 +102,7 @@ class AlignmentCorrelation(nn.Module):
             flow_16.reshape(b * (f - 1), 16, 16, 2).permute(0, 3, 1, 2), (64, 64), mode='bilinear'
         ).reshape(b, f - 1, 2, 64, 64).transpose(1, 2)
 
-        # Estimate 64x64 flow correction
+        # Estimate 64x64 flow correction of size (b, t, 64, 64, 2)
         flow_64, vmap_64 = self.flow_64(x_64, m_64, flow_64_pre, t, r_list)
 
         # Interpolate flow_64 to be 256x256
@@ -110,7 +110,7 @@ class AlignmentCorrelation(nn.Module):
             flow_64.reshape(b * (f - 1), 64, 64, 2).permute(0, 3, 1, 2), (h, w), mode='bilinear'
         ).reshape(b, f - 1, 2, h, w).transpose(1, 2)
 
-        # Estimate 256x256 flow correction
+        # Estimate 256x256 flow correction of size (b, t, 256, 256, 2)
         flow_256, vmap_256 = self.flow_256(x, m, flow_256_pre, t, r_list)
 
         # Return both corr and corr_mixed
