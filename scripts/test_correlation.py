@@ -10,6 +10,8 @@ import numpy as np
 import random
 import matplotlib.patches as patches
 import utils.flow
+import utils.movement
+import torch.nn.functional as F
 
 parser = argparse.ArgumentParser(description='Visualize samples from the dataset')
 parser.add_argument('--data-path', required=True, help='Path where the images are stored')
@@ -33,9 +35,9 @@ def plot_horiz(plots_list):
     for i, plots_item in enumerate(plots_list):
         x1, x2 = plots_item
         x2 = torch.nn.functional.interpolate(x2.view(1, 1, x2.size(0), x2.size(1)), size=(256, 256))
-        plt.subplot(len(plots_list), 2, 2*i + 1)
+        plt.subplot(len(plots_list), 2, 2 * i + 1)
         plt.imshow(x1)
-        plt.subplot(len(plots_list), 2, 2*i + 2)
+        plt.subplot(len(plots_list), 2, 2 * i + 2)
         plt.imshow(x2.view(256, 256))
     plt.show()
 
@@ -72,6 +74,14 @@ dataset = MaskedSequenceDataset(
 # Created Loader object
 loader = iter(torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=True))
 
+# Test movement affine
+obj_mov = utils.movement.MovementSimulator(20, 0, 0)
+affine_grid = obj_mov.identity_theta(16, 16).unsqueeze(0)
+affine_test = F.affine_grid(affine_grid, [1, 3, 16, 16], align_corners=True)
+a1 = affine_test[0, :, :, 0]
+a2 = affine_test[0, :, :, 1]
+b = 1
+
 # Get first sample
 (x, m), y, info = next(loader)
 
@@ -84,6 +94,9 @@ with torch.no_grad():
 # Transform corr to dense flow
 corr_flow = utils.flow.corr_to_flow(x_corr_vol)
 corr_flow_relative = utils.flow.flow_abs_to_relative(corr_flow)
+
+# Plot relative flow
+utils.flow.plot_relative_flow(corr_flow_relative[0, 0])
 
 # Ask for position to plot. x_corr_vol is (b, t, h, w, h, w)
 h_pos, w_pos = 11, 0
