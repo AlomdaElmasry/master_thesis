@@ -75,9 +75,12 @@ def crop_flow(flow, crop_size, crop_position):
     Returns:
         torch.FloatTensor: cropped dense flow tensor of size (B,F,H',W',2).
     """
+    b, f, h, w, _ = flow.size()
     flow_rel = flow_abs_to_relative(flow)
     flow_rel_cut = flow_rel[:, :, crop_position[0]:crop_position[0] + crop_size[0],
                    crop_position[1]:crop_position[1] + crop_size[1]]
+    flow_rel_cut[:, :, :, :, 0] *= (w / crop_size[1])
+    flow_rel_cut[:, :, :, :, 1] *= (h / crop_size[0])
     return flow_relative_to_abs(flow_rel_cut)
 
 

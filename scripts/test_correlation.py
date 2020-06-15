@@ -76,7 +76,7 @@ loader = iter(torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=True))
 
 # Test movement affine
 obj_mov = utils.movement.MovementSimulator(20, 0, 0)
-affine_grid = obj_mov.identity_theta(16, 16).unsqueeze(0)
+affine_grid = obj_mov.identity_affine_theta(16, 16).unsqueeze(0)
 affine_test = F.affine_grid(affine_grid, [1, 3, 16, 16], align_corners=True)
 a1 = affine_test[0, :, :, 0]
 a2 = affine_test[0, :, :, 1]

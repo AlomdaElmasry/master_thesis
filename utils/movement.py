@@ -17,50 +17,66 @@ class MovementSimulator:
                                    size=2) if self.max_displacement > 0 else (0, 0)
         sx, sy = np.random.uniform(low=1 - self.max_scaling, high=1 + self.max_scaling, size=2)
         rot = np.random.uniform(low=-self.max_rotation, high=self.max_rotation)
-        affine_matrix = AffineTransform(translation=(tx, ty), scale=(sx, sy), rotation=rot).params
+        affine_matrix = AffineTransform(translation=(50, 50), scale=(sx, sy), rotation=rot).params
         return torch.from_numpy(affine_matrix).float()
 
-    def empty_affine(self):
-        affine_matrix = np.linalg.inv(AffineTransform(translation=(0, 0), scale=(1, 1), rotation=0).params)
-        return torch.from_numpy(affine_matrix).float()
-
-    def identity_theta(self, h, w):
-        identity_affine = self.empty_affine()
-        return self.affine2theta(identity_affine, h, w)
-
-    def simulate_movement(self, data_in, n, random_affines=None):
+    def simulate_movement(self, x, n, affine_matrices=None):
         """Simulates a moving sequence of ``n` frames using ``frame`` as starting point.
 
         Args:
-            data (torch.FloatTensor): tensor of size (C,H,W) containing the first frame.
+            x (torch.FloatTensor): tensor of size (C,H,W) containing the first frame.
             n (int): number of frames of the sequence.
+            affine_matrices (torch.FloatTensor): tensor of size (n,3,3) containing the transformations to apply.
 
         Returns:
             torch.FloatTensor: tensor of size (C,F,H,W) containing the moving sequence.
         """
-        c, h, w = data_in.size()
+        c, h, w = x.size()
 
         # Create a Tensor with n affine transformations. random_affine \in (n_frames, 3, 3)
-        if random_affines is None:
-            random_affines = [self.random_affine() for _ in range(n - 1)]
-            random_affines = random_affines[:(n - 1) // 2] + [self.empty_affine()] + random_affines[(n - 1) // 2:]
-            random_affines = torch.stack(random_affines, dim=0)
+        if affine_matrices is None:
+            affine_matrices = [self.random_affine() for _ in range(n - 1)]
+            affine_matrices = affine_matrices[:(n - 1) // 2] + [MovementSimulator.identity_affine()] + \
+                              affine_matrices[(n - 1) // 2:]
+            affine_matrices_inv = [MovementSimulator.affine_inverse(affine_mat) for affine_mat in affine_matrices]
+
+        # Stack matrices
+        affine_matrices, affine_matrices_inv = torch.stack(affine_matrices), torch.stack(affine_matrices_inv)
 
         # Stack affine transformations with respect to the central frame
-        random_affines_stacked = MovementSimulator.stack_transformations(random_affines, t=(n - 1) // 2)
-        random_thetas_stacked = torch.stack([
-            MovementSimulator.affine2theta(ra, h, w) for ra in random_affines_stacked
-        ])
-        affine_grid = F.affine_grid(random_thetas_stacked, [n, c, h, w], align_corners=True)
-        data_out = F.grid_sample(data_in.unsqueeze(0).repeat(n, 1, 1, 1), affine_grid, align_corners=True)
+        affine_matrices = MovementSimulator.stack_transformations(affine_matrices, t=(n - 1) // 2)
+        affine_matrices_inv = MovementSimulator.stack_transformations(affine_matrices_inv, t=(n - 1) // 2)
+        affine_matrices_theta = torch.stack([MovementSimulator.affine2theta(ra, h, w) for ra in affine_matrices])
+        affine_matrices_inv_theta = torch.stack([
+            MovementSimulator.affine2theta(ra, h, w) for ra in affine_matrices_inv])
+
+        # Create the grid
+        flow = F.affine_grid(affine_matrices_theta, [n, c, h, w], align_corners=True)
+        flow_inv = F.affine_grid(affine_matrices_inv_theta, [n, c, h, w], align_corners=True)
+
+        # Apply the flow to the target frame
+        y = F.grid_sample(x.unsqueeze(0).repeat(n, 1, 1, 1), flow, align_corners=True)
 
         # Return both data_out and random_thetas_stacked
-        return data_out.permute(1, 0, 2, 3), affine_grid
+        return y.permute(1, 0, 2, 3), flow_inv
 
     @staticmethod
-    def transform_single(image, transformation_affine):
+    def identity_affine():
+        affine_matrix = np.linalg.inv(AffineTransform(translation=(0, 0), scale=(1, 1), rotation=0).params)
+        return torch.from_numpy(affine_matrix).float()
+
+    @staticmethod
+    def identity_affine_theta(self, h, w):
+        return self.affine2theta(MovementSimulator.identity_affine(), h, w)
+
+    @staticmethod
+    def affine_inverse(affine):
+        return torch.from_numpy(np.linalg.inv(affine))
+
+    @staticmethod
+    def transform_single(image, flow):
         c, h, w = image.size()
-        transformation_theta = MovementSimulator.affine2theta(transformation_affine, h, w).unsqueeze(0)
+        transformation_theta = MovementSimulator.affine2theta(flow, h, w).unsqueeze(0)
         affine_grid = F.affine_grid(transformation_theta, [1, c, h, w])
         return F.grid_sample(image.unsqueeze(0), affine_grid).squeeze(0)
 
