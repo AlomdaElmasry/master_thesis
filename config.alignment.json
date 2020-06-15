@@ -17,7 +17,7 @@
     "dilatation_iterations": 4,
     "p_simulator_gts": 1,
     "p_simulator_masks": 0,
-    "gts_movement_params": [20, 0, 0],
+    "gts_movement_params": [20, 0.05, 0.20],
     "masks_movement_params": [20, 0, 0],
     "p_repeat": 0
   },
@@ -25,7 +25,7 @@
     "loss_lambdas": [100, 1]
   },
   "training": {
-    "batch_size": 16,
+    "batch_size": 4,
     "train_max_iterations": 1000,
     "validation_max_iterations": 100,
     "lr": 1e-4,
