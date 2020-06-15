@@ -120,13 +120,15 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
         # Iterate over the samples
         for it_data in loader:
             (x, m), y, info = it_data
-            x, y, m = x.to(device), y.to(device), m.to(device)
+            x, m, y, gt_movement = x.to(device), m.to(device), y.to(device), info[5].to(device)
 
             # Propagate through the model
             t, r_list = x.size(2) // 2, list(range(x.size(2)))
             r_list.pop(t)
             with torch.no_grad():
-                corr, flows, xs, ms, xs_aligned, ms_aligned, v_maps = self.train_step_propagate(x, m, t, r_list)
+                corr, flows, xs, ms, gt_movements, xs_aligned, ms_aligned, v_maps = self.train_step_propagate(
+                    x, m, gt_movement, t, r_list
+                )
 
             # Add items to the lists
             x_64_tbx.append(xs[1].cpu().numpy())
