@@ -6,6 +6,8 @@ import cv2
 import os.path
 import utils.transforms
 import matplotlib.pyplot as plt
+import utils.flow
+import torch.nn.functional as F
 
 
 class ContentProvider(torch.utils.data.Dataset):
@@ -259,11 +261,15 @@ class MaskedSequenceDataset(torch.utils.data.Dataset):
                     masks_n, self.frames_spacing, False, masks_simulator_item
                 )
 
+        a = gt_movement[3, :, :, 0]
+
         # Apply GT transformations
-        if not self.force_resize:
+        if self.force_resize:
             y = utils.transforms.ImageTransforms.resize(y, self.image_size, keep_ratio=False)
+            gt_movement = utils.flow.crop_flow(gt_movement.unsqueeze(0), self.image_size)
         else:
-            y, _ = utils.transforms.ImageTransforms.crop(y, self.image_size)
+            y, crop_position = utils.transforms.ImageTransforms.crop(y, self.image_size)
+            gt_movement = utils.flow.crop_flow(gt_movement.unsqueeze(0), self.image_size, crop_position).squeeze(0)
 
         # Apply Mask transformations
         if self.image_size != (m.size(2), m.size(3)):

@@ -28,23 +28,26 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
             gamma=self.experiment.configuration.get('training', 'lr_scheduler_gamma')
         )
         self.utils_losses = utils.losses.LossesUtils(device)
-        self.losses_items_ids = ['recons_16', 'recons_64', 'recons_256']
+        # self.losses_items_ids = ['recons_16', 'recons_64', 'recons_256']
+        self.losses_items_ids = ['flow_16', 'flow_64', 'flow_256']
         super().init_others(device)
 
     def train_step(self, it_data, device):
         # Decompose iteration data and move data to proper device
         (x, m), y, info = it_data
-        x, m, y = x.to(device), m.to(device), y.to(device)
+        x, m, y, gt_movement = x.to(device), m.to(device), y.to(device), info[5].to(device)
 
         # Compute t and r_list
         t, r_list = x.size(2) // 2, list(range(x.size(2)))
         r_list.pop(t)
 
         # Propagate through the model
-        corr, flows, xs, ms, xs_aligned, ms_aligned, v_maps = self.train_step_propagate(x, m, t, r_list)
+        corr, flows, xs, ms, gt_movements, xs_aligned, ms_aligned, v_maps = self.train_step_propagate(
+            x, m, gt_movement, t, r_list
+        )
 
         # Get both total loss and loss items
-        loss, loss_items = self.compute_loss(xs, xs_aligned, v_maps, t, r_list)
+        loss, loss_items = self.compute_loss(xs, xs_aligned, flows, gt_movements, v_maps, t, r_list)
 
         # Append loss items to epoch dictionary
         e_losses_items = self.e_train_losses_items if self.model.training else self.e_validation_losses_items
@@ -54,21 +57,34 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
         # Return total loss
         return loss
 
-    def train_step_propagate(self, x, m, t, r_list):
+    def train_step_propagate(self, x, m, gt_movement, t, r_list):
         corr, flow_16, flow_64, flow_256, _, _ = self.model(x, m, t, r_list)
+
+        # Resize the data to multiple resolutions
         (x_16, m_16), (x_64, m_64), (x_256, m_256) = self.resize_data(x, m, 16), self.resize_data(x, m, 64), (x, m)
+
+        # Align the data in multiple resolutions
         x_16_aligned, m_16_aligned = self.align_data(x_16[:, :, r_list], m_16[:, :, r_list], flow_16)
         x_64_aligned, m_64_aligned = self.align_data(x_64[:, :, r_list], m_64[:, :, r_list], flow_64)
         x_256_aligned, m_256_aligned = self.align_data(x_256[:, :, r_list], m_256[:, :, r_list], flow_256)
-        # v_map_16 = (1 - m_16[:, :, t].unsqueeze(2)) * (1 - m_16_aligned)
-        # v_map_64 = (1 - m_64[:, :, t].unsqueeze(2)) * (1 - m_64_aligned)
-        # v_map_256 = (1 - m_256[:, :, t].unsqueeze(2)) * (1 - m_256_aligned)
-        v_map_16, v_map_64, v_map_256 = 1, 1, 1
-        return corr, (flow_16, flow_64, flow_256), (x_16, x_64, x_256), (m_16, m_64, m_256), \
-               (x_16_aligned, x_64_aligned, x_256_aligned), (m_16_aligned, m_64_aligned, m_256_aligned), \
-               (v_map_16, v_map_64, v_map_256)
 
-    def compute_loss(self, xs, xs_aligned, v_maps, t, r_list):
+        # Pack variables to return
+        flows = (flow_16, flow_64, flow_256)
+        xs = (x_16, x_64, x_256)
+        ms = (m_16, m_64, m_256)
+        gt_movements = utils.flow.resize_flow(gt_movement, (16, 16)), utils.flow.resize_flow(
+            gt_movement, (64, 64)), gt_movement
+        xs_aligned = (x_16_aligned, x_64_aligned, x_256_aligned)
+        ms_aligned = (m_16_aligned, m_64_aligned, m_256_aligned)
+        v_maps = 1, 1, 1
+
+        # Return packed data
+        return corr, flows, xs, ms, gt_movements, xs_aligned, ms_aligned, v_maps
+
+    def compute_loss(self, xs, xs_aligned, flows, gt_movements, v_maps, t, r_list):
+        flow_loss_16 = self.utils_losses.masked_l1(flows[0], gt_movements[0][:, r_list], 1)
+        flow_loss_64 = self.utils_losses.masked_l1(flows[1], gt_movements[1][:, r_list], 1)
+        flow_loss_256 = self.utils_losses.masked_l1(flows[2], gt_movements[2][:, r_list], 1)
         loss_recons_16 = self.utils_losses.masked_l1(
             xs[0][:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1), xs_aligned[0], v_maps[0]
         )
@@ -78,7 +94,8 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
         loss_recons_256 = self.utils_losses.masked_l1(
             xs[2][:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1), xs_aligned[2], v_maps[2]
         )
-        return loss_recons_16 + loss_recons_64 + loss_recons_256, [loss_recons_16, loss_recons_64, loss_recons_256]
+        total_loss = flow_loss_16 + flow_loss_64 + flow_loss_256
+        return total_loss, [flow_loss_16, flow_loss_64, flow_loss_256]
 
     def test(self, epoch, device):
         # Load state if epoch is set
@@ -154,9 +171,9 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
     def align_data(self, x, m, flow):
         b, c, f, h, w = x.size()
         x_aligned = F.grid_sample(
-            x.transpose(1, 2).reshape(-1, c, h, w), flow.reshape(-1, h, w, 2)
+            x.transpose(1, 2).reshape(-1, c, h, w), flow.reshape(-1, h, w, 2), align_corners=True
         ).reshape(b, -1, 3, h, w).transpose(1, 2)
         m_aligned = F.grid_sample(
-            m.transpose(1, 2).reshape(-1, 1, h, w), flow.reshape(-1, h, w, 2), mode='nearest'
+            m.transpose(1, 2).reshape(-1, 1, h, w), flow.reshape(-1, h, w, 2), align_corners=True, mode='nearest'
         ).reshape(b, -1, 1, h, w).transpose(1, 2)
         return x_aligned, m_aligned

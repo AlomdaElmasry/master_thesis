@@ -51,11 +51,11 @@ class MovementSimulator:
         random_thetas_stacked = torch.stack([
             MovementSimulator.affine2theta(ra, h, w) for ra in random_affines_stacked
         ])
-        affine_grid = F.affine_grid(random_thetas_stacked, [n, c, h, w])
-        data_out = F.grid_sample(data_in.unsqueeze(0).repeat(n, 1, 1, 1), affine_grid)
+        affine_grid = F.affine_grid(random_thetas_stacked, [n, c, h, w], align_corners=True)
+        data_out = F.grid_sample(data_in.unsqueeze(0).repeat(n, 1, 1, 1), affine_grid, align_corners=True)
 
         # Return both data_out and random_thetas_stacked
-        return data_out.permute(1, 0, 2, 3), random_affines
+        return data_out.permute(1, 0, 2, 3), affine_grid
 
     @staticmethod
     def transform_single(image, transformation_affine):
