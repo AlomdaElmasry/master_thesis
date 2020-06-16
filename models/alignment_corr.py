@@ -58,7 +58,7 @@ class FlowEstimator(nn.Module):
         # Create an identity dense flow for the target frame with respect to itself. Insert it at position t.
         flow_identity = F.affine_grid(
             utils.movement.MovementSimulator.identity_affine_theta(h, w).unsqueeze(0), [1, 1, h, w], align_corners=True
-        ).permute(0, 3, 1, 2).unsqueeze(2).repeat(b, 1, 1, 1, 1)
+        ).permute(0, 3, 1, 2).unsqueeze(2).repeat(b, 1, 1, 1, 1).to(x.device)
         flow_input = torch.cat([flow[:, :, :t], flow_identity, flow[:, :, t:]], dim=2)
 
         # Encode each frame independently with its frame, mask and flow with respect to the target
