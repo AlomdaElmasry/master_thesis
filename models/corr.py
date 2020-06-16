@@ -101,17 +101,9 @@ class CorrelationVGG(nn.Module):
         corr = torch.matmul(corr_1, corr_2).reshape(b, ref_n - 1, h, w, h, w)
 
         # Fill holes in the correlation matrix using a NN
-        # corr = self.conv(corr)
-
-        # Upscale correlation to 64x64
-        # corr_upsampled = torch.zeros((b, ref_n - 1, 64, 64, 64, 64))
-        # for i in range(16):
-        #     for j in range(16):
-        #         corr_pix_up = F.interpolate(corr[:, :, i, j], size=(64, 64)).view(b, ref_n - 1, 1, 1, 64, 64)
-        #         corr_upsampled[:, :, 4*i:4*i + 4:, 4*j:4*j + 4] = corr_pix_up.repeat(1, 1, 4, 4, 1, 1)
+        corr = self.conv(corr)
 
         # Compute the softmax over each pixel (b, t, h, w, h, w)
-        return corr
         return self.softmax(corr)
 
 

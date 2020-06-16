@@ -79,62 +79,6 @@ class FlowEstimator(nn.Module):
         return nn_output[:, :2].permute(0, 2, 3, 4, 1), nn_output[:, 2]
 
 
-# class FlowEstimator(nn.Module):
-#     def __init__(self, enc_c=6, dec_c=96):
-#         super(FlowEstimator, self).__init__()
-#         self.encoder = nn.Sequential(
-#             nn.Conv2d(enc_c, enc_c, kernel_size=5, padding=2), nn.ReLU(),
-#             nn.Conv2d(enc_c, enc_c * 2, kernel_size=5, stride=2, padding=2), nn.ReLU(),
-#             nn.Conv2d(enc_c * 2, enc_c * 2, kernel_size=3, padding=1), nn.ReLU(),
-#             nn.Conv2d(enc_c * 2, enc_c * 4, kernel_size=3, stride=2, padding=1), nn.ReLU(),
-#             nn.Conv2d(enc_c * 4, enc_c * 4, kernel_size=3, padding=1), nn.ReLU(),
-#             nn.Conv2d(enc_c * 4, enc_c * 8, kernel_size=3, stride=2, padding=1), nn.ReLU(),
-#             nn.Conv2d(enc_c * 8, enc_c * 8, kernel_size=3, padding=1), nn.ReLU(),
-#         )
-#         self.decoder = nn.Sequential(
-#             nn.Conv2d(dec_c, dec_c, kernel_size=3, padding=1), nn.ReLU(),
-#             nn.ConvTranspose2d(dec_c, dec_c // 2, kernel_size=3, padding=1, output_padding=1, stride=2), nn.ReLU(),
-#             nn.Conv2d(dec_c // 2, dec_c // 2, kernel_size=3, padding=1), nn.ReLU(),
-#             nn.ConvTranspose2d(dec_c // 2, dec_c // 4, kernel_size=3, padding=1, output_padding=1, stride=2), nn.ReLU(),
-#             nn.Conv2d(dec_c // 4, dec_c // 4, kernel_size=5, padding=2), nn.ReLU(),
-#             nn.ConvTranspose2d(dec_c // 4, dec_c // 8, kernel_size=5, padding=2, output_padding=1, stride=2), nn.ReLU(),
-#             nn.Conv2d(dec_c // 8, dec_c // 8, kernel_size=3, padding=1), nn.ReLU(),
-#             nn.Conv2d(dec_c // 8, dec_c // 16, kernel_size=3, padding=1), nn.ReLU(),
-#             nn.Conv2d(dec_c // 16, dec_c // 16, kernel_size=3, padding=1), nn.ReLU(),
-#             nn.Conv2d(dec_c // 16, 3, kernel_size=3, padding=1)
-#         )
-#
-#     def forward(self, x, m, flow, t, r_list):
-#         b, c, f, h, w = x.size()
-#
-#         # Create an identity dense flow for the target frame with respect to itself. Insert it at position t.
-#         flow_identity = F.affine_grid(
-#             utils.movement.MovementSimulator.identity_affine_theta(h, w).unsqueeze(0), [1, 1, h, w], align_corners=True
-#         ).permute(0, 3, 1, 2).unsqueeze(2).repeat(b, 1, 1, 1, 1).to(x.device)
-#         flow_input = torch.cat([flow[:, :, :t], flow_identity, flow[:, :, t:]], dim=2)
-#
-#         # Encode each frame independently with its frame, mask and flow with respect to the target
-#         encoder_input = torch.cat([
-#             x.transpose(1, 2).reshape(b * f, c, h, w),
-#             m.transpose(1, 2).reshape(b * f, 1, h, w),
-#             flow_input.transpose(1, 2).reshape(b * f, 2, h, w)
-#         ], dim=1)
-#         encoder_output = self.encoder(encoder_input).reshape(b, f, -1, h // 8, w // 8)
-#
-#         # Decode every pair of encodings with the target
-#         decoder_input = torch.cat([
-#             encoder_output[:, t].unsqueeze(1).repeat(1, f - 1, 1, 1, 1).reshape(b * (f - 1), -1, h // 8, w // 8),
-#             encoder_output[:, r_list].transpose(1, 2).reshape(b * (f - 1), -1, h // 8, w // 8)
-#         ], dim=1)
-#         decoder_output = self.decoder(decoder_input).reshape(b, f - 1, 3, h, w).transpose(1, 2)
-#
-#         # Apply Sigmoid to the third channel
-#         decoder_output[:, 2] = F.sigmoid(decoder_output[:, 2])
-#
-#         # Return flow and v_map separately
-#         return decoder_output[:, :2].permute(0, 2, 3, 4, 1), decoder_output[:, 2]
-
-
 class AlignmentCorrelation(nn.Module):
 
     def __init__(self, device):
@@ -145,8 +89,6 @@ class AlignmentCorrelation(nn.Module):
         self.flow_256 = FlowEstimator()
         self.register_buffer('mean', torch.as_tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1, 1))
         self.register_buffer('std', torch.as_tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1, 1))
-        print(self.get_n_params(self.corr_mixer))
-        print(self.get_n_params(self.flow_64))
 
     def get_n_params(self, model):
         pp = 0
