@@ -28,26 +28,27 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
             gamma=self.experiment.configuration.get('training', 'lr_scheduler_gamma')
         )
         self.utils_losses = utils.losses.LossesUtils(device)
-        # self.losses_items_ids = ['recons_16', 'recons_64', 'recons_256']
-        self.losses_items_ids = ['flow_16', 'flow_64', 'flow_256']
+        self.losses_items_ids = ['flow_16', 'flow_64', 'flow_256', 'alignment_recons_16', 'alignment_recons_64',
+                                 'alignment_recons_256']
         super().init_others(device)
 
     def train_step(self, it_data, device):
-        # Decompose iteration data and move data to proper device
         (x, m), y, info = it_data
-        x, m, y, use_gt_movements, gt_movement = x.to(device), m.to(device), y.to(device), info[2], info[5].to(device)
+        x, m, y, flows_use, flow_gt = x.to(device), m.to(device), y.to(device), info[2], info[5].to(device)
 
         # Compute t and r_list
         t, r_list = x.size(2) // 2, list(range(x.size(2)))
         r_list.pop(t)
 
         # Propagate through the model
-        corr, flows, xs, ms, gt_movements, xs_aligned, ms_aligned, v_maps = self.train_step_propagate(
-            x, m, gt_movement, t, r_list
-        )
+        corr, xs, ms, xs_aligned, xs_aligned_gt, ms_aligned, ms_aligned_gt, flows, flows_gt, flows_use, v_maps, \
+        v_maps_gt = self.train_step_propagate(x, m, flow_gt, flows_use, t, r_list)
 
         # Get both total loss and loss items
-        loss, loss_items = self.compute_loss(xs, xs_aligned, flows, use_gt_movements, gt_movements, v_maps, t, r_list)
+        loss, loss_items = self.compute_loss(
+            corr, xs, ms, xs_aligned, xs_aligned_gt, ms_aligned, ms_aligned_gt, flows, flows_gt, flows_use, v_maps,
+            v_maps_gt, t, r_list
+        )
 
         # Append loss items to epoch dictionary
         e_losses_items = self.e_train_losses_items if self.model.training else self.e_validation_losses_items
@@ -57,11 +58,22 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
         # Return total loss
         return loss
 
-    def train_step_propagate(self, x, m, gt_movement, t, r_list):
-        corr, flow_16, flow_64, flow_256, _, _ = self.model(x, m, t, r_list)
+    def train_step_propagate(self, x, m, flow_gt, flows_use, t, r_list):
+        corr, flow_16, flow_64, flow_256, v_map_64, v_map_256 = self.model(x, m, t, r_list)
 
         # Resize the data to multiple resolutions
         (x_16, m_16), (x_64, m_64), (x_256, m_256) = self.resize_data(x, m, 16), self.resize_data(x, m, 64), (x, m)
+        flow_16_gt, flow_64_gt, flow_256_gt = utils.flow.resize_flow(flow_gt[:, r_list], (16, 16)), \
+                                              utils.flow.resize_flow(flow_gt[:, r_list], (64, 64)), flow_gt[:, r_list]
+
+        # Align the data in multiple resolutions with GT dense flow
+        x_16_aligned_gt, m_16_aligned_gt = self.align_data(x_16[:, :, r_list], m_16[:, :, r_list], flow_16_gt)
+        x_64_aligned_gt, m_64_aligned_gt = self.align_data(x_64[:, :, r_list], m_64[:, :, r_list], flow_64_gt)
+        x_256_aligned_gt, m_256_aligned_gt = self.align_data(x_256[:, :, r_list], m_256[:, :, r_list], flow_256_gt)
+
+        # Compute target v_maps
+        v_map_64_gt = (m_64[:, :, t].repeat(1, 1, len(r_list), 1, 1) - m_64_aligned_gt).clamp(0, 1)
+        v_map_256_gt = (m_256[:, :, t].repeat(1, 1, len(r_list), 1, 1) - m_256_aligned_gt).clamp(0, 1)
 
         # Align the data in multiple resolutions
         x_16_aligned, m_16_aligned = self.align_data(x_16[:, :, r_list], m_16[:, :, r_list], flow_16)
@@ -69,44 +81,48 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
         x_256_aligned, m_256_aligned = self.align_data(x_256[:, :, r_list], m_256[:, :, r_list], flow_256)
 
         # Pack variables to return
-        flows = (flow_16, flow_64, flow_256)
         xs = (x_16, x_64, x_256)
         ms = (m_16, m_64, m_256)
-        gt_movements = utils.flow.resize_flow(gt_movement, (16, 16)), utils.flow.resize_flow(
-            gt_movement, (64, 64)), gt_movement
         xs_aligned = (x_16_aligned, x_64_aligned, x_256_aligned)
+        xs_aligned_gt = (x_16_aligned_gt, x_64_aligned_gt, x_256_aligned_gt)
         ms_aligned = (m_16_aligned, m_64_aligned, m_256_aligned)
-        v_maps = 1, 1, 1
+        ms_aligned_gt = (m_16_aligned_gt, m_64_aligned_gt, m_256_aligned_gt)
+        flows = (flow_16, flow_64, flow_256)
+        flows_gt = (flow_16_gt, flow_64_gt, flow_256_gt)
+        v_maps = (v_map_64, v_map_256)
+        v_maps_gt = (v_map_64_gt, v_map_256_gt)
 
         # Return packed data
-        return corr, flows, xs, ms, gt_movements, xs_aligned, ms_aligned, v_maps
+        return corr, xs, ms, xs_aligned, xs_aligned_gt, ms_aligned, ms_aligned_gt, flows, flows_gt, flows_use, v_maps, \
+               v_maps_gt
 
-    def compute_loss(self, xs, xs_aligned, flows, use_gt_movements, gt_movements, v_maps, t, r_list):
+    def compute_loss(self, corr, xs, ms, xs_aligned, xs_aligned_gt, ms_aligned, ms_aligned_gt, flows, flows_gt,
+                     flows_use, v_maps, v_maps_gt, t, r_list):
+
         # Compute flow losses
-        flow_loss_16 = self.utils_losses.masked_l1(
-            flows[0], gt_movements[0][:, r_list], torch.ones_like(flows[0]), batch_mask=use_gt_movements
-        )
-        flow_loss_64 = self.utils_losses.masked_l1(
-            flows[1], gt_movements[1][:, r_list], torch.ones_like(flows[1]), batch_mask=use_gt_movements
-        )
-        flow_loss_256 = self.utils_losses.masked_l1(
-            flows[2], gt_movements[2][:, r_list], torch.ones_like(flows[2]), batch_mask=use_gt_movements
-        )
+        flow_loss_16 = self.utils_losses.masked_l1(flows[0], flows_gt[0], torch.ones_like(flows[0]), flows_use)
+        flow_loss_64 = self.utils_losses.masked_l1(flows[1], flows_gt[1], torch.ones_like(flows[1]), flows_use)
+        flow_loss_256 = self.utils_losses.masked_l1(flows[2], flows_gt[2], torch.ones_like(flows[2]), flows_use)
 
         # Compute alignment reconstruction losses
-        loss_recons_16 = self.utils_losses.masked_l1(
-            xs[0][:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1), xs_aligned[0], v_maps[0]
+        alignment_recons_16 = self.utils_losses.masked_l1(
+            xs[0][:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1), xs_aligned_gt[0],
+            1 - ms[0][:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1), ~flows_use
         )
-        loss_recons_64 = self.utils_losses.masked_l1(
-            xs[1][:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1), xs_aligned[1], v_maps[1]
+        alignment_recons_64 = self.utils_losses.masked_l1(
+            xs[1][:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1), xs_aligned_gt[1],
+            1 - ms[1][:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1), ~flows_use
         )
-        loss_recons_256 = self.utils_losses.masked_l1(
-            xs[2][:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1), xs_aligned[2], v_maps[2]
+        alignment_recons_256 = self.utils_losses.masked_l1(
+            xs[2][:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1), xs_aligned_gt[2],
+            1 - ms[2][:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1), ~flows_use
         )
 
         # Compute sum of losses and return them
         total_loss = flow_loss_16 + flow_loss_64 + flow_loss_256
-        return total_loss, [flow_loss_16, flow_loss_64, flow_loss_256]
+        total_loss += alignment_recons_16 + alignment_recons_64 + alignment_recons_256
+        return total_loss, [flow_loss_16, flow_loss_64, flow_loss_256, alignment_recons_16, alignment_recons_64,
+                            alignment_recons_256]
 
     def test(self, epoch, device):
         # Load state if epoch is set
@@ -131,19 +147,18 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
         # Iterate over the samples
         for it_data in loader:
             (x, m), y, info = it_data
-            x, m, y, gt_movement = x.to(device), m.to(device), y.to(device), info[5].to(device)
+            x, m, y, flows_use, flow_gt = x.to(device), m.to(device), y.to(device), info[2], info[5].to(device)
 
             # Propagate through the model
             t, r_list = x.size(2) // 2, list(range(x.size(2)))
             r_list.pop(t)
             with torch.no_grad():
-                corr, flows, xs, ms, gt_movements, xs_aligned, ms_aligned, v_maps = self.train_step_propagate(
-                    x, m, gt_movement, t, r_list
-                )
+                corr, xs, ms, xs_aligned, xs_aligned_gt, ms_aligned, ms_aligned_gt, flows, flows_gt, flows_use, \
+                v_maps, v_maps_gt = self.train_step_propagate(x, m, flow_gt, flows_use, t, r_list)
 
             # Get GT alignment
-            x_64_aligned_gt, _ = self.align_data(xs[1], ms[1], gt_movements[1])
-            x_256_aligned_gt, _ = self.align_data(xs[2], ms[2], gt_movements[2])
+            x_64_aligned_gt, _ = self.align_data(xs[1][:, :, r_list], ms[1][:, :, r_list], flows_gt[1])
+            x_256_aligned_gt, _ = self.align_data(xs[2][:, :, r_list], ms[2][:, :, r_list], flows_gt[2])
 
             # Add items to the lists
             x_64_tbx.append(xs[1].cpu().numpy())
@@ -169,9 +184,11 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
         def add_to_tbx(x, m, x_aligned, x_aligned_gt, res_size):
             for b in range(x_256_tbx.shape[0]):
                 x_sample = x[b].transpose(1, 0, 2, 3)
+                x_aligned_gt_sample = np.insert(arr=x_aligned_gt[b], obj=x[b].shape[1] // 2, values=x[b, :, t], axis=1)
+                x_aligned_gt_sample = utils.draws.add_border(x_aligned_gt_sample, m[b, :, t]).transpose(1, 0, 2, 3)
                 x_aligned_sample = np.insert(arr=x_aligned[b], obj=x[b].shape[1] // 2, values=x[b, :, t], axis=1)
                 x_aligned_sample = utils.draws.add_border(x_aligned_sample, m[b, :, t]).transpose(1, 0, 2, 3)
-                sample = np.concatenate((x_sample, x_aligned_gt[b].transpose(1, 0, 2, 3), x_aligned_sample), axis=2)
+                sample = np.concatenate((x_sample, x_aligned_gt_sample, x_aligned_sample), axis=2)
                 self.experiment.tbx.add_images(
                     '{}_alignment_{}/{}'.format('validation', res_size, b + 1), sample,
                     global_step=self.counters['epoch']
