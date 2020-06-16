@@ -17,7 +17,7 @@
     "dilatation_iterations": 4,
     "p_simulator_gts": 1,
     "p_simulator_masks": 0,
-    "gts_movement_params": [20, 0.05, 0.20],
+    "gts_movement_params": [50, 0.1, 0.30],
     "masks_movement_params": [20, 0, 0],
     "p_repeat": 0
   },

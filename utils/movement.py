@@ -66,8 +66,8 @@ class MovementSimulator:
         return torch.from_numpy(affine_matrix).float()
 
     @staticmethod
-    def identity_affine_theta(self, h, w):
-        return self.affine2theta(MovementSimulator.identity_affine(), h, w)
+    def identity_affine_theta(h, w):
+        return MovementSimulator.affine2theta(MovementSimulator.identity_affine(), h, w)
 
     @staticmethod
     def affine_inverse(affine):
