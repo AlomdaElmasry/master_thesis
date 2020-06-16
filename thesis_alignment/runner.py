@@ -35,7 +35,7 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
     def train_step(self, it_data, device):
         # Decompose iteration data and move data to proper device
         (x, m), y, info = it_data
-        x, m, y, gt_movement = x.to(device), m.to(device), y.to(device), info[5].to(device)
+        x, m, y, use_gt_movements, gt_movement = x.to(device), m.to(device), y.to(device), info[2], info[5].to(device)
 
         # Compute t and r_list
         t, r_list = x.size(2) // 2, list(range(x.size(2)))
@@ -47,7 +47,7 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
         )
 
         # Get both total loss and loss items
-        loss, loss_items = self.compute_loss(xs, xs_aligned, flows, gt_movements, v_maps, t, r_list)
+        loss, loss_items = self.compute_loss(xs, xs_aligned, flows, use_gt_movements, gt_movements, v_maps, t, r_list)
 
         # Append loss items to epoch dictionary
         e_losses_items = self.e_train_losses_items if self.model.training else self.e_validation_losses_items
@@ -81,10 +81,19 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
         # Return packed data
         return corr, flows, xs, ms, gt_movements, xs_aligned, ms_aligned, v_maps
 
-    def compute_loss(self, xs, xs_aligned, flows, gt_movements, v_maps, t, r_list):
-        flow_loss_16 = self.utils_losses.masked_l1(flows[0], gt_movements[0][:, r_list], 1)
-        flow_loss_64 = self.utils_losses.masked_l1(flows[1], gt_movements[1][:, r_list], 1)
-        flow_loss_256 = self.utils_losses.masked_l1(flows[2], gt_movements[2][:, r_list], 1)
+    def compute_loss(self, xs, xs_aligned, flows, use_gt_movements, gt_movements, v_maps, t, r_list):
+        # Compute flow losses
+        flow_loss_16 = self.utils_losses.masked_l1(
+            flows[0], gt_movements[0][:, r_list], torch.ones_like(flows[0]), batch_mask=use_gt_movements
+        )
+        flow_loss_64 = self.utils_losses.masked_l1(
+            flows[1], gt_movements[1][:, r_list], torch.ones_like(flows[1]), batch_mask=use_gt_movements
+        )
+        flow_loss_256 = self.utils_losses.masked_l1(
+            flows[2], gt_movements[2][:, r_list], torch.ones_like(flows[2]), batch_mask=use_gt_movements
+        )
+
+        # Compute alignment reconstruction losses
         loss_recons_16 = self.utils_losses.masked_l1(
             xs[0][:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1), xs_aligned[0], v_maps[0]
         )
@@ -94,6 +103,8 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
         loss_recons_256 = self.utils_losses.masked_l1(
             xs[2][:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1), xs_aligned[2], v_maps[2]
         )
+
+        # Compute sum of losses and return them
         total_loss = flow_loss_16 + flow_loss_64 + flow_loss_256
         return total_loss, [flow_loss_16, flow_loss_64, flow_loss_256]
 

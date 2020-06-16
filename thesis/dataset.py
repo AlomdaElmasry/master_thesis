@@ -153,8 +153,9 @@ class ContentProvider(torch.utils.data.Dataset):
             frames_indexes_after = frame_indexes_candidates_post[1::frames_spacing]
             frames_indexes = frames_indexes_before + [frame_index] + frames_indexes_after
         y, m = self.get_items(frames_indexes)
-        return y, m, self.items_names[sequence_item], frames_indexes, torch.zeros((len(frames_indexes), 3, 3)), \
-               torch.zeros((len(frames_indexes), 3, 3))
+        gt_movement = None if y is None else torch.zeros((len(frames_indexes), y.size(2), y.size(3), 2))
+        m_movement = None if m is None else torch.zeros((len(frames_indexes), m.size(2), m.size(3), 2))
+        return y, m, self.items_names[sequence_item], frames_indexes, gt_movement, m_movement
 
     def _get_patch_simulated(self, frame_index, frames_n, movement_simulator):
         y, m, item_name = self.__getitem__(frame_index)
