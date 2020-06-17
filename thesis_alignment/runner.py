@@ -29,7 +29,7 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
         )
         self.utils_losses = utils.losses.LossesUtils(device)
         self.losses_items_ids = ['flow_16', 'flow_64', 'flow_256', 'alignment_recons_16', 'alignment_recons_64',
-                                 'alignment_recons_256']
+                                 'alignment_recons_256', 'v_map_loss_64', 'v_map_loss_256']
         super().init_others(device)
 
     def train_step(self, it_data, device):
@@ -42,7 +42,7 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
 
         # Propagate through the model
         corr, xs, ms, xs_aligned, xs_aligned_gt, ms_aligned, ms_aligned_gt, flows, flows_gt, flows_use, v_maps, \
-        v_maps_gt = self.train_step_propagate(x, m, flow_gt, flows_use, t, r_list)
+            v_maps_gt = self.train_step_propagate(x, m, flow_gt, flows_use, t, r_list)
 
         # Get both total loss and loss items
         loss, loss_items = self.compute_loss(
@@ -72,8 +72,8 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
         x_256_aligned_gt, m_256_aligned_gt = self.align_data(x_256[:, :, r_list], m_256[:, :, r_list], flow_256_gt)
 
         # Compute target v_maps
-        v_map_64_gt = (m_64[:, :, t].repeat(1, 1, len(r_list), 1, 1) - m_64_aligned_gt).clamp(0, 1)
-        v_map_256_gt = (m_256[:, :, t].repeat(1, 1, len(r_list), 1, 1) - m_256_aligned_gt).clamp(0, 1)
+        v_map_64_gt = (m_64[:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1) - m_64_aligned_gt).clamp(0, 1)
+        v_map_256_gt = (m_256[:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1) - m_256_aligned_gt).clamp(0, 1)
 
         # Align the data in multiple resolutions
         x_16_aligned, m_16_aligned = self.align_data(x_16[:, :, r_list], m_16[:, :, r_list], flow_16)
@@ -94,7 +94,7 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
 
         # Return packed data
         return corr, xs, ms, xs_aligned, xs_aligned_gt, ms_aligned, ms_aligned_gt, flows, flows_gt, flows_use, v_maps, \
-               v_maps_gt
+                v_maps_gt
 
     def compute_loss(self, corr, xs, ms, xs_aligned, xs_aligned_gt, ms_aligned, ms_aligned_gt, flows, flows_gt,
                      flows_use, v_maps, v_maps_gt, t, r_list):
@@ -118,11 +118,18 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
             1 - ms[2][:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1)
         )
 
+        # Compute visual map loss
+        v_map_loss_64 = self.utils_losses.bce(v_maps[0], v_maps_gt[0], torch.ones_like(v_maps_gt[0]), flows_use,
+                                              weight=0.25)
+        v_map_loss_256 = self.utils_losses.bce(v_maps[1], v_maps_gt[1], torch.ones_like(v_maps_gt[1]), flows_use,
+                                               weight=0.25)
+
         # Compute sum of losses and return them
         total_loss = flow_loss_16 + flow_loss_64 + flow_loss_256
         total_loss += alignment_recons_16 + alignment_recons_64 + alignment_recons_256
+        total_loss += v_map_loss_64 + v_map_loss_256
         return total_loss, [flow_loss_16, flow_loss_64, flow_loss_256, alignment_recons_16, alignment_recons_64,
-                            alignment_recons_256]
+                            alignment_recons_256, v_map_loss_64, v_map_loss_256]
 
     def test(self, epoch, device):
         # Load state if epoch is set

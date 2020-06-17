@@ -76,7 +76,7 @@ class FlowEstimator(nn.Module):
         nn_output[:, 2] = F.sigmoid(nn_output[:, 2])
 
         # Return flow and v_map separately
-        return nn_output[:, :2].permute(0, 2, 3, 4, 1), nn_output[:, 2]
+        return nn_output[:, :2].permute(0, 2, 3, 4, 1), nn_output[:, 2].unsqueeze(1)
 
 
 class AlignmentCorrelation(nn.Module):

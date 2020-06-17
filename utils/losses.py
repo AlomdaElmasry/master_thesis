@@ -22,11 +22,17 @@ class LossesUtils:
         for param in self.model_vgg.features.parameters():
             param.requires_grad = False
 
-    def masked_l1(self, x, x_hat, mask, batch_mask=None, reduction='mean', weight=1):
+    def masked_l1(self, input, target, mask, batch_mask=None, reduction='mean', weight=1):
         if batch_mask is not None:
-            x, x_hat, mask = x[batch_mask], x_hat[batch_mask], mask[batch_mask]
-        masked_l1_loss = F.l1_loss(x_hat * mask, x * mask, reduction=reduction)
+            input, target, mask = input[batch_mask], target[batch_mask], mask[batch_mask]
+        masked_l1_loss = F.l1_loss(input * mask, target * mask, reduction=reduction)
         return weight * masked_l1_loss / (torch.sum(mask) if reduction == 'sum' else 1)
+
+    def bce(self, input, target, mask, batch_mask=None, reduction='mean', weight=1):
+        if batch_mask is not None:
+            input, target, mask = input[batch_mask], target[batch_mask], mask[batch_mask]
+        bce_loss = F.binary_cross_entropy(input * mask, target * mask, reduction=reduction)
+        return weight * bce_loss / (torch.sum(mask) if reduction == 'sum' else 1)
 
     def perceptual(self, x, x_hat, weight=1):
         x_vgg = self.model_vgg(x.contiguous())
