@@ -46,7 +46,7 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
 
         # Propagate through the model
         corr, xs, ms, ys, xs_aligned, xs_aligned_gt, ms_aligned, ms_aligned_gt, flows, flows_gt, flows_use, v_maps, \
-            v_maps_gt = self.train_step_propagate(x, m, y, flow_gt, flows_use, t, r_list)
+        v_maps_gt = self.train_step_propagate(x, m, y, flow_gt, flows_use, t, r_list)
 
         # Get both total loss and loss items
         loss, loss_items = self.compute_loss(
@@ -171,8 +171,8 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
             t, r_list = x.size(2) // 2, list(range(x.size(2)))
             r_list.pop(t)
             with torch.no_grad():
-                corr, xs, ms, xs_aligned, xs_aligned_gt, ms_aligned, ms_aligned_gt, flows, flows_gt, flows_use, \
-                v_maps, v_maps_gt = self.train_step_propagate(x, m, flow_gt, flows_use, t, r_list)
+                corr, xs, ms, ys, xs_aligned, xs_aligned_gt, ms_aligned, ms_aligned_gt, flows, flows_gt, flows_use, \
+                    v_maps, v_maps_gt = self.train_step_propagate(x, m, y, flow_gt, flows_use, t, r_list)
 
             # Get GT alignment
             x_64_aligned_gt, _ = self.align_data(xs[1][:, :, r_list], ms[1][:, :, r_list], flows_gt[1])
