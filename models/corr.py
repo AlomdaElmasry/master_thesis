@@ -5,6 +5,7 @@ import models.cpn_encoders
 import models.cpn_decoders
 import models.vgg_16
 import matplotlib.pyplot as plt
+import utils.correlation
 
 
 class SeparableConv4d(nn.Module):
@@ -60,9 +61,9 @@ class Softmax3d(torch.nn.Module):
 
 class CorrelationVGG(nn.Module):
 
-    def __init__(self, device, use_softmax=False):
+    def __init__(self, model_vgg, use_softmax=False):
         super(CorrelationVGG, self).__init__()
-        self.model_vgg = models.vgg_16.get_pretrained_model(device, normalize_input=False)
+        self.model_vgg = model_vgg
         self.conv = SeparableConv4d()
         self.softmax = Softmax3d()
         self.use_softmax = use_softmax
@@ -72,39 +73,24 @@ class CorrelationVGG(nn.Module):
 
         # Get the features of the frames from VGG
         with torch.no_grad():
-            x_vgg_feats = self.model_vgg(x.transpose(1, 2).reshape(b * ref_n, c, h, w))
+            x_vgg_feats = self.model_vgg(x.transpose(1, 2).reshape(b * ref_n, c, h, w), normalize_input=False)
         x_vgg_feats = x_vgg_feats[3].reshape(b, ref_n, -1, 16, 16).transpose(1, 2)
 
         # Update the parameters to the VGG features
         b, c, ref_n, h, w = x_vgg_feats.size()
 
-        # Get target and reference values
-        feats_t = x_vgg_feats[:, :, t]
-        feats_ref = x_vgg_feats[:, :, r_list]
-        v_t = 1 - m[:, :, t]
-        v_ref = 1 - m[:, :, r_list]
+        # Interpolate the feature masks
+        corr_masks = F.interpolate(
+            1 - m.transpose(1, 2).reshape(b * ref_n, 1, m.size(3), m.size(4)), size=(h, w), mode='nearest'
+        ).reshape(b, ref_n, 1, h, w).transpose(1, 2)
 
-        # Resize v_t and v_aligned to be h x w
-        v_t = F.interpolate(v_t, size=(h, w), mode='nearest')
-        v_ref = F.interpolate(
-            v_ref.transpose(1, 2).reshape(-1, 1, v_ref.size(3), v_ref.size(4)), size=(h, w), mode='nearest'
-        ).reshape(b, ref_n - 1, 1, h, w).transpose(1, 2)
-
-        # Mask the features
-        feats_t, feats_ref = feats_t * v_t, feats_ref * v_ref
-
-        # Compute the correlation with target frame.
-        # corr is (b, t, h, w, h, w)
-        corr_1 = feats_t.reshape(b, c, -1).transpose(-1, -2).unsqueeze(1)
-        corr_1 /= torch.norm(corr_1, dim=3).unsqueeze(3) + 1e-9
-        corr_2 = feats_ref.reshape(b, c, ref_n - 1, -1).permute(0, 2, 1, 3)
-        corr_2 /= torch.norm(corr_2, dim=2).unsqueeze(2) + 1e-9
-        corr = torch.matmul(corr_1, corr_2).reshape(b, ref_n - 1, h, w, h, w)
+        # Compute the feature correlation
+        corr = utils.correlation.compute_masked_correlation(x_vgg_feats, corr_masks, t, r_list)
 
         # Fill holes in the correlation matrix using a NN
         corr = self.conv(corr)
 
-        # Compute the softmax over each pixel (b, t, h, w, h, w)
+        # Compute the Softmax over each pixel (b, t, h, w, h, w)
         return self.softmax(corr) if self.use_softmax else corr
 
 

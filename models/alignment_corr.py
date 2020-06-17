@@ -81,9 +81,9 @@ class FlowEstimator(nn.Module):
 
 class AlignmentCorrelation(nn.Module):
 
-    def __init__(self, device):
+    def __init__(self, model_vgg):
         super(AlignmentCorrelation, self).__init__()
-        self.corr = models.corr.CorrelationVGG(device)
+        self.corr = models.corr.CorrelationVGG(model_vgg)
         self.corr_mixer = AlignmentCorrelationMixer()
         self.flow_64 = FlowEstimator()
         self.flow_256 = FlowEstimator()
