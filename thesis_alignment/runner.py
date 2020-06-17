@@ -119,10 +119,8 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
         )
 
         # Compute visual map loss
-        v_map_loss_64 = self.utils_losses.bce(v_maps[0], v_maps_gt[0], torch.ones_like(v_maps_gt[0]), flows_use,
-                                              weight=0.25)
-        v_map_loss_256 = self.utils_losses.bce(v_maps[1], v_maps_gt[1], torch.ones_like(v_maps_gt[1]), flows_use,
-                                               weight=0.25)
+        v_map_loss_64 = self.utils_losses.bce(v_maps[0], v_maps_gt[0], torch.ones_like(v_maps_gt[0]), flows_use)
+        v_map_loss_256 = self.utils_losses.bce(v_maps[1], v_maps_gt[1], torch.ones_like(v_maps_gt[1]), flows_use)
 
         # Compute sum of losses and return them
         total_loss = flow_loss_16 + flow_loss_64 + flow_loss_256
