@@ -60,11 +60,12 @@ class Softmax3d(torch.nn.Module):
 
 class CorrelationVGG(nn.Module):
 
-    def __init__(self, device, target_size=16):
+    def __init__(self, device, use_softmax=False):
         super(CorrelationVGG, self).__init__()
         self.model_vgg = models.vgg_16.get_pretrained_model(device, normalize_input=False)
         self.conv = SeparableConv4d()
         self.softmax = Softmax3d()
+        self.use_softmax = use_softmax
 
     def forward(self, x, m, t, r_list):
         b, c, ref_n, h, w = x.size()
@@ -104,7 +105,7 @@ class CorrelationVGG(nn.Module):
         corr = self.conv(corr)
 
         # Compute the softmax over each pixel (b, t, h, w, h, w)
-        return self.softmax(corr)
+        return self.softmax(corr) if self.use_softmax else corr
 
 
 class CorrelationModel(nn.Module):
