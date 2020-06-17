@@ -106,15 +106,15 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
 
         # Compute alignment reconstruction losses
         alignment_recons_16 = self.utils_losses.masked_l1(
-            xs[0][:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1), xs_aligned_gt[0],
+            xs[0][:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1), xs_aligned[0],
             1 - ms[0][:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1)
         )
         alignment_recons_64 = self.utils_losses.masked_l1(
-            xs[1][:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1), xs_aligned_gt[1],
+            xs[1][:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1), xs_aligned[1],
             1 - ms[1][:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1)
         )
         alignment_recons_256 = self.utils_losses.masked_l1(
-            xs[2][:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1), xs_aligned_gt[2],
+            xs[2][:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1), xs_aligned[2],
             1 - ms[2][:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1)
         )
 
@@ -154,7 +154,7 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
             r_list.pop(t)
             with torch.no_grad():
                 corr, xs, ms, xs_aligned, xs_aligned_gt, ms_aligned, ms_aligned_gt, flows, flows_gt, flows_use, \
-                v_maps, v_maps_gt = self.train_step_propagate(x, m, flow_gt, flows_use, t, r_list)
+                    v_maps, v_maps_gt = self.train_step_propagate(x, m, flow_gt, flows_use, t, r_list)
 
             # Get GT alignment
             x_64_aligned_gt, _ = self.align_data(xs[1][:, :, r_list], ms[1][:, :, r_list], flows_gt[1])
