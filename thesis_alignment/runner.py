@@ -66,8 +66,8 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
         corr, flow_16, flow_64, flow_256, v_map_64, v_map_256 = self.model(x, m, t, r_list)
 
         # Resize the data to multiple resolutions
-        (x_16, v_16, y_16), (x_64, v_64, y_64), (x_256, v_256, y_256) = self.resize_data(x, 1 - m, y, 16), \
-                                                                        self.resize_data(x, 1 - m, y, 64), (x, 1 - m, y)
+        (x_16, v_16, y_16), (x_64, v_64, y_64), (x_256, v_256, y_256) = \
+            self.resize_data(x, 1 - m, y, 16), self.resize_data(x, 1 - m, y, 64), (x, 1 - m, y)
         flow_16_gt, flow_64_gt, flow_256_gt = utils.flow.resize_flow(flow_gt[:, r_list], (16, 16)), \
                                               utils.flow.resize_flow(flow_gt[:, r_list], (64, 64)), flow_gt[:, r_list]
 
@@ -96,7 +96,7 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
 
         # Return packed data
         return corr, xs, vs, ys, xs_aligned, xs_aligned_gt, vs_aligned, vs_aligned_gt, flows, flows_gt, flows_use, \
-                v_maps, v_maps_gt
+            v_maps, v_maps_gt
 
     def compute_loss(self, corr, xs, vs, ys, xs_aligned, xs_aligned_gt, vs_aligned, vs_aligned_gt, flows, flows_gt,
                      flows_use, v_maps, v_maps_gt, t, r_list):
@@ -172,8 +172,8 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
             t, r_list = x.size(2) // 2, list(range(x.size(2)))
             r_list.pop(t)
             with torch.no_grad():
-                corr, xs, ms, ys, xs_aligned, xs_aligned_gt, ms_aligned, ms_aligned_gt, flows, flows_gt, flows_use, \
-                v_maps, v_maps_gt = self.train_step_propagate(x, m, y, flow_gt, flows_use, t, r_list)
+                corr, xs, vs, ys, xs_aligned, xs_aligned_gt, vs_aligned, vs_aligned_gt, flows, flows_gt, flows_use, \
+                    v_maps, v_maps_gt = self.train_step_propagate(x, m, y, flow_gt, flows_use, t, r_list)
 
             # Get GT alignment
             x_64_aligned_gt, _ = self.align_data(xs[1][:, :, r_list], ms[1][:, :, r_list], flows_gt[1])
@@ -181,11 +181,11 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
 
             # Add items to the lists
             x_64_tbx.append(xs[1].cpu().numpy())
-            m_64_tbx.append(ms[1].cpu().numpy())
+            m_64_tbx.append(1 - vs[1].cpu().numpy())
             x_64_aligned_tbx.append(xs_aligned[1].cpu().numpy())
             x_64_aligned_gt_tbx.append(x_64_aligned_gt.cpu().numpy())
             x_256_tbx.append(xs[2].cpu().numpy())
-            m_256_tbx.append(ms[2].cpu().numpy())
+            m_256_tbx.append(1 - vs[2].cpu().numpy())
             x_256_aligned_tbx.append(xs_aligned[2].cpu().numpy())
             x_256_aligned_gt_tbx.append(x_256_aligned_gt.cpu().numpy())
             v_map_64_tbx.append(v_maps[0].cpu().numpy())
@@ -208,7 +208,7 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
         v_map_256_gt_tbx = np.concatenate(v_map_256_gt_tbx)
 
         # Define a function to add images to TensorBoard
-        def add_to_tbx(x, m, x_aligned, x_aligned_gt, res_size):
+        def add_alignment_tbx(x, m, x_aligned, x_aligned_gt, res_size):
             for b in range(x.shape[0]):
                 x_sample = x[b].transpose(1, 0, 2, 3)
                 x_aligned_gt_sample = np.insert(arr=x_aligned_gt[b], obj=t, values=x[b, :, t], axis=1)
@@ -222,7 +222,7 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
                 )
 
         # Define a function to add v_maps to TensorBoard
-        def add_vmap_tbx(x, m, v_map, v_map_gt, res_size):
+        def add_v_map_tbx(x, m, v_map, v_map_gt, res_size):
             for b in range(x.shape[0]):
                 x_sample = x[b]
                 v_map_rep, v_map_gt_rep, m_rep = v_map[b].repeat(3, axis=0), v_map_gt[b].repeat(3, axis=0), \
@@ -236,10 +236,10 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
                 )
 
         # Add different resolutions to TensorBoard
-        add_to_tbx(x_64_tbx, m_64_tbx, x_64_aligned_tbx, x_64_aligned_gt_tbx, '64')
-        add_to_tbx(x_256_tbx, m_256_tbx, x_256_aligned_tbx, x_256_aligned_gt_tbx, '256')
-        add_vmap_tbx(x_64_tbx, m_64_tbx, v_map_64_tbx, v_map_64_gt_tbx, '64')
-        add_vmap_tbx(x_256_tbx, m_256_tbx, v_map_256_tbx, v_map_256_gt_tbx, '256')
+        add_alignment_tbx(x_64_tbx, m_64_tbx, x_64_aligned_tbx, x_64_aligned_gt_tbx, '64')
+        add_alignment_tbx(x_256_tbx, m_256_tbx, x_256_aligned_tbx, x_256_aligned_gt_tbx, '256')
+        add_v_map_tbx(x_64_tbx, m_64_tbx, v_map_64_tbx, v_map_64_gt_tbx, '64')
+        add_v_map_tbx(x_256_tbx, m_256_tbx, v_map_256_tbx, v_map_256_gt_tbx, '256')
 
     def resize_data(self, x, m, y, size):
         b, c, f, h, w = x.size()
