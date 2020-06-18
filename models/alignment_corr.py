@@ -73,7 +73,7 @@ class FlowEstimator(nn.Module):
         nn_output = self.nn(nn_input).reshape(b, f - 1, 3, h, w).transpose(1, 2)
 
         # Apply Sigmoid to channel 3 (v_map)
-        nn_output[:, 2] = F.sigmoid(nn_output[:, 2])
+        nn_output[:, 2] = torch.sigmoid(nn_output[:, 2])
 
         # Return flow and v_map separately
         return nn_output[:, :2].permute(0, 2, 3, 4, 1), nn_output[:, 2].unsqueeze(1)
