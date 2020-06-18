@@ -77,8 +77,13 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
         x_256_aligned_gt, v_256_aligned_gt = self.align_data(x_256[:, :, r_list], v_256[:, :, r_list], flow_256_gt)
 
         # Compute target v_maps
-        v_map_64_gt = (v_64_aligned_gt - v_64[:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1)).clamp(0, 1)
-        v_map_256_gt = (v_256_aligned_gt - v_256[:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1)).clamp(0, 1)
+        v_map_64_gt, v_map_256_gt = torch.zeros_like(v_64_aligned_gt), torch.zeros_like(v_256_aligned_gt)
+        v_map_64_gt[flows_use] = (
+                v_64_aligned_gt[flows_use] - v_64[flows_use, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1)
+        ).clamp(0, 1)
+        v_map_256_gt[flows_use] = (
+                v_256_aligned_gt[flows_use] - v_256[flows_use, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1)
+        ).clamp(0, 1)
 
         # Align the data in multiple resolutions
         x_16_aligned, v_16_aligned = self.align_data(x_16[:, :, r_list], v_16[:, :, r_list], flow_16)
@@ -116,18 +121,23 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
         flow_loss_64 = self.utils_losses.masked_l1(flows[1], flows_gt[1], torch.ones_like(flows[1]), flows_use)
         flow_loss_256 = self.utils_losses.masked_l1(flows[2], flows_gt[2], torch.ones_like(flows[2]), flows_use)
 
+        # Compute out-of-frame regions from flows
+        mask_out_16 = ((flows[0] < -1).float() + (flows[0] > 1).float()).sum(4).clamp(0, 1).unsqueeze(1)
+        mask_out_64 = ((flows[1] < -1).float() + (flows[1] > 1).float()).sum(4).clamp(0, 1).unsqueeze(1)
+        mask_out_256 = ((flows[2] < -1).float() + (flows[2] > 1).float()).sum(4).clamp(0, 1).unsqueeze(1)
+
         # Compute alignment reconstruction losses
         alignment_recons_16 = self.utils_losses.masked_l1(
             xs[0][:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1), xs_aligned[0],
-            vs[0][:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1)
+            vs[0][:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1) * (1 - mask_out_16)
         )
         alignment_recons_64 = self.utils_losses.masked_l1(
             xs[1][:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1), xs_aligned[1],
-            vs[1][:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1)
+            vs[1][:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1) * (1 - mask_out_64)
         )
         alignment_recons_256 = self.utils_losses.masked_l1(
             xs[2][:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1), xs_aligned[2],
-            vs[2][:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1)
+            vs[2][:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1) * (1 - mask_out_256)
         )
 
         # Compute visual map loss
@@ -173,7 +183,7 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
             r_list.pop(t)
             with torch.no_grad():
                 corr, xs, vs, ys, xs_aligned, xs_aligned_gt, vs_aligned, vs_aligned_gt, flows, flows_gt, flows_use, \
-                    v_maps, v_maps_gt = self.train_step_propagate(x, m, y, flow_gt, flows_use, t, r_list)
+                v_maps, v_maps_gt = self.train_step_propagate(x, m, y, flow_gt, flows_use, t, r_list)
 
             # Get GT alignment
             x_64_aligned_gt, _ = self.align_data(xs[1][:, :, r_list], 1 - vs[1][:, :, r_list], flows_gt[1])
@@ -188,9 +198,9 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
             m_256_tbx.append(1 - vs[2].cpu().numpy())
             x_256_aligned_tbx.append(xs_aligned[2].cpu().numpy())
             x_256_aligned_gt_tbx.append(x_256_aligned_gt.cpu().numpy())
-            v_map_64_tbx.append(v_maps[0].cpu().numpy())
+            v_map_64_tbx.append((v_maps[0] > 0.5).float().cpu().numpy())
             v_map_64_gt_tbx.append(v_maps_gt[0].cpu().numpy())
-            v_map_256_tbx.append(v_maps[1].cpu().numpy())
+            v_map_256_tbx.append((v_maps[1] > 0.5).float().cpu().numpy())
             v_map_256_gt_tbx.append(v_maps_gt[1].cpu().numpy())
 
         # Concatenate the results along dim=0
