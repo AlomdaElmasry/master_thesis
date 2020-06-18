@@ -176,8 +176,8 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
                     v_maps, v_maps_gt = self.train_step_propagate(x, m, y, flow_gt, flows_use, t, r_list)
 
             # Get GT alignment
-            x_64_aligned_gt, _ = self.align_data(xs[1][:, :, r_list], ms[1][:, :, r_list], flows_gt[1])
-            x_256_aligned_gt, _ = self.align_data(xs[2][:, :, r_list], ms[2][:, :, r_list], flows_gt[2])
+            x_64_aligned_gt, _ = self.align_data(xs[1][:, :, r_list], 1 - vs[1][:, :, r_list], flows_gt[1])
+            x_256_aligned_gt, _ = self.align_data(xs[2][:, :, r_list], 1 - vs[2][:, :, r_list], flows_gt[2])
 
             # Add items to the lists
             x_64_tbx.append(xs[1].cpu().numpy())
