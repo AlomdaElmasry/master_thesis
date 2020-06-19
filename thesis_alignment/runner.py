@@ -145,8 +145,7 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
         v_map_loss_256 = self.utils_losses.bce(v_maps[1], v_maps_gt[1], torch.ones_like(v_maps_gt[1]), flows_use)
 
         # Compute sum of losses and return them
-        total_loss = corr_loss
-        total_loss += flow_loss_16 + flow_loss_64 + flow_loss_256
+        total_loss = corr_loss + flow_loss_16 + flow_loss_64 + flow_loss_256
         total_loss += alignment_recons_16 + alignment_recons_64 + alignment_recons_256
         total_loss += v_map_loss_64 + v_map_loss_256
         return total_loss, [corr_loss, flow_loss_16, flow_loss_64, flow_loss_256, alignment_recons_16,
