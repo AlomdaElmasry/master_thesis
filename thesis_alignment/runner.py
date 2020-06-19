@@ -1,5 +1,5 @@
 import torch.optim
-import models.alignment_corr
+import models.thesis_alignment
 import torch.nn.functional as F
 import utils.losses
 import numpy as np
@@ -9,6 +9,7 @@ import thesis.runner
 import models.vgg_16
 import matplotlib.pyplot as plt
 import utils.correlation
+import utils.transforms
 
 
 class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
@@ -18,7 +19,7 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
 
     def init_model(self, device):
         self.model_vgg = models.vgg_16.get_pretrained_model(device)
-        self.model = models.alignment_corr.AlignmentCorrelation(self.model_vgg).to(device)
+        self.model = models.thesis_alignment.ThesisAlignmentModel(self.model_vgg).to(device)
 
     def init_optimizer(self, device):
         self.optimizer = torch.optim.Adam(
@@ -46,12 +47,12 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
 
         # Propagate through the model
         corr, xs, vs, ys, xs_aligned, xs_aligned_gt, vs_aligned, vs_aligned_gt, flows, flows_gt, flows_use, v_maps, \
-        v_maps_gt = self.train_step_propagate(x, m, y, flow_gt, flows_use, t, r_list)
+        v_maps_gt = ThesisAlignmentRunner.train_step_propagate(self.model, x, m, y, flow_gt, flows_use, t, r_list)
 
         # Get both total loss and loss items
-        loss, loss_items = self.compute_loss(
-            corr, xs, vs, ys, xs_aligned, xs_aligned_gt, vs_aligned, vs_aligned_gt, flows, flows_gt, flows_use, v_maps,
-            v_maps_gt, t, r_list
+        loss, loss_items = ThesisAlignmentRunner.compute_loss(
+            self.model_vgg, self.utils_losses, corr, xs, vs, ys, xs_aligned, xs_aligned_gt, vs_aligned, vs_aligned_gt,
+            flows, flows_gt, flows_use, v_maps, v_maps_gt, t, r_list
         )
 
         # Append loss items to epoch dictionary
@@ -61,95 +62,6 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
 
         # Return total loss
         return loss
-
-    def train_step_propagate(self, x, m, y, flow_gt, flows_use, t, r_list):
-        corr, flow_16, flow_64, flow_256, v_map_64, v_map_256 = self.model(x, m, t, r_list)
-
-        # Resize the data to multiple resolutions
-        (x_16, v_16, y_16), (x_64, v_64, y_64), (x_256, v_256, y_256) = \
-            self.resize_data(x, 1 - m, y, 16), self.resize_data(x, 1 - m, y, 64), (x, 1 - m, y)
-        flow_16_gt, flow_64_gt, flow_256_gt = utils.flow.resize_flow(flow_gt[:, r_list], (16, 16)), \
-                                              utils.flow.resize_flow(flow_gt[:, r_list], (64, 64)), flow_gt[:, r_list]
-
-        # Align the data in multiple resolutions with GT dense flow
-        x_16_aligned_gt, v_16_aligned_gt = self.align_data(x_16[:, :, r_list], v_16[:, :, r_list], flow_16_gt)
-        x_64_aligned_gt, v_64_aligned_gt = self.align_data(x_64[:, :, r_list], v_64[:, :, r_list], flow_64_gt)
-        x_256_aligned_gt, v_256_aligned_gt = self.align_data(x_256[:, :, r_list], v_256[:, :, r_list], flow_256_gt)
-
-        # Compute target v_maps
-        v_map_64_gt, v_map_256_gt = torch.zeros_like(v_64_aligned_gt), torch.zeros_like(v_256_aligned_gt)
-        v_map_64_gt[flows_use] = (
-                v_64_aligned_gt[flows_use] - v_64[flows_use, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1)
-        ).clamp(0, 1)
-        v_map_256_gt[flows_use] = (
-                v_256_aligned_gt[flows_use] - v_256[flows_use, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1)
-        ).clamp(0, 1)
-
-        # Align the data in multiple resolutions
-        x_16_aligned, v_16_aligned = self.align_data(x_16[:, :, r_list], v_16[:, :, r_list], flow_16)
-        x_64_aligned, v_64_aligned = self.align_data(x_64[:, :, r_list], v_64[:, :, r_list], flow_64)
-        x_256_aligned, v_256_aligned = self.align_data(x_256[:, :, r_list], v_256[:, :, r_list], flow_256)
-
-        # Pack variables to return
-        xs, vs, ys = (x_16, x_64, x_256), (v_16, v_64, v_256), (y_16, y_64, y_256)
-        xs_aligned = (x_16_aligned, x_64_aligned, x_256_aligned)
-        xs_aligned_gt = (x_16_aligned_gt, x_64_aligned_gt, x_256_aligned_gt)
-        vs_aligned = (v_16_aligned, v_64_aligned, v_256_aligned)
-        vs_aligned_gt = (v_16_aligned_gt, v_64_aligned_gt, v_256_aligned_gt)
-        flows, flows_gt = (flow_16, flow_64, flow_256), (flow_16_gt, flow_64_gt, flow_256_gt)
-        v_maps, v_maps_gt = (v_map_64, v_map_256), (v_map_64_gt, v_map_256_gt)
-
-        # Return packed data
-        return corr, xs, vs, ys, xs_aligned, xs_aligned_gt, vs_aligned, vs_aligned_gt, flows, flows_gt, flows_use, \
-            v_maps, v_maps_gt
-
-    def compute_loss(self, corr, xs, vs, ys, xs_aligned, xs_aligned_gt, vs_aligned, vs_aligned_gt, flows, flows_gt,
-                     flows_use, v_maps, v_maps_gt, t, r_list):
-
-        # Get the features of the frames from VGG
-        b, c, f, h, w = ys[2].size()
-        with torch.no_grad():
-            x_vgg_feats = self.model_vgg(ys[2].transpose(1, 2).reshape(b * f, c, h, w), normalize_input=True)
-        y_vgg_feats = x_vgg_feats[3].reshape(b, f, -1, 16, 16).transpose(1, 2)
-        corr_y = utils.correlation.compute_masked_correlation(y_vgg_feats, torch.ones_like(y_vgg_feats), t, r_list)
-
-        # Compute L1 loss between correlation volumes
-        corr_loss = F.l1_loss(corr, corr_y)
-
-        # Compute flow losses
-        flow_loss_16 = self.utils_losses.masked_l1(flows[0], flows_gt[0], torch.ones_like(flows[0]), flows_use)
-        flow_loss_64 = self.utils_losses.masked_l1(flows[1], flows_gt[1], torch.ones_like(flows[1]), flows_use)
-        flow_loss_256 = self.utils_losses.masked_l1(flows[2], flows_gt[2], torch.ones_like(flows[2]), flows_use)
-
-        # Compute out-of-frame regions from flows
-        mask_out_16 = ((flows[0] < -1).float() + (flows[0] > 1).float()).sum(4).clamp(0, 1).unsqueeze(1)
-        mask_out_64 = ((flows[1] < -1).float() + (flows[1] > 1).float()).sum(4).clamp(0, 1).unsqueeze(1)
-        mask_out_256 = ((flows[2] < -1).float() + (flows[2] > 1).float()).sum(4).clamp(0, 1).unsqueeze(1)
-
-        # Compute alignment reconstruction losses
-        alignment_recons_16 = self.utils_losses.masked_l1(
-            xs[0][:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1), xs_aligned[0],
-            vs[0][:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1) * (1 - mask_out_16)
-        )
-        alignment_recons_64 = self.utils_losses.masked_l1(
-            xs[1][:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1), xs_aligned[1],
-            vs[1][:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1) * (1 - mask_out_64)
-        )
-        alignment_recons_256 = self.utils_losses.masked_l1(
-            xs[2][:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1), xs_aligned[2],
-            vs[2][:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1) * (1 - mask_out_256)
-        )
-
-        # Compute visual map loss
-        v_map_loss_64 = self.utils_losses.bce(v_maps[0], v_maps_gt[0], torch.ones_like(v_maps_gt[0]), flows_use)
-        v_map_loss_256 = self.utils_losses.bce(v_maps[1], v_maps_gt[1], torch.ones_like(v_maps_gt[1]), flows_use)
-
-        # Compute sum of losses and return them
-        total_loss = corr_loss + flow_loss_16 + flow_loss_64 + flow_loss_256
-        total_loss += alignment_recons_16 + alignment_recons_64 + alignment_recons_256
-        total_loss += v_map_loss_64 + v_map_loss_256
-        return total_loss, [corr_loss, flow_loss_16, flow_loss_64, flow_loss_256, alignment_recons_16,
-                            alignment_recons_64, alignment_recons_256, v_map_loss_64, v_map_loss_256]
 
     def test(self, epoch, device):
         # Load state if epoch is set
@@ -250,22 +162,97 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
         add_v_map_tbx(x_64_tbx, m_64_tbx, v_map_64_tbx, v_map_64_gt_tbx, '64')
         add_v_map_tbx(x_256_tbx, m_256_tbx, v_map_256_tbx, v_map_256_gt_tbx, '256')
 
-    def resize_data(self, x, m, y, size):
-        b, c, f, h, w = x.size()
-        x_down = F.interpolate(x.transpose(1, 2).reshape(-1, c, h, w), (size, size), mode='bilinear'). \
-            reshape(b, f, c, size, size).transpose(1, 2)
-        m_down = F.interpolate(m.transpose(1, 2).reshape(-1, 1, h, w), (size, size)). \
-            reshape(b, f, 1, size, size).transpose(1, 2)
-        y_down = F.interpolate(y.transpose(1, 2).reshape(-1, c, h, w), (size, size), mode='bilinear'). \
-            reshape(b, f, c, size, size).transpose(1, 2)
-        return x_down, m_down, y_down
+    @staticmethod
+    def train_step_propagate(model, x, m, y, flow_gt, flows_use, t, r_list):
+        corr, flow_16, flow_64, flow_256, v_map_64, v_map_256 = model(x, m, t, r_list)
 
-    def align_data(self, x, m, flow):
-        b, c, f, h, w = x.size()
-        x_aligned = F.grid_sample(
-            x.transpose(1, 2).reshape(-1, c, h, w), flow.reshape(-1, h, w, 2), align_corners=True
-        ).reshape(b, -1, 3, h, w).transpose(1, 2)
-        m_aligned = F.grid_sample(
-            m.transpose(1, 2).reshape(-1, 1, h, w), flow.reshape(-1, h, w, 2), align_corners=True, mode='nearest'
-        ).reshape(b, -1, 1, h, w).transpose(1, 2)
-        return x_aligned, m_aligned
+        # Resize the data to multiple resolutions
+        x_16, v_16, y_16 = utils.transforms.resize_set(x, 1 - m, y, 16)
+        x_64, v_64, y_64 = utils.transforms.resize_set(x, 1 - m, y, 64)
+        x_256, v_256, y_256 = x, 1 - m, y
+
+        # Resize GT flows to multiple resolutions
+        flow_16_gt = utils.flow.resize_flow(flow_gt[:, r_list], (16, 16))
+        flow_64_gt = utils.flow.resize_flow(flow_gt[:, r_list], (64, 64))
+        flow_256_gt = flow_gt[:, r_list]
+
+        # Align the data in multiple resolutions with GT dense flow
+        x_16_aligned_gt, v_16_aligned_gt = utils.flow.align_set(x_16[:, :, r_list], v_16[:, :, r_list], flow_16_gt)
+        x_64_aligned_gt, v_64_aligned_gt = utils.flow.align_set(x_64[:, :, r_list], v_64[:, :, r_list], flow_64_gt)
+        x_256_aligned_gt, v_256_aligned_gt = utils.flow.align_set(x_256[:, :, r_list], v_256[:, :, r_list], flow_256_gt)
+
+        # Compute target v_maps
+        v_map_64_gt, v_map_256_gt = torch.zeros_like(v_64_aligned_gt), torch.zeros_like(v_256_aligned_gt)
+        v_map_64_gt[flows_use] = (
+                v_64_aligned_gt[flows_use] - v_64[flows_use, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1)
+        ).clamp(0, 1)
+        v_map_256_gt[flows_use] = (
+                v_256_aligned_gt[flows_use] - v_256[flows_use, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1)
+        ).clamp(0, 1)
+
+        # Align the data in multiple resolutions
+        x_16_aligned, v_16_aligned = utils.flow.align_set(x_16[:, :, r_list], v_16[:, :, r_list], flow_16)
+        x_64_aligned, v_64_aligned = utils.flow.align_set(x_64[:, :, r_list], v_64[:, :, r_list], flow_64)
+        x_256_aligned, v_256_aligned = utils.flow.align_set(x_256[:, :, r_list], v_256[:, :, r_list], flow_256)
+
+        # Pack variables to return
+        xs, vs, ys = (x_16, x_64, x_256), (v_16, v_64, v_256), (y_16, y_64, y_256)
+        xs_aligned = (x_16_aligned, x_64_aligned, x_256_aligned)
+        xs_aligned_gt = (x_16_aligned_gt, x_64_aligned_gt, x_256_aligned_gt)
+        vs_aligned = (v_16_aligned, v_64_aligned, v_256_aligned)
+        vs_aligned_gt = (v_16_aligned_gt, v_64_aligned_gt, v_256_aligned_gt)
+        flows, flows_gt = (flow_16, flow_64, flow_256), (flow_16_gt, flow_64_gt, flow_256_gt)
+        v_maps, v_maps_gt = (v_map_64, v_map_256), (v_map_64_gt, v_map_256_gt)
+
+        # Return packed data
+        return corr, xs, vs, ys, xs_aligned, xs_aligned_gt, vs_aligned, vs_aligned_gt, flows, flows_gt, flows_use, \
+               v_maps, v_maps_gt
+
+    @staticmethod
+    def compute_loss(model_vgg, utils_losses, corr, xs, vs, ys, xs_aligned, xs_aligned_gt, vs_aligned, vs_aligned_gt,
+                     flows, flows_gt, flows_use, v_maps, v_maps_gt, t, r_list):
+
+        # Get the features of the frames from VGG
+        b, c, f, h, w = ys[2].size()
+        with torch.no_grad():
+            x_vgg_feats = model_vgg(ys[2].transpose(1, 2).reshape(b * f, c, h, w), normalize_input=True)
+        y_vgg_feats = x_vgg_feats[3].reshape(b, f, -1, 16, 16).transpose(1, 2)
+        corr_y = utils.correlation.compute_masked_4d_correlation(y_vgg_feats, torch.ones_like(y_vgg_feats), t, r_list)
+
+        # Compute L1 loss between correlation volumes
+        corr_loss = F.l1_loss(corr, corr_y)
+
+        # Compute flow losses
+        flow_loss_16 = utils_losses.masked_l1(flows[0], flows_gt[0], torch.ones_like(flows[0]), flows_use)
+        flow_loss_64 = utils_losses.masked_l1(flows[1], flows_gt[1], torch.ones_like(flows[1]), flows_use)
+        flow_loss_256 = utils_losses.masked_l1(flows[2], flows_gt[2], torch.ones_like(flows[2]), flows_use)
+
+        # Compute out-of-frame regions from flows
+        mask_out_16 = ((flows[0] < -1).float() + (flows[0] > 1).float()).sum(4).clamp(0, 1).unsqueeze(1)
+        mask_out_64 = ((flows[1] < -1).float() + (flows[1] > 1).float()).sum(4).clamp(0, 1).unsqueeze(1)
+        mask_out_256 = ((flows[2] < -1).float() + (flows[2] > 1).float()).sum(4).clamp(0, 1).unsqueeze(1)
+
+        # Compute alignment reconstruction losses
+        alignment_recons_16 = utils_losses.masked_l1(
+            xs[0][:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1), xs_aligned[0],
+            vs[0][:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1) * (1 - mask_out_16)
+        )
+        alignment_recons_64 = utils_losses.masked_l1(
+            xs[1][:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1), xs_aligned[1],
+            vs[1][:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1) * (1 - mask_out_64)
+        )
+        alignment_recons_256 = utils_losses.masked_l1(
+            xs[2][:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1), xs_aligned[2],
+            vs[2][:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1) * (1 - mask_out_256)
+        )
+
+        # Compute visual map loss
+        v_map_loss_64 = utils_losses.bce(v_maps[0], v_maps_gt[0], torch.ones_like(v_maps_gt[0]), flows_use)
+        v_map_loss_256 = utils_losses.bce(v_maps[1], v_maps_gt[1], torch.ones_like(v_maps_gt[1]), flows_use)
+
+        # Compute sum of losses and return them
+        total_loss = corr_loss + flow_loss_16 + flow_loss_64 + flow_loss_256
+        total_loss += alignment_recons_16 + alignment_recons_64 + alignment_recons_256
+        total_loss += v_map_loss_64 + v_map_loss_256
+        return total_loss, [corr_loss, flow_loss_16, flow_loss_64, flow_loss_256, alignment_recons_16,
+                            alignment_recons_64, alignment_recons_256, v_map_loss_64, v_map_loss_256]

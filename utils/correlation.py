@@ -1,7 +1,31 @@
 import torch
 
 
-def compute_masked_correlation(features, masks, t, r_list):
+def compute_masked_correlation(feats_1, feats_2, mask_1, mask_2):
+    """Computes the normalized masked correlation pixel-by-pixel between two feature maps.
+
+    Args:
+        feats_1 (torch.FloatTensor): tensor of size (B,C,H,W) containing the features of the first image.
+        feats_2 (torch.FloatTensor): tensor of size (B,C,H,W) containing the features of the second image.
+
+    Returns:
+        torch.FloatTensor: normalized pixel-by-pixel correlation between the feature maps of size (B,1,H,W).
+
+    """
+    b, c, h, w = feats_1.size()
+
+    # Mask the features
+    feats_1, feats_2 = feats_1 * mask_1, feats_2 * mask_2
+
+    # Compute correlation multiplication and return
+    feats_1 = feats_1.permute(0, 2, 3, 1).reshape(b * h * w, -1)
+    feats_1_norm = torch.norm(feats_1, dim=1).unsqueeze(1) + 1e-9
+    feats_2 = feats_2.permute(0, 2, 3, 1).reshape(b * h * w, -1)
+    feats_2_norm = torch.norm(feats_2, dim=1).unsqueeze(1) + 1e-9
+    return ((feats_1 / feats_1_norm) * (feats_2 / feats_2_norm)).sum(1).reshape(b, h, w).unsqueeze(1)
+
+
+def compute_masked_4d_correlation(features, masks, t, r_list):
     """Computes the normalized correlation between the feature maps of t and r_list.
 
     Args:

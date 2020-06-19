@@ -78,7 +78,7 @@ class CorrelationVGG(nn.Module):
         ).reshape(b, ref_n, 1, h, w).transpose(1, 2)
 
         # Compute the feature correlation
-        corr = utils.correlation.compute_masked_correlation(x_vgg_feats, corr_masks, t, r_list)
+        corr = utils.correlation.compute_masked_4d_correlation(x_vgg_feats, corr_masks, t, r_list)
 
         # Fill holes in the correlation matrix using a NN
         corr = self.conv(corr)

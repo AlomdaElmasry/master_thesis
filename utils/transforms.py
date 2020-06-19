@@ -4,6 +4,25 @@ import torch
 import torch.nn.functional as F
 
 
+def resize_set(x, v, y, size):
+    """Resizes the entire set of data (x, m, y).
+
+    Args:
+        x (torch.FloatTensor): tensor of size (B,C,F,H,W) containing masked images quantized from [0, 1].
+        v (torch.FloatTensor): tensor of size (B,1,F,H,W) containing visibility maps quantized from [0, 1].
+        y (torch.FloatTensor): tensor of size (B,C,F,H,W) containing images from [0, 1].
+        size (int): new size of the set of data.
+    """
+    b, c, f, h, w = x.size()
+    x_new = F.interpolate(x.transpose(1, 2).reshape(-1, c, h, w), (size, size), mode='bilinear'). \
+        reshape(b, f, c, size, size).transpose(1, 2)
+    m_new = F.interpolate(v.transpose(1, 2).reshape(-1, 1, h, w), (size, size)). \
+        reshape(b, f, 1, size, size).transpose(1, 2)
+    y_new = F.interpolate(y.transpose(1, 2).reshape(-1, c, h, w), (size, size), mode='bilinear'). \
+        reshape(b, f, c, size, size).transpose(1, 2)
+    return x_new, m_new, y_new
+
+
 class ImageTransforms:
 
     @staticmethod

@@ -79,10 +79,10 @@ class FlowEstimator(nn.Module):
         return nn_output[:, :2].permute(0, 2, 3, 4, 1), nn_output[:, 2].unsqueeze(1)
 
 
-class AlignmentCorrelation(nn.Module):
+class ThesisAlignmentModel(nn.Module):
 
     def __init__(self, model_vgg):
-        super(AlignmentCorrelation, self).__init__()
+        super(ThesisAlignmentModel, self).__init__()
         self.corr = models.corr.CorrelationVGG(model_vgg)
         self.corr_mixer = AlignmentCorrelationMixer()
         self.flow_64 = FlowEstimator()

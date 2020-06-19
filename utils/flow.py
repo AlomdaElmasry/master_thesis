@@ -90,13 +90,12 @@ def resize_flow(flow, size):
     return flow_resized.reshape(b, f, 2, size[0], size[1]).permute(0, 1, 3, 4, 2)
 
 
-# def plot_relative_flow(flow_rel):
-#     h, w, _ = flow_rel.size()
-#     mag, ang = cv2.cartToPolar(flow_rel[:, :, 0].numpy(), flow_rel[:, :, 1].numpy())
-#     hsv = np.zeros((h, w, 3), dtype=np.float32)
-#     hsv[..., 0] = ang * 180 / np.pi / 2
-#     hsv[..., 1] = 255
-#     hsv[..., 2] = cv2.normalize(mag, None, 0, 1, cv2.NORM_MINMAX)
-#     bgr = cv2.cvtColor(hsv, cv2.COLOR_HSV2RGB)
-#     plt.imshow(bgr)
-#     plt.show()
+def align_set(x, v, flow):
+    b, c, f, h, w = x.size()
+    x_aligned = F.grid_sample(
+        x.transpose(1, 2).reshape(-1, c, h, w), flow.reshape(-1, h, w, 2), align_corners=True
+    ).reshape(b, -1, 3, h, w).transpose(1, 2)
+    v_aligned = F.grid_sample(
+        v.transpose(1, 2).reshape(-1, 1, h, w), flow.reshape(-1, h, w, 2), align_corners=True, mode='nearest'
+    ).reshape(b, -1, 1, h, w).transpose(1, 2)
+    return x_aligned, v_aligned
