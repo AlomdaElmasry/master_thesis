@@ -5,8 +5,41 @@ import utils.correlation
 
 
 class FrameEncoder(nn.Module):
+
     def __init__(self, res):
         super(FrameEncoder, self).__init__()
+        in_c = 4 if res == '16' else 5
+        self.convs = nn.Sequential(
+            nn.Conv2d(in_c, in_c, kernel_size=7, padding=3), nn.ReLU(),
+            nn.Conv2d(in_c, in_c, kernel_size=5, padding=2), nn.ReLU(),
+            nn.Conv2d(in_c, in_c, kernel_size=3, padding=1), nn.ReLU(),
+            nn.Conv2d(in_c, in_c * 2, kernel_size=3, padding=1), nn.ReLU(),
+            nn.Conv2d(in_c * 2, in_c * 2, kernel_size=3, padding=1), nn.ReLU(),
+            nn.Conv2d(in_c * 2, in_c * 2, kernel_size=5, padding=2), nn.ReLU(),
+            nn.Conv2d(in_c * 2, in_c * 2, kernel_size=7, padding=3), nn.ReLU(),
+            nn.Conv2d(in_c * 2, in_c * 2, kernel_size=5, padding=2), nn.ReLU(),
+            nn.Conv2d(in_c * 2, in_c * 2, kernel_size=3, padding=1), nn.ReLU(),
+            nn.Conv2d(in_c * 2, in_c * 4, kernel_size=3, padding=1), nn.ReLU(),
+            nn.Conv2d(in_c * 4, in_c * 4, kernel_size=3, padding=1, stride=2), nn.ReLU(),
+            nn.Conv2d(in_c * 4, in_c * 4, kernel_size=3, padding=1), nn.ReLU(),
+            nn.Conv2d(in_c * 4, in_c * 4, kernel_size=3, padding=1), nn.ReLU(),
+            nn.Conv2d(in_c * 4, in_c * 4, kernel_size=5, padding=2), nn.ReLU(),
+            nn.Conv2d(in_c * 4, in_c * 4, kernel_size=5, padding=2), nn.ReLU(),
+            nn.Conv2d(in_c * 4, in_c * 4, kernel_size=3, padding=1), nn.ReLU(),
+            nn.Conv2d(in_c * 4, in_c * 8, kernel_size=3, padding=1), nn.ReLU(),
+            nn.Conv2d(in_c * 8, in_c * 8, kernel_size=3, padding=1, stride=2), nn.ReLU(),
+            nn.Conv2d(in_c * 8, in_c * 8, kernel_size=3, padding=1), nn.ReLU(),
+            nn.Conv2d(in_c * 8, in_c * 8, kernel_size=3, padding=1), nn.ReLU(),
+            nn.Conv2d(in_c * 8, in_c * 8, kernel_size=5, padding=2), nn.ReLU()
+        )
+
+    def forward(self, enc_input):
+        return self.convs(enc_input)
+
+
+class FrameEncoderSkip(nn.Module):
+    def __init__(self, res):
+        super(FrameEncoderSkip, self).__init__()
         in_c = 4 if res == '16' else 5
         self.convs_1 = nn.Sequential(
             nn.Conv2d(in_c, in_c, kernel_size=7, padding=3), nn.ReLU(),
@@ -46,6 +79,46 @@ class FrameEncoder(nn.Module):
 class FrameDecoder(nn.Module):
     def __init__(self, res):
         super(FrameDecoder, self).__init__()
+        in_c = 64 if res == '16' else 80
+        self.convs = nn.Sequential(
+            nn.Conv2d(in_c, in_c, kernel_size=5, padding=2), nn.ReLU(),
+            nn.Conv2d(in_c, in_c, kernel_size=3, padding=1), nn.ReLU(),
+            nn.Conv2d(in_c, in_c // 2, kernel_size=3, padding=1), nn.ReLU(),
+            nn.ConvTranspose2d(in_c // 2, in_c // 2, kernel_size=3, padding=1, output_padding=1, stride=2), nn.ReLU(),
+            nn.Conv2d(in_c // 2, in_c // 2, kernel_size=3, padding=1), nn.ReLU(),
+            nn.Conv2d(in_c // 2, in_c // 2, kernel_size=3, padding=1), nn.ReLU(),
+            nn.Conv2d(in_c // 2, in_c // 2, kernel_size=5, padding=2), nn.ReLU(),
+            nn.Conv2d(in_c // 2, in_c // 2, kernel_size=5, padding=2), nn.ReLU(),
+            nn.Conv2d(in_c // 2, in_c // 2, kernel_size=3, padding=1), nn.ReLU(),
+            nn.Conv2d(in_c // 2, in_c // 4, kernel_size=3, padding=1), nn.ReLU(),
+            nn.ConvTranspose2d(in_c // 4, in_c // 4, kernel_size=3, padding=1, output_padding=1, stride=2), nn.ReLU(),
+            nn.Conv2d(in_c // 4, in_c // 4, kernel_size=3, padding=1), nn.ReLU(),
+            nn.Conv2d(in_c // 4, in_c // 4, kernel_size=3, padding=1), nn.ReLU(),
+            nn.Conv2d(in_c // 4, in_c // 4, kernel_size=5, padding=2), nn.ReLU(),
+            nn.Conv2d(in_c // 4, in_c // 8, kernel_size=3, padding=1), nn.ReLU(),
+            nn.Conv2d(in_c // 8, in_c // 8, kernel_size=3, padding=1), nn.ReLU(),
+            nn.Conv2d(in_c // 8, in_c // 8, kernel_size=5, padding=2), nn.ReLU(),
+            nn.Conv2d(in_c // 8, in_c // 8, kernel_size=7, padding=3), nn.ReLU(),
+            nn.Conv2d(in_c // 8, in_c // 8, kernel_size=5, padding=2), nn.ReLU(),
+            nn.Conv2d(in_c // 8, in_c // 8, kernel_size=3, padding=1), nn.ReLU(),
+            nn.Conv2d(in_c // 8, in_c // 8, kernel_size=3, padding=1), nn.ReLU(),
+            nn.Conv2d(in_c // 8, in_c // 8, kernel_size=5, padding=2), nn.ReLU(),
+            nn.Conv2d(in_c // 8, in_c // 8, kernel_size=3, padding=1), nn.ReLU(),
+            nn.Conv2d(in_c // 8, in_c // 16, kernel_size=3, padding=1), nn.ReLU(),
+            nn.Conv2d(in_c // 16, in_c // 16, kernel_size=5, padding=2), nn.ReLU(),
+            nn.Conv2d(in_c // 16, in_c // 16, kernel_size=3, padding=1), nn.ReLU(),
+            nn.Conv2d(in_c // 16, 3, kernel_size=3, padding=1), nn.ReLU(),
+            nn.Conv2d(3, 3, kernel_size=5, padding=2), nn.ReLU(),
+            nn.Conv2d(3, 3, kernel_size=3, padding=1), nn.ReLU()
+        )
+
+    def forward(self, dec_input):
+        return self.convs(dec_input)
+
+
+class FrameDecoderSkip(nn.Module):
+    def __init__(self, res):
+        super(FrameDecoderSkip, self).__init__()
         in_c = 64 if res == '16' else 80
         self.convs_1 = nn.Sequential(
             nn.Conv2d(in_c, in_c, kernel_size=5, padding=2), nn.ReLU(),
@@ -136,6 +209,47 @@ class ThesisInpaintingModel(nn.Module):
         return y_hat_16, y_hat_comp_16, y_hat_64, y_hat_comp_64, y_hat_256, y_hat_comp_256
 
     def inpaint_resolution(self, xs_target, vs_target, ys_target, xs_aligned, vs_aligned, v_maps, res):
+        b, c, f, h, w = xs_aligned.size()
+
+        # Normalize input
+        xs_target = (xs_target - self.mean.squeeze(2)) / self.std.squeeze(2)
+        xs_aligned = (xs_aligned - self.mean) / self.std
+
+        # Prepare the input of the encoder
+        enc_input = torch.cat([
+            torch.cat([xs_target.unsqueeze(2), xs_aligned], dim=2),
+            torch.cat([vs_target.unsqueeze(2), vs_aligned], dim=2)
+        ], dim=1)
+        enc_input = torch.cat([
+            enc_input, torch.cat([torch.zeros_like(vs_target).unsqueeze(2), v_maps], dim=2),
+        ], dim=1) if v_maps is not None else enc_input
+
+        # Encode input frames
+        enc_output = self.enc_handlers[res](enc_input.transpose(1, 2).reshape(b * (f + 1), -1, h, w)) \
+            .reshape(b, f + 1, -1, h // 4, w // 4).transpose(1, 2)
+
+        # Interpolate masks to perform the matching
+        vs_target_res = F.interpolate(vs_target, (h // 4, w // 4))
+        vs_aligned_res = F.interpolate(
+            vs_aligned.transpose(1, 2).reshape(b * f, -1, h, w), (h // 4, w // 4)
+        ).reshape(b, f, -1, h // 4, w // 4).transpose(1, 2)
+
+        # Compute the matching
+        matching = ThesisInpaintingModel.compute_matching(
+            enc_output[:, :, 0], enc_output[:, :, 1:], vs_target_res, vs_aligned_res
+        )
+
+        # Mix the features of the reference frames
+        dec_input = torch.cat([enc_output[:, :, 0], (enc_output[:, :, 1:] * matching).sum(2)], dim=1)
+
+        # Predict the inpainted frame and de-normalize
+        y_hat = self.dec_handlers[res](dec_input) * self.std.squeeze(2) + self.mean.squeeze(2)
+        y_hat_comp = ys_target * vs_target + y_hat * (1 - vs_target)
+
+        # Return both y_hat and y_hat_comp
+        return y_hat, y_hat_comp
+
+    def inpaint_resolution_skip(self, xs_target, vs_target, ys_target, xs_aligned, vs_aligned, v_maps, res):
         b, c, f, h, w = xs_aligned.size()
 
         # Normalize input

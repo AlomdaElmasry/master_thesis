@@ -12,8 +12,8 @@ import utils.draws
 
 
 class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
-    checkpoint_path = '/home/ubuntu/ebs/master_thesis/experiments/hard_flow_9/checkpoints/80.checkpoint.pkl'
-    # checkpoint_path = '/Users/DavidAlvarezDLT/Documents/PyCharm/master_thesis/experiments/test/checkpoints/58.checkpoint.pkl'
+    # checkpoint_path = '/home/ubuntu/ebs/master_thesis/experiments/hard_flow_9/checkpoints/80.checkpoint.pkl'
+    checkpoint_path = '/Users/DavidAlvarezDLT/Documents/PyCharm/master_thesis/experiments/test/checkpoints/58.checkpoint.pkl'
     model_vgg = None
     model_alignment = None
     utils_losses = None
