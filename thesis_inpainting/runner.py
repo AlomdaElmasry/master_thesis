@@ -6,10 +6,14 @@ import torch
 import utils.losses
 import thesis_alignment.runner
 import torch.nn.functional as F
+import utils.flow
+import numpy as np
+import utils.draws
 
 
 class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
     checkpoint_path = '/home/ubuntu/ebs/master_thesis/experiments/hard_flow_9/checkpoints/80.checkpoint.pkl'
+    # checkpoint_path = '/Users/DavidAlvarezDLT/Documents/PyCharm/master_thesis/experiments/test/checkpoints/58.checkpoint.pkl'
     model_vgg = None
     model_alignment = None
     utils_losses = None
@@ -72,7 +76,94 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
         return loss
 
     def test(self, epoch, device):
-        pass
+        # Load state if epoch is set
+        if epoch is not None:
+            self.load_states(epoch, device)
+
+        # Set model in evaluation mode
+        self.model.eval()
+
+        # Create a Subset using self.experiment.data.test_frames_indexes defined frames
+        subset_dataset = torch.utils.data.Subset(
+            self.experiment.data.datasets['validation'], self.experiment.data.validation_frames_indexes
+        )
+        loader = torch.utils.data.DataLoader(
+            subset_dataset, self.experiment.configuration.get('training', 'batch_size')
+        )
+
+        # Create variables with the images to log inside TensorBoard -> (b,c,h,w)
+        x_64_tbx, m_64_tbx, x_64_aligned_tbx, y_hat_64_tbx, y_hat_comp_64_tbx = [], [], [], [], []
+        x_256_tbx, m_256_tbx, x_256_aligned_tbx, y_hat_256_tbx, y_hat_comp_256_tbx = [], [], [], [], []
+        v_map_64_tbx, v_map_256_tbx = [], []
+
+        # Iterate over the samples
+        for it_data in loader:
+            (x, m), y, info = it_data
+            x, m, y, flows_use, flow_gt = x.to(device), m.to(device), y.to(device), info[2], info[5].to(device)
+
+            # Propagate through the model
+            t, r_list = x.size(2) // 2, list(range(x.size(2)))
+            r_list.pop(t)
+            with torch.no_grad():
+                corr, xs, vs, ys, xs_aligned, xs_aligned_gt, vs_aligned, vs_aligned_gt, flows, flows_gt, flows_use, \
+                v_maps, v_maps_gt = thesis_alignment.runner.ThesisAlignmentRunner.train_step_propagate(
+                    self.model_alignment, x, m, y, flow_gt, flows_use, t, r_list
+                )
+                ys_hat, ys_hat_comp = ThesisInpaintingRunner.train_step_propagate(
+                    self.model, xs, vs, ys, xs_aligned, vs_aligned, v_maps, t, r_list
+                )
+
+            # Add items to the lists
+            x_64_tbx.append(xs[1].cpu().numpy())
+            m_64_tbx.append(1 - vs[1].cpu().numpy())
+            x_64_aligned_tbx.append(xs_aligned[1].cpu().numpy())
+            y_hat_64_tbx.append(ys_hat[1].cpu().numpy())
+            y_hat_comp_64_tbx.append(ys_hat_comp[1].cpu().numpy())
+            x_256_tbx.append(xs[2].cpu().numpy())
+            m_256_tbx.append(1 - vs[2].cpu().numpy())
+            x_256_aligned_tbx.append(xs_aligned[2].cpu().numpy())
+            v_map_64_tbx.append((v_maps[0] > 0.5).float().cpu().numpy())
+            v_map_256_tbx.append((v_maps[1] > 0.5).float().cpu().numpy())
+            y_hat_256_tbx.append(ys_hat[2].cpu().numpy())
+            y_hat_comp_256_tbx.append(ys_hat_comp[2].cpu().numpy())
+
+        # Concatenate the results along dim=0
+        x_64_tbx = np.concatenate(x_64_tbx)
+        m_64_tbx = np.concatenate(m_64_tbx)
+        x_64_aligned_tbx = np.concatenate(x_64_aligned_tbx)
+        v_map_64_tbx = np.concatenate(v_map_64_tbx)
+        y_hat_64_tbx = np.concatenate(y_hat_64_tbx)
+        y_hat_comp_64_tbx = np.concatenate(y_hat_comp_64_tbx)
+        x_256_tbx = np.concatenate(x_256_tbx)
+        m_256_tbx = np.concatenate(m_256_tbx)
+        x_256_aligned_tbx = np.concatenate(x_256_aligned_tbx)
+        v_map_256_tbx = np.concatenate(v_map_256_tbx)
+        y_hat_256_tbx = np.concatenate(y_hat_256_tbx)
+        y_hat_comp_256_tbx = np.concatenate(y_hat_comp_256_tbx)
+
+        # Define a function to add images to TensorBoard
+        def add_sample_tbx(x, m, x_aligned, v_map, y_hat, y_hat_comp, t, res_size):
+            for b in range(x.shape[0]):
+                x_aligned_sample = np.insert(arr=x_aligned[b], obj=t, values=x[b, :, t], axis=1)
+                x_aligned_sample = utils.draws.add_border(x_aligned_sample, m[b, :, t])
+                v_map_rep, m_rep = v_map[b].repeat(3, axis=0), m[b, :, t].repeat(3, axis=0)
+                v_map_sample = np.insert(arr=v_map_rep, obj=t, values=m_rep, axis=1)
+                y_hat_sample = np.insert(arr=np.zeros_like(x_aligned[b]), obj=t, values=y_hat[b], axis=1)
+                y_hat_comp_sample = np.insert(arr=np.zeros_like(x_aligned[b]), obj=t, values=y_hat_comp[b], axis=1)
+                sample = np.concatenate(
+                    (x[b], x_aligned_sample, v_map_sample, y_hat_sample, y_hat_comp_sample), axis=2
+                ).transpose(1, 0, 2, 3)
+                self.experiment.tbx.add_images(
+                    '{}_sample_{}/{}'.format('validation', res_size, b + 1), sample, global_step=self.counters['epoch']
+                )
+
+        # Add different resolutions to TensorBoard
+        add_sample_tbx(
+            x_64_tbx, m_64_tbx, x_64_aligned_tbx, v_map_64_tbx, y_hat_64_tbx, y_hat_comp_64_tbx, t, '64'
+        )
+        add_sample_tbx(
+            x_256_tbx, m_256_tbx, x_256_aligned_tbx, v_map_256_tbx, y_hat_256_tbx, y_hat_comp_256_tbx, t, '256'
+        )
 
     @staticmethod
     def train_step_propagate(model, xs, vs, ys, xs_aligned, vs_aligned, v_maps, t, r_list):

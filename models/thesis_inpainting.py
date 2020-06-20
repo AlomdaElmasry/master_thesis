@@ -101,6 +101,15 @@ class ThesisInpaintingModel(nn.Module):
         self.register_buffer('mean', torch.as_tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1, 1))
         self.register_buffer('std', torch.as_tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1, 1))
 
+    def get_n_params(self, model):
+        pp = 0
+        for p in list(model.parameters()):
+            nn = 1
+            for s in list(p.size()):
+                nn = nn * s
+            pp += nn
+        return pp
+
     def forward(self, xs_target, vs_target, ys_target, xs_aligned, vs_aligned, v_maps):
         # Predict the inpainting at 16x16 resolution
         y_hat_16, y_hat_comp_16 = self.inpaint_resolution(
