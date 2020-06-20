@@ -92,8 +92,8 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
         )
 
         # Create variables with the images to log inside TensorBoard -> (b,c,h,w)
-        x_64_tbx, m_64_tbx, x_64_aligned_tbx, y_hat_64_tbx, y_hat_comp_64_tbx = [], [], [], [], []
-        x_256_tbx, m_256_tbx, x_256_aligned_tbx, y_hat_256_tbx, y_hat_comp_256_tbx = [], [], [], [], []
+        x_64_tbx, m_64_tbx, y_64_tbx, x_64_aligned_tbx, y_hat_64_tbx, y_hat_comp_64_tbx = [], [], [], [], [], []
+        x_256_tbx, m_256_tbx, y_256_tbx, x_256_aligned_tbx, y_hat_256_tbx, y_hat_comp_256_tbx = [], [], [], [], [], []
         v_map_64_tbx, v_map_256_tbx = [], []
 
         # Iterate over the samples
@@ -116,11 +116,13 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
             # Add items to the lists
             x_64_tbx.append(xs[1].cpu().numpy())
             m_64_tbx.append(1 - vs[1].cpu().numpy())
+            y_64_tbx.append(ys[1].cpu().numpy())
             x_64_aligned_tbx.append(xs_aligned[1].cpu().numpy())
             y_hat_64_tbx.append(ys_hat[1].cpu().numpy())
             y_hat_comp_64_tbx.append(ys_hat_comp[1].cpu().numpy())
             x_256_tbx.append(xs[2].cpu().numpy())
             m_256_tbx.append(1 - vs[2].cpu().numpy())
+            y_256_tbx.append(ys[2].cpu().numpy())
             x_256_aligned_tbx.append(xs_aligned[2].cpu().numpy())
             v_map_64_tbx.append((v_maps[0] > 0.5).float().cpu().numpy())
             v_map_256_tbx.append((v_maps[1] > 0.5).float().cpu().numpy())
@@ -130,25 +132,28 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
         # Concatenate the results along dim=0
         x_64_tbx = np.concatenate(x_64_tbx)
         m_64_tbx = np.concatenate(m_64_tbx)
+        y_64_tbx = np.concatenate(y_64_tbx)
         x_64_aligned_tbx = np.concatenate(x_64_aligned_tbx)
         v_map_64_tbx = np.concatenate(v_map_64_tbx)
         y_hat_64_tbx = np.concatenate(y_hat_64_tbx)
         y_hat_comp_64_tbx = np.concatenate(y_hat_comp_64_tbx)
         x_256_tbx = np.concatenate(x_256_tbx)
         m_256_tbx = np.concatenate(m_256_tbx)
+        y_256_tbx = np.concatenate(y_256_tbx)
         x_256_aligned_tbx = np.concatenate(x_256_aligned_tbx)
         v_map_256_tbx = np.concatenate(v_map_256_tbx)
         y_hat_256_tbx = np.concatenate(y_hat_256_tbx)
         y_hat_comp_256_tbx = np.concatenate(y_hat_comp_256_tbx)
 
         # Define a function to add images to TensorBoard
-        def add_sample_tbx(x, m, x_aligned, v_map, y_hat, y_hat_comp, t, res_size):
+        def add_sample_tbx(x, m, y, x_aligned, v_map, y_hat, y_hat_comp, t, res_size):
             for b in range(x.shape[0]):
                 x_aligned_sample = np.insert(arr=x_aligned[b], obj=t, values=x[b, :, t], axis=1)
                 x_aligned_sample = utils.draws.add_border(x_aligned_sample, m[b, :, t])
                 v_map_rep, m_rep = v_map[b].repeat(3, axis=0), m[b, :, t].repeat(3, axis=0)
                 v_map_sample = np.insert(arr=v_map_rep, obj=t, values=m_rep, axis=1)
                 y_sample = np.insert(arr=np.zeros_like(x_aligned[b]), obj=t, values=y_hat[b], axis=1)
+                y_sample[:, t - 1] = y[b]
                 y_sample[:, t + 1] = y_hat_comp[b]
                 sample = np.concatenate(
                     (x[b], x_aligned_sample, v_map_sample, y_sample), axis=2
@@ -159,10 +164,10 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
 
         # Add different resolutions to TensorBoard
         add_sample_tbx(
-            x_64_tbx, m_64_tbx, x_64_aligned_tbx, v_map_64_tbx, y_hat_64_tbx, y_hat_comp_64_tbx, t, '64'
+            x_64_tbx, m_64_tbx, y_64_tbx, x_64_aligned_tbx, v_map_64_tbx, y_hat_64_tbx, y_hat_comp_64_tbx, t, '64'
         )
         add_sample_tbx(
-            x_256_tbx, m_256_tbx, x_256_aligned_tbx, v_map_256_tbx, y_hat_256_tbx, y_hat_comp_256_tbx, t, '256'
+            x_256_tbx, m_256_tbx, y_256_tbx, x_256_aligned_tbx, v_map_256_tbx, y_hat_256_tbx, y_hat_comp_256_tbx, t, '256'
         )
 
     @staticmethod
