@@ -24,17 +24,17 @@ class FrameEncoder(nn.Module):
 class FrameDecoder(nn.Module):
     def __init__(self, res):
         super(FrameDecoder, self).__init__()
-        in_c = 64 if res == '16' else 80
+        in_c = 256
         self.convs = nn.Sequential(
-            nn.Conv2d(in_c, 257, kernel_size=3, stride=1, padding=1), nn.ReLU(),
-            nn.Conv2d(257, 257, kernel_size=3, stride=1, padding=1), nn.ReLU(),
-            nn.Conv2d(257, 257, kernel_size=3, stride=1, padding=1), nn.ReLU(),
-            nn.Conv2d(257, 257, kernel_size=3, stride=1, padding=2, dilation=2), nn.ReLU(),
-            nn.Conv2d(257, 257, kernel_size=3, stride=1, padding=4, dilation=4), nn.ReLU(),
-            nn.Conv2d(257, 257, kernel_size=3, stride=1, padding=8, dilation=8), nn.ReLU(),
-            nn.Conv2d(257, 257, kernel_size=3, stride=1, padding=16, dilation=16), nn.ReLU(),
-            nn.Conv2d(257, 257, kernel_size=3, stride=1, padding=1), nn.ReLU(),
-            nn.Conv2d(257, 128, kernel_size=3, stride=1, padding=1), nn.ReLU(),
+            nn.Conv2d(in_c, 256, kernel_size=3, stride=1, padding=1), nn.ReLU(),
+            nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1), nn.ReLU(),
+            nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1), nn.ReLU(),
+            nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=2, dilation=2), nn.ReLU(),
+            nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=4, dilation=4), nn.ReLU(),
+            nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=8, dilation=8), nn.ReLU(),
+            nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=16, dilation=16), nn.ReLU(),
+            nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1), nn.ReLU(),
+            nn.Conv2d(256, 128, kernel_size=3, stride=1, padding=1), nn.ReLU(),
             nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1), nn.ReLU(),
             nn.ConvTranspose2d(128, 128, kernel_size=3, padding=1, output_padding=1, stride=2), nn.ReLU(),
             nn.Conv2d(128, 64, kernel_size=3, stride=1, padding=1), nn.ReLU(),
