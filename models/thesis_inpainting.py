@@ -10,31 +10,41 @@ class FrameEncoder(nn.Module):
         super(FrameEncoder, self).__init__()
         in_c = 4 if res == '16' else 5
         self.convs = nn.Sequential(
-            nn.Conv2d(in_c, in_c, kernel_size=7, padding=3), nn.ReLU(),
-            nn.Conv2d(in_c, in_c, kernel_size=5, padding=2), nn.ReLU(),
-            nn.Conv2d(in_c, in_c, kernel_size=3, padding=1), nn.ReLU(),
-            nn.Conv2d(in_c, in_c * 2, kernel_size=3, padding=1), nn.ReLU(),
-            nn.Conv2d(in_c * 2, in_c * 2, kernel_size=3, padding=1), nn.ReLU(),
-            nn.Conv2d(in_c * 2, in_c * 2, kernel_size=5, padding=2), nn.ReLU(),
-            nn.Conv2d(in_c * 2, in_c * 2, kernel_size=7, padding=3), nn.ReLU(),
-            nn.Conv2d(in_c * 2, in_c * 2, kernel_size=5, padding=2), nn.ReLU(),
-            nn.Conv2d(in_c * 2, in_c * 2, kernel_size=3, padding=1), nn.ReLU(),
-            nn.Conv2d(in_c * 2, in_c * 4, kernel_size=3, padding=1), nn.ReLU(),
-            nn.Conv2d(in_c * 4, in_c * 4, kernel_size=3, padding=1, stride=2), nn.ReLU(),
-            nn.Conv2d(in_c * 4, in_c * 4, kernel_size=3, padding=1), nn.ReLU(),
-            nn.Conv2d(in_c * 4, in_c * 4, kernel_size=3, padding=1), nn.ReLU(),
-            nn.Conv2d(in_c * 4, in_c * 4, kernel_size=5, padding=2), nn.ReLU(),
-            nn.Conv2d(in_c * 4, in_c * 4, kernel_size=5, padding=2), nn.ReLU(),
-            nn.Conv2d(in_c * 4, in_c * 4, kernel_size=3, padding=1), nn.ReLU(),
-            nn.Conv2d(in_c * 4, in_c * 8, kernel_size=3, padding=1), nn.ReLU(),
-            nn.Conv2d(in_c * 8, in_c * 8, kernel_size=3, padding=1, stride=2), nn.ReLU(),
-            nn.Conv2d(in_c * 8, in_c * 8, kernel_size=3, padding=1), nn.ReLU(),
-            nn.Conv2d(in_c * 8, in_c * 8, kernel_size=3, padding=1), nn.ReLU(),
-            nn.Conv2d(in_c * 8, in_c * 8, kernel_size=5, padding=2), nn.ReLU()
+            nn.Conv2d(in_c, 64, kernel_size=5, stride=2, padding=2), nn.ReLU(),
+            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1), nn.ReLU(),
+            nn.Conv2d(64, 128, kernel_size=3, stride=4, padding=1), nn.ReLU(),
+            nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1), nn.ReLU(),
+            nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1)
         )
 
     def forward(self, enc_input):
         return self.convs(enc_input)
+
+
+class FrameDecoder(nn.Module):
+    def __init__(self, res):
+        super(FrameDecoder, self).__init__()
+        in_c = 64 if res == '16' else 80
+        self.convs = nn.Sequential(
+            nn.Conv2d(in_c, 257, kernel_size=3, stride=1, padding=1), nn.ReLU(),
+            nn.Conv2d(257, 257, kernel_size=3, stride=1, padding=1), nn.ReLU(),
+            nn.Conv2d(257, 257, kernel_size=3, stride=1, padding=1), nn.ReLU(),
+            nn.Conv2d(257, 257, kernel_size=3, stride=1, padding=2, dilation=2), nn.ReLU(),
+            nn.Conv2d(257, 257, kernel_size=3, stride=1, padding=4, dilation=4), nn.ReLU(),
+            nn.Conv2d(257, 257, kernel_size=3, stride=1, padding=8, dilation=8), nn.ReLU(),
+            nn.Conv2d(257, 257, kernel_size=3, stride=1, padding=16, dilation=16), nn.ReLU(),
+            nn.Conv2d(257, 257, kernel_size=3, stride=1, padding=1), nn.ReLU(),
+            nn.Conv2d(257, 128, kernel_size=3, stride=1, padding=1), nn.ReLU(),
+            nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1), nn.ReLU(),
+            nn.ConvTranspose2d(128, 128, kernel_size=3, padding=1, output_padding=1, stride=2), nn.ReLU(),
+            nn.Conv2d(128, 64, kernel_size=3, stride=1, padding=1), nn.ReLU(),
+            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1), nn.ReLU(),
+            nn.ConvTranspose2d(64, 64, kernel_size=3, padding=1, output_padding=1, stride=2), nn.ReLU(),
+            nn.Conv2d(64, 3, kernel_size=5, stride=1, padding=2)
+        )
+
+    def forward(self, dec_input):
+        return self.convs(dec_input)
 
 
 class FrameEncoderSkip(nn.Module):
@@ -74,46 +84,6 @@ class FrameEncoderSkip(nn.Module):
         enc_out_x2 = self.convs_2(enc_out_x1)
         enc_out_x3 = self.convs_3(enc_out_x2)
         return [enc_out_x1, enc_out_x2, enc_out_x3]
-
-
-class FrameDecoder(nn.Module):
-    def __init__(self, res):
-        super(FrameDecoder, self).__init__()
-        in_c = 64 if res == '16' else 80
-        self.convs = nn.Sequential(
-            nn.Conv2d(in_c, in_c, kernel_size=5, padding=2), nn.ReLU(),
-            nn.Conv2d(in_c, in_c, kernel_size=3, padding=1), nn.ReLU(),
-            nn.Conv2d(in_c, in_c // 2, kernel_size=3, padding=1), nn.ReLU(),
-            nn.ConvTranspose2d(in_c // 2, in_c // 2, kernel_size=3, padding=1, output_padding=1, stride=2), nn.ReLU(),
-            nn.Conv2d(in_c // 2, in_c // 2, kernel_size=3, padding=1), nn.ReLU(),
-            nn.Conv2d(in_c // 2, in_c // 2, kernel_size=3, padding=1), nn.ReLU(),
-            nn.Conv2d(in_c // 2, in_c // 2, kernel_size=5, padding=2), nn.ReLU(),
-            nn.Conv2d(in_c // 2, in_c // 2, kernel_size=5, padding=2), nn.ReLU(),
-            nn.Conv2d(in_c // 2, in_c // 2, kernel_size=3, padding=1), nn.ReLU(),
-            nn.Conv2d(in_c // 2, in_c // 4, kernel_size=3, padding=1), nn.ReLU(),
-            nn.ConvTranspose2d(in_c // 4, in_c // 4, kernel_size=3, padding=1, output_padding=1, stride=2), nn.ReLU(),
-            nn.Conv2d(in_c // 4, in_c // 4, kernel_size=3, padding=1), nn.ReLU(),
-            nn.Conv2d(in_c // 4, in_c // 4, kernel_size=3, padding=1), nn.ReLU(),
-            nn.Conv2d(in_c // 4, in_c // 4, kernel_size=5, padding=2), nn.ReLU(),
-            nn.Conv2d(in_c // 4, in_c // 8, kernel_size=3, padding=1), nn.ReLU(),
-            nn.Conv2d(in_c // 8, in_c // 8, kernel_size=3, padding=1), nn.ReLU(),
-            nn.Conv2d(in_c // 8, in_c // 8, kernel_size=5, padding=2), nn.ReLU(),
-            nn.Conv2d(in_c // 8, in_c // 8, kernel_size=7, padding=3), nn.ReLU(),
-            nn.Conv2d(in_c // 8, in_c // 8, kernel_size=5, padding=2), nn.ReLU(),
-            nn.Conv2d(in_c // 8, in_c // 8, kernel_size=3, padding=1), nn.ReLU(),
-            nn.Conv2d(in_c // 8, in_c // 8, kernel_size=3, padding=1), nn.ReLU(),
-            nn.Conv2d(in_c // 8, in_c // 8, kernel_size=5, padding=2), nn.ReLU(),
-            nn.Conv2d(in_c // 8, in_c // 8, kernel_size=3, padding=1), nn.ReLU(),
-            nn.Conv2d(in_c // 8, in_c // 16, kernel_size=3, padding=1), nn.ReLU(),
-            nn.Conv2d(in_c // 16, in_c // 16, kernel_size=5, padding=2), nn.ReLU(),
-            nn.Conv2d(in_c // 16, in_c // 16, kernel_size=3, padding=1), nn.ReLU(),
-            nn.Conv2d(in_c // 16, 3, kernel_size=3, padding=1), nn.ReLU(),
-            nn.Conv2d(3, 3, kernel_size=5, padding=2), nn.ReLU(),
-            nn.Conv2d(3, 3, kernel_size=3, padding=1), nn.ReLU()
-        )
-
-    def forward(self, dec_input):
-        return self.convs(dec_input)
 
 
 class FrameDecoderSkip(nn.Module):
