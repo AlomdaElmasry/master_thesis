@@ -38,7 +38,7 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
             gamma=self.experiment.configuration.get('training', 'lr_scheduler_gamma')
         )
         self.utils_losses = utils.losses.LossesUtils(device)
-        self.losses_items_ids = ['loss_vh']
+        self.losses_items_ids = ['loss_nh', 'loss_vh', 'loss_nvh']
         super().init_others(device)
 
     def load_alignment_state(self, checkpoint_path, device):
