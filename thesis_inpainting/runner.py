@@ -2,7 +2,7 @@ import thesis.runner
 import models.vgg_16
 import models.thesis_alignment
 import models.thesis_inpainting
-import models.thesis_inpainting_2
+import models.thesis_inpainting_3
 import torch
 import utils.losses
 import thesis_alignment.runner
@@ -13,8 +13,8 @@ import utils.draws
 
 
 class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
-    checkpoint_path = '/home/ubuntu/ebs/master_thesis/experiments/hard_flow_9/checkpoints/80.checkpoint.pkl'
-    # checkpoint_path = '/Users/DavidAlvarezDLT/Documents/PyCharm/master_thesis/experiments/test/checkpoints/58.checkpoint.pkl'
+    # checkpoint_path = '/home/ubuntu/ebs/master_thesis/experiments/hard_flow_9/checkpoints/80.checkpoint.pkl'
+    checkpoint_path = '/Users/DavidAlvarezDLT/Documents/PyCharm/master_thesis/experiments/test/checkpoints/58.checkpoint.pkl'
     model_vgg = None
     model_alignment = None
     utils_losses = None
@@ -23,7 +23,7 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
         torch.autograd.set_detect_anomaly(True)
         self.model_vgg = models.vgg_16.get_pretrained_model(device)
         self.model_alignment = models.thesis_alignment.ThesisAlignmentModel(self.model_vgg).to(device)
-        self.model = models.thesis_inpainting_2.ThesisInpaintingVisible().to(device)
+        self.model = models.thesis_inpainting_3.ThesisInpaintingVisible().to(device)
         self.load_alignment_state(self.checkpoint_path, device)
 
     def init_optimizer(self, device):
