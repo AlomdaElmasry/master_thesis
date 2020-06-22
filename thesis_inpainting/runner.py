@@ -189,8 +189,8 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
         nh_mask = vs[2][:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1)
         vh_mask = v_maps[2]
         nvh_mask = (1 - nh_mask) - vh_mask
-        loss_nh = utils_losses.masked_l1(ys_hat[2], target_img, nh_mask, weight=0.5)
-        loss_vh = utils_losses.masked_l1(ys_hat[2], target_img, vh_mask, weight=2)
-        loss_nvh = utils_losses.masked_l1(ys_hat[2], target_img, nvh_mask, weight=1)
+        loss_nh = utils_losses.masked_l1(ys_hat[2], target_img, nh_mask, weight=1)
+        loss_vh = utils_losses.masked_l1(ys_hat[2], target_img, vh_mask, weight=50)
+        loss_nvh = utils_losses.masked_l1(ys_hat[2], target_img, nvh_mask, weight=25)
         loss = loss_nh + loss_vh + loss_nvh
         return loss, [loss_nh, loss_vh, loss_nvh]
