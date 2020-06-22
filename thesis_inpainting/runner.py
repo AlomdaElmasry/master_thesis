@@ -156,6 +156,7 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
                 v_map_rep, m_rep = v_map[b].repeat(3, axis=0), m[b, :, t].repeat(3, axis=0)
                 v_map_sample = np.insert(arr=v_map_rep, obj=t, values=m_rep, axis=1)
                 y_sample = np.insert(arr=y_hat[b], obj=t, values=x[b, :, t], axis=1)
+                y_sample = utils.draws.add_border(y_sample, m[b, :, t])
                 # y_sample = np.insert(arr=np.zeros_like(x_aligned[b]), obj=t, values=y_hat[b], axis=1)
                 # y_sample[:, t - 1] = y[b, :, t]
                 # y_sample[:, t + 1] = y_hat_comp[b]
