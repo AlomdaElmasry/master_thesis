@@ -7,7 +7,7 @@ class ThesisInpaintingVisible(nn.Module):
 
     def __init__(self, in_c=12):
         super(ThesisInpaintingVisible, self).__init__()
-        self.nn = models.rrdb_net.RRDBNet(in_c, 3, 16, 8, gc=8)
+        self.nn = models.rrdb_net.RRDBNet(in_c, 3, 8, 4, gc=4)
         self.register_buffer('mean', torch.as_tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1, 1))
         self.register_buffer('std', torch.as_tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1, 1))
 
