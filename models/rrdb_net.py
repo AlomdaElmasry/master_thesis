@@ -53,8 +53,8 @@ class RRDB(nn.Module):
 class RRDBNet(nn.Module):
     def __init__(self, in_nc, out_nc, nf, nb, gc=32):
         super(RRDBNet, self).__init__()
-        RRDB_block_f = functools.partial(RRDB, nf=nf, gc=gc)
         self.conv_first = nn.Conv2d(in_nc, nf, 3, 1, 1, bias=True)
+        RRDB_block_f = functools.partial(RRDB, nf=nf, gc=gc)
         self.RRDB_trunk = make_layer(RRDB_block_f, nb)
         self.trunk_conv = nn.Conv2d(nf, nf, 3, 1, 1, bias=True)
         self.upconv1 = nn.Conv2d(nf, nf, 3, 1, 1, bias=True)
