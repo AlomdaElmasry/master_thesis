@@ -62,6 +62,7 @@ class RRDBNet(nn.Module):
         self.HRconv = nn.Conv2d(nf, nf, 3, 1, 1, bias=True)
         self.conv_last = nn.Conv2d(nf, out_nc, 3, 1, 1, bias=True)
         self.lrelu = nn.LeakyReLU(negative_slope=0.2, inplace=True)
+        print(self.get_n_params(self))
 
     def get_n_params(self, model):
         pp = 0
@@ -81,5 +82,4 @@ class RRDBNet(nn.Module):
         fea = self.lrelu(self.upconv1(fea))
         fea = self.lrelu(self.upconv2(fea))
         out = self.conv_last(self.lrelu(self.HRconv(fea)))
-        print(out.size())
         return out
