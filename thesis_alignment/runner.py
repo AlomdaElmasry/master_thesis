@@ -33,7 +33,7 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
             gamma=self.experiment.configuration.get('training', 'lr_scheduler_gamma')
         )
         self.utils_losses = utils.losses.LossesUtils(device)
-        self.losses_items_ids = ['feats_loss', 'corr_loss', 'flow_16', 'flow_64', 'flow_256', 'alignment_recons_64',
+        self.losses_items_ids = ['corr_loss', 'flow_16', 'flow_64', 'flow_256', 'alignment_recons_64',
                                  'alignment_recons_256']
         super().init_others(device)
 
@@ -133,38 +133,25 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
         v_map_256_gt_tbx = np.concatenate(v_map_256_gt_tbx)
 
         # Define a function to add images to TensorBoard
-        def add_alignment_tbx(x, m, x_aligned, x_aligned_gt, res_size):
+        def add_alignment_tbx(x, m, x_aligned, x_aligned_gt, v_map, res_size):
             for b in range(x.shape[0]):
-                x_sample = x[b].transpose(1, 0, 2, 3)
                 x_aligned_gt_sample = np.insert(arr=x_aligned_gt[b], obj=t, values=x[b, :, t], axis=1)
-                x_aligned_gt_sample = utils.draws.add_border(x_aligned_gt_sample, m[b, :, t]).transpose(1, 0, 2, 3)
+                x_aligned_gt_sample = utils.draws.add_border(x_aligned_gt_sample, m[b, :, t])
                 x_aligned_sample = np.insert(arr=x_aligned[b], obj=t, values=x[b, :, t], axis=1)
-                x_aligned_sample = utils.draws.add_border(x_aligned_sample, m[b, :, t]).transpose(1, 0, 2, 3)
-                sample = np.concatenate((x_sample, x_aligned_gt_sample, x_aligned_sample), axis=2)
-                self.experiment.tbx.add_images(
-                    '{}_alignment_{}/{}'.format('validation', res_size, b + 1), sample,
-                    global_step=self.counters['epoch']
-                )
-
-        # Define a function to add v_maps to TensorBoard
-        def add_v_map_tbx(x, m, v_map, v_map_gt, res_size):
-            for b in range(x.shape[0]):
-                x_sample = x[b]
-                v_map_rep, v_map_gt_rep, m_rep = v_map[b].repeat(3, axis=0), v_map_gt[b].repeat(3, axis=0), \
-                                                 m[b, :, t].repeat(3, axis=0)
+                x_aligned_sample = utils.draws.add_border(x_aligned_sample, m[b, :, t])
+                v_map_rep, m_rep = v_map[b].repeat(3, axis=0), m[b, :, t].repeat(3, axis=0)
                 v_map_sample = np.insert(arr=v_map_rep, obj=t, values=m_rep, axis=1)
-                v_map_gt_sample = np.insert(arr=v_map_gt_rep, obj=t, values=m_rep, axis=1)
-                sample = np.concatenate((x_sample, v_map_gt_sample, v_map_sample), axis=2).transpose(1, 0, 2, 3)
+                sample = np.concatenate(
+                    (x[b], x_aligned_gt_sample, x_aligned_sample, v_map_sample), axis=2
+                ).transpose(1, 0, 2, 3)
                 self.experiment.tbx.add_images(
-                    '{}_v_map_{}/{}'.format('validation', res_size, b + 1), sample,
+                    '{}_sample_{}/{}'.format('validation', res_size, b + 1), sample,
                     global_step=self.counters['epoch']
                 )
 
         # Add different resolutions to TensorBoard
-        add_alignment_tbx(x_64_tbx, m_64_tbx, x_64_aligned_tbx, x_64_aligned_gt_tbx, '64')
-        add_alignment_tbx(x_256_tbx, m_256_tbx, x_256_aligned_tbx, x_256_aligned_gt_tbx, '256')
-        add_v_map_tbx(x_64_tbx, m_64_tbx, v_map_64_tbx, v_map_64_gt_tbx, '64')
-        add_v_map_tbx(x_256_tbx, m_256_tbx, v_map_256_tbx, v_map_256_gt_tbx, '256')
+        add_alignment_tbx(x_64_tbx, m_64_tbx, x_64_aligned_tbx, x_64_aligned_gt_tbx, v_map_64_tbx, '64')
+        add_alignment_tbx(x_256_tbx, m_256_tbx, x_256_aligned_tbx, x_256_aligned_gt_tbx, v_map_256_tbx, '256')
 
     @staticmethod
     def train_step_propagate(model, x, m, y, flow_gt, flows_use, t, r_list):
@@ -223,13 +210,8 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
         # Get the features of the frames from VGG
         b, c, f, h, w = ys[2].size()
         with torch.no_grad():
-            x_vgg_feats = model_vgg(xs[2].transpose(1, 2).reshape(b * f, c, h, w))
             y_vgg_feats = model_vgg(ys[2].transpose(1, 2).reshape(b * f, c, h, w))
-        x_vgg_feats = x_vgg_feats[3].reshape(b, f, -1, 16, 16).transpose(1, 2)
         y_vgg_feats = y_vgg_feats[3].reshape(b, f, -1, 16, 16).transpose(1, 2)
-
-        # Compute L1 loss between x features
-        feats_loss = F.l1_loss(x_feats, x_vgg_feats)
 
         # Compute L1 loss between correlation volumes
         corr_y = utils.correlation.compute_masked_4d_correlation(y_vgg_feats, None, t, r_list)
@@ -247,19 +229,17 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
         # Compute alignment reconstruction losses
         alignment_recons_64 = utils_losses.masked_l1(
             xs[1][:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1), xs_aligned[1],
-            vs[1][:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1) * (1 - mask_out_64)
+            vs[1][:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1) * (1 - mask_out_64),
+            reduction='sum'
         )
         alignment_recons_256 = utils_losses.masked_l1(
             xs[2][:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1), xs_aligned[2],
-            vs[2][:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1) * (1 - mask_out_256)
+            vs[2][:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1) * (1 - mask_out_256),
+            reduction='sum'
         )
 
-        # Compute visual map loss
-        # v_map_loss_64 = utils_losses.bce(v_maps[0], v_maps_gt[0], torch.ones_like(v_maps_gt[0]), flows_use)
-        # v_map_loss_256 = utils_losses.bce(v_maps[1], v_maps_gt[1], torch.ones_like(v_maps_gt[1]), flows_use)
-
         # Compute sum of losses and return them
-        total_loss = feats_loss + corr_loss + flow_loss_16 + flow_loss_64 + flow_loss_256
+        total_loss = corr_loss + flow_loss_16 + flow_loss_64 + flow_loss_256
         total_loss += alignment_recons_64 + alignment_recons_256
-        return total_loss, [feats_loss, corr_loss, flow_loss_16, flow_loss_64, flow_loss_256, alignment_recons_64,
+        return total_loss, [corr_loss, flow_loss_16, flow_loss_64, flow_loss_256, alignment_recons_64,
                             alignment_recons_256]

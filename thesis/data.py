@@ -68,10 +68,16 @@ class ThesisData(skeltorch.Data):
     def _clean_masks(self, data_path, masks_meta):
         train_masks_items = list(masks_meta.keys())
         for train_masks_item in train_masks_items:
-            item_path = os.path.join(data_path, masks_meta[train_masks_item][1][0])
-            image = cv2.imread(item_path, cv2.IMREAD_GRAYSCALE) > 0
-            image_mask_size = np.count_nonzero(image) / (image.shape[0] * image.shape[1])
-            if image_mask_size > self.experiment.configuration.get('data', 'max_mask_size'):
+            mask_item_values = []
+            samples_paths = random.sample(
+                masks_meta[train_masks_item][1], min(10, len(masks_meta[train_masks_item][1]))
+            )
+            for train_masks_item_path in samples_paths:
+                item_path = os.path.join(data_path, train_masks_item_path)
+                image = cv2.imread(item_path, cv2.IMREAD_GRAYSCALE) > 0
+                mask_item_values.append(np.count_nonzero(image) / (image.shape[0] * image.shape[1]))
+            if not (self.experiment.configuration.get('data', 'min_mask_size') <= np.mean(mask_item_values) <=
+                    self.experiment.configuration.get('data', 'max_mask_size')):
                 masks_meta.pop(train_masks_item)
 
     def load_datasets(self, data_path):

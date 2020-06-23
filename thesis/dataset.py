@@ -259,7 +259,7 @@ class MaskedSequenceDataset(torch.utils.data.Dataset):
             if self.masks_dataset is not None:
                 masks_n = self.frames_n if self.frames_n != -1 else y.size(1)
                 _, m, m_name, m_indexes, _, m_movement = self.masks_dataset.get_patch_random(
-                    masks_n, self.frames_spacing, False, masks_simulator_item
+                    masks_n, self.frames_spacing, self.frames_randomize, masks_simulator_item
                 )
 
         # Apply GT transformations

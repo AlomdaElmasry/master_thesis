@@ -6,7 +6,8 @@
     "validation_masks_dataset": "youtube-vos",
     "test_dataset": "davis-2017",
     "train_resize": false,
-    "max_mask_size": 0.1,
+    "min_mask_size": 0.05,
+    "max_mask_size": 0.15,
     "validation_split": 0.2,
     "train_size": [256, 256],
     "test_size": [240, 480],
@@ -16,7 +17,7 @@
     "dilatation_filter_size": [3, 3],
     "dilatation_iterations": 4,
     "p_simulator_gts": 0.5,
-    "p_simulator_masks": 0,
+    "p_simulator_masks": 0.5,
     "gts_movement_params": [25, 0.05, 0.15],
     "masks_movement_params": [20, 0, 0],
     "p_repeat": 0

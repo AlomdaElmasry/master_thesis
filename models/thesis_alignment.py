@@ -30,8 +30,16 @@ class FeatureExtractor(nn.Module):
 class SeparableConv4d(nn.Module):
     def __init__(self, in_c=1, out_c=1):
         super(SeparableConv4d, self).__init__()
-        self.conv_1 = torch.nn.Conv2d(in_c, 128, 3, padding=1)
-        self.conv_2 = torch.nn.Conv2d(128, out_c, 3, padding=1)
+        self.conv_1 = nn.Sequential(
+            torch.nn.Conv2d(in_c, 128, 3, padding=1), nn.ReLU(),
+            torch.nn.Conv2d(128, 256, 3, padding=1), nn.ReLU(),
+            torch.nn.Conv2d(256, 256, 3, padding=1)
+        )
+        self.conv_2 = nn.Sequential(
+            torch.nn.Conv2d(256, 256, 3, padding=1), nn.ReLU(),
+            torch.nn.Conv2d(256, 128, 3, padding=1), nn.ReLU(),
+            torch.nn.Conv2d(128, out_c, 3, padding=1)
+        )
 
     def forward(self, x):
         x = x.unsqueeze(4)
@@ -73,9 +81,10 @@ class Softmax3d(torch.nn.Module):
 
 class CorrelationVGG(nn.Module):
 
-    def __init__(self, use_softmax=False):
+    def __init__(self, model_vgg, use_softmax=False):
         super(CorrelationVGG, self).__init__()
-        self.feature_extractor = FeatureExtractor()
+        self.model_vgg = model_vgg
+        # self.feature_extractor = FeatureExtractor()
         self.conv = SeparableConv4d()
         self.softmax = Softmax3d() if use_softmax else None
 
@@ -83,12 +92,12 @@ class CorrelationVGG(nn.Module):
         b, c, ref_n, h, w = x.size()
 
         # Get the features of the frames from VGG
-        # with torch.no_grad():
-        # x_feats = self.model_vgg(x.transpose(1, 2).reshape(b * ref_n, c, h, w), normalize_input=False)
-        # x_feats = x_feats[3].reshape(b, ref_n, -1, 16, 16).transpose(1, 2)
-        x_feats = self.feature_extractor(
-            x.transpose(1, 2).reshape(b * ref_n, c, h, w)
-        ).reshape(b, ref_n, -1, 16, 16).transpose(1, 2)
+        with torch.no_grad():
+            x_feats = self.model_vgg(x.transpose(1, 2).reshape(b * ref_n, c, h, w), normalize_input=False)
+        x_feats = x_feats[3].reshape(b, ref_n, -1, 16, 16).transpose(1, 2)
+        # x_feats = self.feature_extractor(
+        #     x.transpose(1, 2).reshape(b * ref_n, c, h, w)
+        # ).reshape(b, ref_n, -1, 16, 16).transpose(1, 2)
 
         # Update the parameters to the VGG features
         b, c, ref_n, h, w = x_feats.size()
