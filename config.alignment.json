@@ -26,10 +26,10 @@
   },
   "training": {
     "batch_size": 16,
-    "train_max_iterations": 1000,
-    "validation_max_iterations": 100,
+    "train_max_iterations": 2000,
+    "validation_max_iterations": 200,
     "lr": 1e-4,
     "lr_scheduler_step_size": 50,
-    "lr_scheduler_gamma": 0.1
+    "lr_scheduler_gamma": 0.5
   }
 }
