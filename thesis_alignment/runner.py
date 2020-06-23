@@ -7,9 +7,9 @@ import utils.draws
 import utils.flow
 import thesis.runner
 import models.vgg_16
-import matplotlib.pyplot as plt
 import utils.correlation
 import utils.transforms
+import torch.utils.data
 
 
 class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
@@ -33,8 +33,8 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
             gamma=self.experiment.configuration.get('training', 'lr_scheduler_gamma')
         )
         self.utils_losses = utils.losses.LossesUtils(device)
-        self.losses_items_ids = ['corr_loss', 'flow_16', 'flow_64', 'flow_256', 'alignment_recons_16',
-                                 'alignment_recons_64', 'alignment_recons_256', 'v_map_loss_64', 'v_map_loss_256']
+        self.losses_items_ids = ['feats_loss', 'corr_loss', 'flow_16', 'flow_64', 'flow_256', 'alignment_recons_64',
+                                 'alignment_recons_256', 'v_map_loss_64', 'v_map_loss_256']
         super().init_others(device)
 
     def train_step(self, it_data, device):
@@ -46,13 +46,15 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
         r_list.pop(t)
 
         # Propagate through the model
-        corr, xs, vs, ys, xs_aligned, xs_aligned_gt, vs_aligned, vs_aligned_gt, flows, flows_gt, flows_use, v_maps, \
-        v_maps_gt = ThesisAlignmentRunner.train_step_propagate(self.model, x, m, y, flow_gt, flows_use, t, r_list)
+        x_feats, corr, xs, vs, ys, xs_aligned, xs_aligned_gt, vs_aligned, vs_aligned_gt, flows, flows_gt, flows_use, \
+        v_maps, v_maps_gt = ThesisAlignmentRunner.train_step_propagate(
+            self.model, x, m, y, flow_gt, flows_use, t, r_list
+        )
 
         # Get both total loss and loss items
         loss, loss_items = ThesisAlignmentRunner.compute_loss(
-            self.model_vgg, self.utils_losses, corr, xs, vs, ys, xs_aligned, xs_aligned_gt, vs_aligned, vs_aligned_gt,
-            flows, flows_gt, flows_use, v_maps, v_maps_gt, t, r_list
+            self.model_vgg, self.utils_losses, x_feats, corr, xs, vs, ys, xs_aligned, xs_aligned_gt, vs_aligned,
+            vs_aligned_gt, flows, flows_gt, flows_use, v_maps, v_maps_gt, t, r_list
         )
 
         # Append loss items to epoch dictionary
@@ -93,12 +95,14 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
             t, r_list = x.size(2) // 2, list(range(x.size(2)))
             r_list.pop(t)
             with torch.no_grad():
-                corr, xs, vs, ys, xs_aligned, xs_aligned_gt, vs_aligned, vs_aligned_gt, flows, flows_gt, flows_use, \
-                v_maps, v_maps_gt = self.train_step_propagate(x, m, y, flow_gt, flows_use, t, r_list)
+                _, _, xs, vs, ys, xs_aligned, xs_aligned_gt, vs_aligned, vs_aligned_gt, flows, flows_gt, \
+                flows_use, v_maps, v_maps_gt = ThesisAlignmentRunner.train_step_propagate(
+                    self.model, x, m, y, flow_gt, flows_use, t, r_list
+                )
 
             # Get GT alignment
-            x_64_aligned_gt, _ = self.align_data(xs[1][:, :, r_list], 1 - vs[1][:, :, r_list], flows_gt[1])
-            x_256_aligned_gt, _ = self.align_data(xs[2][:, :, r_list], 1 - vs[2][:, :, r_list], flows_gt[2])
+            x_64_aligned_gt, _ = utils.flow.align_set(xs[1][:, :, r_list], 1 - vs[1][:, :, r_list], flows_gt[1])
+            x_256_aligned_gt, _ = utils.flow.align_set(xs[2][:, :, r_list], 1 - vs[2][:, :, r_list], flows_gt[2])
 
             # Add items to the lists
             x_64_tbx.append(xs[1].cpu().numpy())
@@ -164,7 +168,7 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
 
     @staticmethod
     def train_step_propagate(model, x, m, y, flow_gt, flows_use, t, r_list):
-        corr, flow_16, flow_64, flow_256, v_map_64, v_map_256 = model(x, m, t, r_list)
+        x_feats, corr, flow_16, flow_64, flow_256 = model(x, m, t, r_list)
 
         # Resize the data to multiple resolutions
         x_16, v_16, y_16 = utils.transforms.resize_set(x, 1 - m, y, 16)
@@ -195,6 +199,10 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
         x_64_aligned, v_64_aligned = utils.flow.align_set(x_64[:, :, r_list], v_64[:, :, r_list], flow_64)
         x_256_aligned, v_256_aligned = utils.flow.align_set(x_256[:, :, r_list], v_256[:, :, r_list], flow_256)
 
+        # Compute predicted visual maps
+        v_map_64 = (v_64_aligned - v_64[:, :, t].unsqueeze(2)).clamp(0, 1)
+        v_map_256 = (v_256_aligned - v_256[:, :, t].unsqueeze(2)).clamp(0, 1)
+
         # Pack variables to return
         xs, vs, ys = (x_16, x_64, x_256), (v_16, v_64, v_256), (y_16, y_64, y_256)
         xs_aligned = (x_16_aligned, x_64_aligned, x_256_aligned)
@@ -205,21 +213,26 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
         v_maps, v_maps_gt = (v_map_64, v_map_256), (v_map_64_gt, v_map_256_gt)
 
         # Return packed data
-        return corr, xs, vs, ys, xs_aligned, xs_aligned_gt, vs_aligned, vs_aligned_gt, flows, flows_gt, flows_use, \
-               v_maps, v_maps_gt
+        return x_feats, corr, xs, vs, ys, xs_aligned, xs_aligned_gt, vs_aligned, vs_aligned_gt, flows, flows_gt, \
+               flows_use, v_maps, v_maps_gt
 
     @staticmethod
-    def compute_loss(model_vgg, utils_losses, corr, xs, vs, ys, xs_aligned, xs_aligned_gt, vs_aligned, vs_aligned_gt,
-                     flows, flows_gt, flows_use, v_maps, v_maps_gt, t, r_list):
+    def compute_loss(model_vgg, utils_losses, x_feats, corr, xs, vs, ys, xs_aligned, xs_aligned_gt, vs_aligned,
+                     vs_aligned_gt, flows, flows_gt, flows_use, v_maps, v_maps_gt, t, r_list):
 
         # Get the features of the frames from VGG
         b, c, f, h, w = ys[2].size()
         with torch.no_grad():
-            x_vgg_feats = model_vgg(ys[2].transpose(1, 2).reshape(b * f, c, h, w), normalize_input=True)
-        y_vgg_feats = x_vgg_feats[3].reshape(b, f, -1, 16, 16).transpose(1, 2)
-        corr_y = utils.correlation.compute_masked_4d_correlation(y_vgg_feats, torch.ones_like(y_vgg_feats), t, r_list)
+            x_vgg_feats = model_vgg(xs[2].transpose(1, 2).reshape(b * f, c, h, w), normalize_input=True)
+            y_vgg_feats = model_vgg(ys[2].transpose(1, 2).reshape(b * f, c, h, w), normalize_input=True)
+        x_vgg_feats = x_vgg_feats[3].reshape(b, f, -1, 16, 16).transpose(1, 2)
+        y_vgg_feats = y_vgg_feats[3].reshape(b, f, -1, 16, 16).transpose(1, 2)
+
+        # Compute L1 loss between x features
+        feats_loss = F.l1_loss(x_feats, x_vgg_feats)
 
         # Compute L1 loss between correlation volumes
+        corr_y = utils.correlation.compute_masked_4d_correlation(y_vgg_feats, None, t, r_list)
         corr_loss = F.l1_loss(corr, corr_y)
 
         # Compute flow losses
@@ -228,15 +241,10 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
         flow_loss_256 = utils_losses.masked_l1(flows[2], flows_gt[2], torch.ones_like(flows[2]), flows_use)
 
         # Compute out-of-frame regions from flows
-        mask_out_16 = ((flows[0] < -1).float() + (flows[0] > 1).float()).sum(4).clamp(0, 1).unsqueeze(1)
         mask_out_64 = ((flows[1] < -1).float() + (flows[1] > 1).float()).sum(4).clamp(0, 1).unsqueeze(1)
         mask_out_256 = ((flows[2] < -1).float() + (flows[2] > 1).float()).sum(4).clamp(0, 1).unsqueeze(1)
 
         # Compute alignment reconstruction losses
-        alignment_recons_16 = utils_losses.masked_l1(
-            xs[0][:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1), xs_aligned[0],
-            vs[0][:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1) * (1 - mask_out_16)
-        )
         alignment_recons_64 = utils_losses.masked_l1(
             xs[1][:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1), xs_aligned[1],
             vs[1][:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1) * (1 - mask_out_64)
@@ -251,8 +259,7 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
         v_map_loss_256 = utils_losses.bce(v_maps[1], v_maps_gt[1], torch.ones_like(v_maps_gt[1]), flows_use)
 
         # Compute sum of losses and return them
-        total_loss = corr_loss + flow_loss_16 + flow_loss_64 + flow_loss_256
-        total_loss += alignment_recons_16 + alignment_recons_64 + alignment_recons_256
-        total_loss += v_map_loss_64 + v_map_loss_256
-        return total_loss, [corr_loss, flow_loss_16, flow_loss_64, flow_loss_256, alignment_recons_16,
-                            alignment_recons_64, alignment_recons_256, v_map_loss_64, v_map_loss_256]
+        total_loss = feats_loss + corr_loss + flow_loss_16 + flow_loss_64 + flow_loss_256
+        total_loss += alignment_recons_64 + alignment_recons_256 + v_map_loss_64 + v_map_loss_256
+        return total_loss, [feats_loss, corr_loss, flow_loss_16, flow_loss_64, flow_loss_256, alignment_recons_64,
+                            alignment_recons_256, v_map_loss_64, v_map_loss_256]

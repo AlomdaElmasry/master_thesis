@@ -40,14 +40,14 @@ def compute_masked_4d_correlation(features, masks, t, r_list):
     b, c, f, h, w = features.size()
 
     # Mask the features
-    features *= masks
+    features = features * masks if masks is not None else features
 
     # Compute the correlation with target frame.
     corr_1 = features[:, :, t].reshape(b, c, -1).transpose(-1, -2).unsqueeze(1)
-    corr_1 /= torch.norm(corr_1, dim=3).unsqueeze(3) + 1e-9
+    corr_1_norm = torch.norm(corr_1, dim=3).unsqueeze(3) + 1e-9
     corr_2 = features[:, :, r_list].reshape(b, c, f - 1, -1).permute(0, 2, 1, 3)
-    corr_2 /= torch.norm(corr_2, dim=2).unsqueeze(2) + 1e-9
-    corr = torch.matmul(corr_1, corr_2).reshape(b, f - 1, h, w, h, w)
+    corr_2_norm = torch.norm(corr_2, dim=3).unsqueeze(3) + 1e-9
+    corr = torch.matmul(corr_1 / corr_1_norm, corr_2 / corr_2_norm).reshape(b, f - 1, h, w, h, w)
 
     # Return 4D volume corr
     return corr

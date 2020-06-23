@@ -28,6 +28,16 @@ class ThesisRunner(skeltorch.Runner):
             'train': {loss_item_id: {} for loss_item_id in self.losses_items_ids},
             'validation': {loss_item_id: {} for loss_item_id in self.losses_items_ids}
         }
+        self.logger.info('Number of model parameters: {}'.format(self.get_n_params(self.model)))
+
+    def get_n_params(self, model):
+        pp = 0
+        for p in list(model.parameters()):
+            nn = 1
+            for s in list(p.size()):
+                nn = nn * s
+            pp += nn
+        return pp
 
     def load_states_others(self, checkpoint_data):
         self.scheduler.load_state_dict(checkpoint_data['scheduler'])
