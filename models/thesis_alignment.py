@@ -55,7 +55,7 @@ class SeparableConv4d(nn.Module):
         x3_bis = x3_bis.reshape(b, t, h, w, x3_bis.size(1), h, w).squeeze(4)
 
         # Return last layer
-        return x3_bis
+        return x3_bis.permute(0, 1, 4, 5, 2, 3)
 
 
 class Softmax3d(torch.nn.Module):
