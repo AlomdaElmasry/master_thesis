@@ -34,7 +34,7 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
         )
         self.utils_losses = utils.losses.LossesUtils(device)
         self.losses_items_ids = ['feats_loss', 'corr_loss', 'flow_16', 'flow_64', 'flow_256', 'alignment_recons_64',
-                                 'alignment_recons_256', 'v_map_loss_64', 'v_map_loss_256']
+                                 'alignment_recons_256']
         super().init_others(device)
 
     def train_step(self, it_data, device):
@@ -255,11 +255,11 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
         )
 
         # Compute visual map loss
-        v_map_loss_64 = utils_losses.bce(v_maps[0], v_maps_gt[0], torch.ones_like(v_maps_gt[0]), flows_use)
-        v_map_loss_256 = utils_losses.bce(v_maps[1], v_maps_gt[1], torch.ones_like(v_maps_gt[1]), flows_use)
+        # v_map_loss_64 = utils_losses.bce(v_maps[0], v_maps_gt[0], torch.ones_like(v_maps_gt[0]), flows_use)
+        # v_map_loss_256 = utils_losses.bce(v_maps[1], v_maps_gt[1], torch.ones_like(v_maps_gt[1]), flows_use)
 
         # Compute sum of losses and return them
         total_loss = feats_loss + corr_loss + flow_loss_16 + flow_loss_64 + flow_loss_256
-        total_loss += alignment_recons_64 + alignment_recons_256 + v_map_loss_64 + v_map_loss_256
+        total_loss += alignment_recons_64 + alignment_recons_256
         return total_loss, [feats_loss, corr_loss, flow_loss_16, flow_loss_64, flow_loss_256, alignment_recons_64,
-                            alignment_recons_256, v_map_loss_64, v_map_loss_256]
+                            alignment_recons_256]
