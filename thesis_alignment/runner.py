@@ -223,8 +223,8 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
         # Get the features of the frames from VGG
         b, c, f, h, w = ys[2].size()
         with torch.no_grad():
-            x_vgg_feats = model_vgg(xs[2].transpose(1, 2).reshape(b * f, c, h, w), normalize_input=True)
-            y_vgg_feats = model_vgg(ys[2].transpose(1, 2).reshape(b * f, c, h, w), normalize_input=True)
+            x_vgg_feats = model_vgg(xs[2].transpose(1, 2).reshape(b * f, c, h, w))
+            y_vgg_feats = model_vgg(ys[2].transpose(1, 2).reshape(b * f, c, h, w))
         x_vgg_feats = x_vgg_feats[3].reshape(b, f, -1, 16, 16).transpose(1, 2)
         y_vgg_feats = y_vgg_feats[3].reshape(b, f, -1, 16, 16).transpose(1, 2)
 
