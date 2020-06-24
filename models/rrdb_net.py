@@ -14,15 +14,12 @@ def make_layer(block, n_layers):
 class ResidualDenseBlock_5C(nn.Module):
     def __init__(self, nf=64, gc=32, bias=True):
         super(ResidualDenseBlock_5C, self).__init__()
-        # gc: growth channel, i.e. intermediate channels
         self.conv1 = nn.Conv2d(nf, gc, 3, 1, 1, bias=bias)
         self.conv2 = nn.Conv2d(nf + gc, gc, 3, 1, 1, bias=bias)
         self.conv3 = nn.Conv2d(nf + 2 * gc, gc, 3, 1, 1, bias=bias)
         self.conv4 = nn.Conv2d(nf + 3 * gc, gc, 3, 1, 1, bias=bias)
         self.conv5 = nn.Conv2d(nf + 4 * gc, nf, 3, 1, 1, bias=bias)
         self.lrelu = nn.LeakyReLU(negative_slope=0.2, inplace=True)
-
-        # initialization
         # mutil.initialize_weights([self.conv1, self.conv2, self.conv3, self.conv4, self.conv5], 0.1)
 
     def forward(self, x):
@@ -62,24 +59,33 @@ class RRDBNet(nn.Module):
         self.HRconv = nn.Conv2d(nf, nf, 3, 1, 1, bias=True)
         self.conv_last = nn.Conv2d(nf, out_nc, 3, 1, 1, bias=True)
         self.lrelu = nn.LeakyReLU(negative_slope=0.2, inplace=True)
-        print(self.get_n_params(self))
-
-    def get_n_params(self, model):
-        pp = 0
-        for p in list(model.parameters()):
-            nn = 1
-            for s in list(p.size()):
-                nn = nn * s
-            pp += nn
-        return pp
 
     def forward(self, x):
         fea = self.conv_first(x)
         trunk = self.trunk_conv(self.RRDB_trunk(fea))
         fea = fea + trunk
-        #fea = self.lrelu(self.upconv1(F.interpolate(fea, scale_factor=2, mode='nearest')))
-        #fea = self.lrelu(self.upconv2(F.interpolate(fea, scale_factor=2, mode='nearest')))
+        # fea = self.lrelu(self.upconv1(F.interpolate(fea, scale_factor=2, mode='nearest')))
+        # fea = self.lrelu(self.upconv2(F.interpolate(fea, scale_factor=2, mode='nearest')))
         fea = self.lrelu(self.upconv1(fea))
         fea = self.lrelu(self.upconv2(fea))
         out = self.conv_last(self.lrelu(self.HRconv(fea)))
         return out
+
+
+class RRDBNetInpainting(nn.Module):
+
+    def __init__(self, in_c, out_c=3, mid_c=16, add_c=4, n_blocks=4):
+        super(RRDBNetInpainting, self).__init__()
+        self.conv_first = nn.Conv2d(in_c, mid_c, 3, 1, 1, bias=True)
+        self.RRDB_trunk = make_layer(functools.partial(RRDB, nf=mid_c, gc=add_c), n_blocks)
+        self.conv_trunk = nn.Conv2d(mid_c, mid_c, 3, 1, 1)
+        self.convs_last = nn.Sequential(
+            nn.Conv2d(mid_c, mid_c, 3, 1, 1), nn.LeakyReLU(negative_slope=0.2),
+            nn.Conv2d(mid_c, mid_c, 3, 1, 1), nn.LeakyReLU(negative_slope=0.2),
+            nn.Conv2d(mid_c, out_c, 3, 1, 1)
+        )
+
+    def forward(self, x):
+        y = self.conv_first(x)
+        trunk = self.conv_trunk(self.RRDB_trunk(y))
+        return self.convs_last(y + trunk)

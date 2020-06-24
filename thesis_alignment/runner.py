@@ -154,6 +154,11 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
         add_alignment_tbx(x_256_tbx, m_256_tbx, x_256_aligned_tbx, x_256_aligned_gt_tbx, v_map_256_tbx, '256')
 
     @staticmethod
+    def infer_step_propagate(model, x, m, t, r_list):
+        _, _, _, _, flow_256 = model(x, m, t, r_list)
+        return utils.flow.align_set(x[:, :, r_list], (1 - m)[:, :, r_list], flow_256)
+
+    @staticmethod
     def train_step_propagate(model, x, m, y, flow_gt, flows_use, t, r_list):
         x_feats, corr, flow_16, flow_64, flow_256 = model(x, m, t, r_list)
 

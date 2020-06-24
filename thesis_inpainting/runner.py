@@ -2,7 +2,7 @@ import thesis.runner
 import models.vgg_16
 import models.thesis_alignment
 import models.thesis_inpainting
-import models.thesis_inpainting_3
+import models.thesis_inpainting
 import torch
 import utils.losses
 import thesis_alignment.runner
@@ -13,8 +13,8 @@ import utils.draws
 
 
 class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
-    checkpoint_path = '/home/ubuntu/ebs/master_thesis/experiments/hard_flow_9/checkpoints/80.checkpoint.pkl'
-    # checkpoint_path = '/Users/DavidAlvarezDLT/Documents/PyCharm/master_thesis/experiments/test/checkpoints/58.checkpoint.pkl'
+    checkpoint_path = '/home/ubuntu/ebs/master_thesis/experiments/align_v3_1/checkpoints/45.checkpoint.pkl'
+    # checkpoint_path = '/Users/DavidAlvarezDLT/Documents/PyCharm/master_thesis/experiments/test/checkpoints/45.checkpoint.pkl'
     model_vgg = None
     model_alignment = None
     utils_losses = None
@@ -23,7 +23,7 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
         torch.autograd.set_detect_anomaly(True)
         self.model_vgg = models.vgg_16.get_pretrained_model(device)
         self.model_alignment = models.thesis_alignment.ThesisAlignmentModel(self.model_vgg).to(device)
-        self.model = models.thesis_inpainting_3.ThesisInpaintingVisible().to(device)
+        self.model = models.thesis_inpainting.ThesisInpaintingVisible().to(device)
         self.load_alignment_state(self.checkpoint_path, device)
 
     def init_optimizer(self, device):
@@ -55,19 +55,16 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
 
         # Propagate through alignment network
         with torch.no_grad():
-            corr, xs, vs, ys, xs_aligned, _, vs_aligned, *_ = \
-                thesis_alignment.runner.ThesisAlignmentRunner.train_step_propagate(
-                    self.model_alignment, x, m, y, flow_gt, flows_use, t, r_list
-                )
+            x_aligned, v_aligned = thesis_alignment.runner.ThesisAlignmentRunner.infer_step_propagate(
+                self.model_alignment, x, m, t, r_list
+            )
 
         # Propagate through inpainting network
-        ys_hat, ys_hat_comp, v_maps = ThesisInpaintingRunner.train_step_propagate(
-            self.model, xs, vs, ys, xs_aligned, vs_aligned, t, r_list
-        )
+        y_hat, y_hat_comp, v_map = self.model(x[:, :, t], (1 - m)[:, :, t], y[:, :, t], x_aligned, v_aligned)
 
         # Get both total loss and loss items
         loss, loss_items = ThesisInpaintingRunner.compute_loss(
-            self.utils_losses, ys_hat, ys_hat_comp, v_maps, vs, ys, t, r_list
+            self.utils_losses, y_hat, y_hat_comp, v_map, v_aligned, y, t, r_list
         )
 
         # Append loss items to epoch dictionary
@@ -95,9 +92,7 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
         )
 
         # Create variables with the images to log inside TensorBoard -> (b,c,h,w)
-        x_64_tbx, m_64_tbx, y_64_tbx, x_64_aligned_tbx, y_hat_64_tbx, y_hat_comp_64_tbx = [], [], [], [], [], []
-        x_256_tbx, m_256_tbx, y_256_tbx, x_256_aligned_tbx, y_hat_256_tbx, y_hat_comp_256_tbx = [], [], [], [], [], []
-        v_map_64_tbx, v_map_256_tbx = [], []
+        x_tbx, m_tbx, y_tbx, x_aligned_tbx, y_hat_tbx, y_hat_comp_tbx, v_map_tbx = [], [], [], [], [], [], []
 
         # Iterate over the samples
         for it_data in loader:
@@ -108,45 +103,28 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
             t, r_list = x.size(2) // 2, list(range(x.size(2)))
             r_list.pop(t)
             with torch.no_grad():
-                corr, xs, vs, ys, xs_aligned, xs_aligned_gt, vs_aligned, vs_aligned_gt, flows, flows_gt, flows_use, \
-                _, _ = thesis_alignment.runner.ThesisAlignmentRunner.train_step_propagate(
-                    self.model_alignment, x, m, y, flow_gt, flows_use, t, r_list
+                x_aligned, v_aligned = thesis_alignment.runner.ThesisAlignmentRunner.infer_step_propagate(
+                    self.model_alignment, x, m, t, r_list
                 )
-                ys_hat, ys_hat_comp, v_maps = ThesisInpaintingRunner.train_step_propagate(
-                    self.model, xs, vs, ys, xs_aligned, vs_aligned, t, r_list
-                )
+                y_hat, y_hat_comp, v_map = self.model(x[:, :, t], (1 - m)[:, :, t], y[:, :, t], x_aligned, v_aligned)
 
             # Add items to the lists
-            # x_64_tbx.append(xs[1].cpu().numpy())
-            # m_64_tbx.append(1 - vs[1].cpu().numpy())
-            # y_64_tbx.append(ys[1].cpu().numpy())
-            # x_64_aligned_tbx.append(xs_aligned[1].cpu().numpy())
-            # v_map_64_tbx.append((v_maps[0] > 0.5).float().cpu().numpy())
-            # y_hat_64_tbx.append(ys_hat[1].cpu().numpy())
-            # y_hat_comp_64_tbx.append(ys_hat_comp[1].cpu().numpy())
-            x_256_tbx.append(xs[2].cpu().numpy())
-            m_256_tbx.append(1 - vs[2].cpu().numpy())
-            y_256_tbx.append(ys[2].cpu().numpy())
-            x_256_aligned_tbx.append(xs_aligned[2].cpu().numpy())
-            v_map_256_tbx.append(v_maps[2].cpu().numpy())
-            y_hat_256_tbx.append(ys_hat[2].cpu().numpy())
-            y_hat_comp_256_tbx.append(ys_hat_comp[2].cpu().numpy())
+            x_tbx.append(x.cpu().numpy())
+            m_tbx.append(m.cpu().numpy())
+            y_tbx.append(y.cpu().numpy())
+            x_aligned_tbx.append(x_aligned.cpu().numpy())
+            y_hat_tbx.append(y_hat.cpu().numpy())
+            y_hat_comp_tbx.append(y_hat_comp.cpu().numpy())
+            v_map_tbx.append(v_map.cpu().numpy())
 
         # Concatenate the results along dim=0
-        # x_64_tbx = np.concatenate(x_64_tbx)
-        # m_64_tbx = np.concatenate(m_64_tbx)
-        # y_64_tbx = np.concatenate(y_64_tbx)
-        # x_64_aligned_tbx = np.concatenate(x_64_aligned_tbx)
-        # v_map_64_tbx = np.concatenate(v_map_64_tbx)
-        # y_hat_64_tbx = np.concatenate(y_hat_64_tbx)
-        # y_hat_comp_64_tbx = np.concatenate(y_hat_comp_64_tbx)
-        x_256_tbx = np.concatenate(x_256_tbx)
-        m_256_tbx = np.concatenate(m_256_tbx)
-        y_256_tbx = np.concatenate(y_256_tbx)
-        x_256_aligned_tbx = np.concatenate(x_256_aligned_tbx)
-        v_map_256_tbx = np.concatenate(v_map_256_tbx)
-        y_hat_256_tbx = np.concatenate(y_hat_256_tbx)
-        y_hat_comp_256_tbx = np.concatenate(y_hat_comp_256_tbx)
+        x_tbx = np.concatenate(x_tbx)
+        m_tbx = np.concatenate(m_tbx)
+        y_tbx = np.concatenate(y_tbx)
+        x_aligned_tbx = np.concatenate(x_aligned_tbx)
+        y_hat_tbx = np.concatenate(y_hat_tbx)
+        y_hat_comp_tbx = np.concatenate(y_hat_comp_tbx)
+        v_map_tbx = np.concatenate(v_map_tbx)
 
         # Define a function to add images to TensorBoard
         def add_sample_tbx(x, m, y, x_aligned, v_map, y_hat, y_hat_comp, t, res_size):
@@ -168,30 +146,16 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
                 )
 
         # Add different resolutions to TensorBoard
-        # add_sample_tbx(
-        #     x_64_tbx, m_64_tbx, y_64_tbx, x_64_aligned_tbx, v_map_64_tbx, y_hat_64_tbx, y_hat_comp_64_tbx, t, '64'
-        # )
-        add_sample_tbx(
-            x_256_tbx, m_256_tbx, y_256_tbx, x_256_aligned_tbx, v_map_256_tbx, y_hat_256_tbx, y_hat_comp_256_tbx, t,
-            '256'
-        )
+        add_sample_tbx(x_tbx, m_tbx, y_tbx, x_aligned_tbx, v_map_tbx, y_hat_tbx, y_hat_comp_tbx, t, '256')
 
     @staticmethod
-    def train_step_propagate(model, xs, vs, ys, xs_aligned, vs_aligned, t, r_list):
-        y_hat_16, y_hat_comp_16, y_hat_64, y_hat_comp_64, y_hat_256, y_hat_comp_256, v_map_256 = model(
-            [xs_item[:, :, t] for xs_item in xs], [vs_item[:, :, t] for vs_item in vs],
-            [ys_item[:, :, t] for ys_item in ys], xs_aligned, vs_aligned
-        )
-        return (y_hat_16, y_hat_64, y_hat_256), (y_hat_comp_16, y_hat_comp_64, y_hat_comp_256), (None, None, v_map_256)
-
-    @staticmethod
-    def compute_loss(utils_losses, ys_hat, ys_hat_comp, v_maps, vs, ys, t, r_list):
-        target_img = ys[2][:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1)
-        nh_mask = vs[2][:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1)
-        vh_mask = v_maps[2]
+    def compute_loss(utils_losses, y_hat, y_hat_comp, v_map, v, y, t, r_list):
+        target_img = y[:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1)
+        nh_mask = v[:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1)
+        vh_mask = v_map
         nvh_mask = (1 - nh_mask) - vh_mask
-        loss_nh = utils_losses.masked_l1(ys_hat[2], target_img, nh_mask, weight=1)
-        loss_vh = utils_losses.masked_l1(ys_hat[2], target_img, vh_mask, weight=50)
-        loss_nvh = utils_losses.masked_l1(ys_hat[2], target_img, nvh_mask, weight=25)
+        loss_nh = utils_losses.masked_l1(y_hat, target_img, nh_mask, weight=1, reduction='sum')
+        loss_vh = utils_losses.masked_l1(y_hat, target_img, vh_mask, weight=10, reduction='sum')
+        loss_nvh = utils_losses.masked_l1(y_hat, target_img, nvh_mask, weight=2, reduction='sum')
         loss = loss_nh + loss_vh + loss_nvh
         return loss, [loss_nh, loss_vh, loss_nvh]
