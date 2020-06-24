@@ -48,7 +48,7 @@ class RRDB(nn.Module):
 
 
 class RRDBNet(nn.Module):
-    def __init__(self, in_nc, out_nc, nf=64, nb=4, gc=32):
+    def __init__(self, in_nc, out_nc, nf=32, nb=5, gc=16):
         super(RRDBNet, self).__init__()
         self.conv_first = nn.Sequential(
             nn.Conv2d(in_nc, nf, 3, 1, 1, bias=True),
