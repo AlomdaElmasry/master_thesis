@@ -48,9 +48,15 @@ class RRDB(nn.Module):
 
 
 class RRDBNet(nn.Module):
-    def __init__(self, in_nc, out_nc, nf, nb, gc=32):
+    def __init__(self, in_nc, out_nc, nf=64, nb=10, gc=32):
         super(RRDBNet, self).__init__()
-        self.conv_first = nn.Conv2d(in_nc, nf, 3, 1, 1, bias=True)
+        self.conv_first = nn.Sequential(
+            nn.Conv2d(in_nc, nf, 3, 1, 1, bias=True),
+            nn.Conv2d(nf, nf, 3),
+            nn.Conv2d(nf, nf, 3, 1, 2),
+            nn.Conv2d(nf, nf, 3),
+            nn.Conv2d(nf, nf, 3, 1, 2)
+        )
         RRDB_block_f = functools.partial(RRDB, nf=nf, gc=gc)
         self.RRDB_trunk = make_layer(RRDB_block_f, nb)
         self.trunk_conv = nn.Conv2d(nf, nf, 3, 1, 1, bias=True)
@@ -64,8 +70,8 @@ class RRDBNet(nn.Module):
         fea = self.conv_first(x)
         trunk = self.trunk_conv(self.RRDB_trunk(fea))
         fea = fea + trunk
-        # fea = self.lrelu(self.upconv1(F.interpolate(fea, scale_factor=2, mode='nearest')))
-        # fea = self.lrelu(self.upconv2(F.interpolate(fea, scale_factor=2, mode='nearest')))
+        fea = self.lrelu(self.upconv1(F.interpolate(fea, scale_factor=2, mode='nearest')))
+        fea = self.lrelu(self.upconv2(F.interpolate(fea, scale_factor=2, mode='nearest')))
         fea = self.lrelu(self.upconv1(fea))
         fea = self.lrelu(self.upconv2(fea))
         out = self.conv_last(self.lrelu(self.HRconv(fea)))
@@ -74,7 +80,7 @@ class RRDBNet(nn.Module):
 
 class RRDBNetInpainting(nn.Module):
 
-    def __init__(self, in_c, out_c=3, mid_c=16, add_c=4, n_blocks=4):
+    def __init__(self, in_c, out_c=3, mid_c=16, add_c=4, n_blocks=10):
         super(RRDBNetInpainting, self).__init__()
         self.conv_first = nn.Conv2d(in_c, mid_c, 3, 1, 1, bias=True)
         self.RRDB_trunk = make_layer(functools.partial(RRDB, nf=mid_c, gc=add_c), n_blocks)
