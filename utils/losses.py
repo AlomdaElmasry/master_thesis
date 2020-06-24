@@ -23,9 +23,9 @@ class LossesUtils:
             param.requires_grad = False
 
     def masked_l1(self, input, target, mask, batch_mask=None, reduction='mean', weight=1):
-        if batch_mask is not None and not any(batch_mask.tolist()):
+        if batch_mask is not None and not any(batch_mask):
             return torch.zeros(1).to(input.device)
-        elif batch_mask:
+        elif batch_mask is not None:
             input, target, mask = input[batch_mask], target[batch_mask], mask[batch_mask]
         masked_l1_loss = F.l1_loss(input * mask, target * mask, reduction=reduction)
         return weight * masked_l1_loss / (torch.sum(mask) if reduction == 'sum' else 1)
