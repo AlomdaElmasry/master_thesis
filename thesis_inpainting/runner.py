@@ -13,8 +13,8 @@ import utils.draws
 
 
 class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
-    checkpoint_path = '/home/ubuntu/ebs/master_thesis/experiments/align_v3_1/checkpoints/45.checkpoint.pkl'
-    # checkpoint_path = '/Users/DavidAlvarezDLT/Documents/PyCharm/master_thesis/experiments/test/checkpoints/45.checkpoint.pkl'
+    # checkpoint_path = '/home/ubuntu/ebs/master_thesis/experiments/align_v3_1/checkpoints/45.checkpoint.pkl'
+    checkpoint_path = '/Users/DavidAlvarezDLT/Documents/PyCharm/master_thesis/experiments/test/checkpoints/45.checkpoint.pkl'
     model_vgg = None
     model_alignment = None
     utils_losses = None
@@ -133,13 +133,14 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
                 x_aligned_sample = utils.draws.add_border(x_aligned_sample, m[b, :, t])
                 v_map_rep, m_rep = v_map[b].repeat(3, axis=0), m[b, :, t].repeat(3, axis=0)
                 v_map_sample = np.insert(arr=v_map_rep, obj=t, values=m_rep, axis=1)
-                y_sample = np.insert(arr=y_hat[b], obj=t, values=x[b, :, t], axis=1)
-                y_sample = utils.draws.add_border(y_sample, m[b, :, t])
+                y_hat_sample = np.insert(arr=y_hat[b], obj=t, values=y[b, :, t], axis=1)
+                y_hat_sample = utils.draws.add_border(y_hat_sample, m[b, :, t])
+                y_hat_comp_sample = np.insert(arr=y_hat_comp[b], obj=t, values=y[b, :, t], axis=1)
                 # y_sample = np.insert(arr=np.zeros_like(x_aligned[b]), obj=t, values=y_hat[b], axis=1)
                 # y_sample[:, t - 1] = y[b, :, t]
                 # y_sample[:, t + 1] = y_hat_comp[b]
                 sample = np.concatenate(
-                    (x[b], x_aligned_sample, v_map_sample, y_sample), axis=2
+                    (x[b], x_aligned_sample, v_map_sample, y_hat_sample, y_hat_comp_sample), axis=2
                 ).transpose(1, 0, 2, 3)
                 self.experiment.tbx.add_images(
                     '{}_sample_{}/{}'.format('validation', res_size, b + 1), sample, global_step=self.counters['epoch']
@@ -155,7 +156,7 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
         vh_mask = v_map
         nvh_mask = (1 - nh_mask) - vh_mask
         loss_nh = utils_losses.masked_l1(y_hat, target_img, nh_mask, weight=1, reduction='sum')
-        loss_vh = utils_losses.masked_l1(y_hat, target_img, vh_mask, weight=10, reduction='sum')
-        loss_nvh = utils_losses.masked_l1(y_hat, target_img, nvh_mask, weight=2, reduction='sum')
+        loss_vh = utils_losses.masked_l1(y_hat, target_img, vh_mask, weight=2, reduction='sum')
+        loss_nvh = utils_losses.masked_l1(y_hat, target_img, nvh_mask, weight=0.5, reduction='sum')
         loss = loss_nh + loss_vh + loss_nvh
         return loss, [loss_nh, loss_vh, loss_nvh]
