@@ -48,14 +48,14 @@ class RRDB(nn.Module):
 
 
 class RRDBNet(nn.Module):
-    def __init__(self, in_nc, out_nc, nf=16, nb=5, gc=8):
+    def __init__(self, in_nc, out_nc, nf=64, nb=10, gc=32):
         super(RRDBNet, self).__init__()
         self.conv_first = nn.Sequential(
-            nn.Conv2d(in_nc, nf, 3, 1, 1, bias=True),
-            nn.Conv2d(nf, nf, 3),
-            nn.Conv2d(nf, nf, 3, 1, 2),
-            nn.Conv2d(nf, nf, 3),
-            nn.Conv2d(nf, nf, 3, 1, 2)
+            nn.Conv2d(in_nc, nf, 3, padding=1),
+            nn.Conv2d(nf, nf, 3, padding=1),
+            nn.Conv2d(nf, nf, 3, stride=2, padding=1),
+            nn.Conv2d(nf, nf, 3, padding=1),
+            nn.Conv2d(nf, nf, 3, stride=2, padding=1)
         )
         RRDB_block_f = functools.partial(RRDB, nf=nf, gc=gc)
         self.RRDB_trunk = make_layer(RRDB_block_f, nb)
