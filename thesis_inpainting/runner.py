@@ -13,8 +13,8 @@ import utils.draws
 
 
 class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
-    # checkpoint_path = '/home/ubuntu/ebs/master_thesis/experiments/align_v3_1/checkpoints/45.checkpoint.pkl'
-    checkpoint_path = '/Users/DavidAlvarezDLT/Documents/PyCharm/master_thesis/experiments/test/checkpoints/45.checkpoint.pkl'
+    checkpoint_path = '/home/ubuntu/ebs/master_thesis/experiments/align_v3_1/checkpoints/45.checkpoint.pkl'
+    # checkpoint_path = '/Users/DavidAlvarezDLT/Documents/PyCharm/master_thesis/experiments/test/checkpoints/45.checkpoint.pkl'
     model_vgg = None
     model_alignment = None
     utils_losses = None
@@ -64,7 +64,7 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
 
         # Get both total loss and loss items
         loss, loss_items = ThesisInpaintingRunner.compute_loss(
-            self.utils_losses, y_hat, y_hat_comp, v_map, v_aligned, y, t, r_list
+            self.utils_losses, y[:, :, t], (1 - m)[:, :, t], y_hat, y_hat_comp, v_map
         )
 
         # Append loss items to epoch dictionary
@@ -150,9 +150,9 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
         add_sample_tbx(x_tbx, m_tbx, y_tbx, x_aligned_tbx, v_map_tbx, y_hat_tbx, y_hat_comp_tbx, t, '256')
 
     @staticmethod
-    def compute_loss(utils_losses, y_hat, y_hat_comp, v_map, v, y, t, r_list):
-        target_img = y[:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1)
-        nh_mask = v[:, :, t].unsqueeze(2).repeat(1, 1, len(r_list), 1, 1)
+    def compute_loss(utils_losses, y_target, v_target, y_hat, y_hat_comp, v_map):
+        target_img = y_target.unsqueeze(2).repeat(1, 1, y_hat.size(2), 1, 1)
+        nh_mask = v_target.unsqueeze(2).repeat(1, 1, y_hat.size(2), 1, 1)
         vh_mask = v_map
         nvh_mask = (1 - nh_mask) - vh_mask
         loss_nh = utils_losses.masked_l1(y_hat, target_img, nh_mask, weight=1, reduction='sum')
