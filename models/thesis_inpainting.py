@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import models.rrdb_net
+import matplotlib.pyplot as plt
 
 
 class ThesisInpaintingVisible(nn.Module):
@@ -32,7 +33,7 @@ class ThesisInpaintingVisible(nn.Module):
 
         # Propagate data through the NN
         y_hat = torch.clamp(self.nn(nn_input).reshape(b, f, c, h, w).transpose(1, 2) * self.std + self.mean, 0, 1)
-        y_hat_comp = (y_target * v_target).unsqueeze(2).repeat(1, 1, f, 1, 1) + y_hat * (1 - v_aligned)
+        y_hat_comp = (y_target * v_target).unsqueeze(2).repeat(1, 1, f, 1, 1) + y_hat * (1 - v_target)
 
         # Return the data
         return y_hat, y_hat_comp, visible_zones_mask

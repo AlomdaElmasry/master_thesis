@@ -13,8 +13,8 @@ import utils.draws
 
 
 class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
-    checkpoint_path = '/home/ubuntu/ebs/master_thesis/experiments/align_v3_1/checkpoints/45.checkpoint.pkl'
-    # checkpoint_path = '/Users/DavidAlvarezDLT/Documents/PyCharm/master_thesis/experiments/test/checkpoints/45.checkpoint.pkl'
+    # checkpoint_path = '/home/ubuntu/ebs/master_thesis/experiments/align_v3_1/checkpoints/45.checkpoint.pkl'
+    checkpoint_path = '/Users/DavidAlvarezDLT/Documents/PyCharm/master_thesis/experiments/test/checkpoints/45.checkpoint.pkl'
     model_vgg = None
     model_alignment = None
     utils_losses = None
@@ -156,7 +156,7 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
         vh_mask = v_map
         nvh_mask = (1 - nh_mask) - vh_mask
         loss_nh = utils_losses.masked_l1(y_hat, target_img, nh_mask, weight=1, reduction='sum')
-        loss_vh = utils_losses.masked_l1(y_hat, target_img, vh_mask, weight=2, reduction='sum')
+        loss_vh = utils_losses.masked_l1(y_hat, target_img, vh_mask, weight=1, reduction='sum')
         loss_nvh = utils_losses.masked_l1(y_hat, target_img, nvh_mask, weight=0.5, reduction='sum')
         loss = loss_nh + loss_vh + loss_nvh
         return loss, [loss_nh, loss_vh, loss_nvh]
