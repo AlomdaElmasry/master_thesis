@@ -35,18 +35,15 @@ class ThesisInpaintingVisible(nn.Module):
 
         # Combine the input of the NN
         nn_input = torch.cat([
+            xs_target_norm.unsqueeze(2).repeat(1, 1, f, 1, 1).transpose(1, 2).reshape(b * f, c, h, w),
             xs_aligned_norm.transpose(1, 2).reshape(b * f, c, h, w),
-            xs_target_norm.repeat(1, 1, f, 1, 1).transpose(1, 2).reshape(b * f, c, h, w),
+            v_target.unsqueeze(2).repeat(1, 1, f, 1, 1).transpose(1, 2).reshape(b * f, 1, h, w),
             v_aligned.transpose(1, 2).reshape(b * f, 1, h, w),
-            v_target.repeat(1, 1, f, 1, 1).transpose(1, 2).reshape(b * f, 1, h, w),
             visible_zones_mask.transpose(1, 2).reshape(b * f, 1, h, w)
         ], dim=1)
 
-        # PATH TEST
-        nn_input = xs_target_norm.unsqueeze(2).repeat(1, 1, f, 1, 1).transpose(1, 2).reshape(b * f, c, h, w)
-
         # Propagate data through the NN
-        y_hat = self.nn(nn_input).reshape(b, f, c, h, w).transpose(1, 2) * self.std + self.mean
+        y_hat = torch.clamp(self.nn(nn_input).reshape(b, f, c, h, w).transpose(1, 2) * self.std + self.mean, 0, 1)
         y_hat_comp = (y_target * v_target).unsqueeze(2).repeat(1, 1, f, 1, 1) + \
                      y_hat * (1 - v_target).unsqueeze(2).repeat(1, 1, f, 1, 1)
 
