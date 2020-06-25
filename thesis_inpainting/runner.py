@@ -14,14 +14,14 @@ import matplotlib.pyplot as plt
 
 
 class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
-    # checkpoint_path = '/home/ubuntu/ebs/master_thesis/experiments/align_v3_1/checkpoints/45.checkpoint.pkl'
-    checkpoint_path = '/Users/DavidAlvarezDLT/Documents/PyCharm/master_thesis/experiments/test/checkpoints/45.checkpoint.pkl'
+    checkpoint_path_cuda = '/home/ubuntu/ebs/master_thesis/experiments/align_v3_1/checkpoints/45.checkpoint.pkl'
+    checkpoint_path_cpu = '/Users/DavidAlvarezDLT/Documents/PyCharm/master_thesis/experiments/test/checkpoints/45.checkpoint.pkl'
     model_vgg = None
     model_alignment = None
     utils_losses = None
 
     def init_model(self, device):
-        torch.autograd.set_detect_anomaly(True)
+        self.checkpoint_path = self.checkpoint_path_cuda if device == 'cuda' else self.checkpoint_path_cpu
         self.model_vgg = models.vgg_16.get_pretrained_model(device)
         self.model_alignment = models.thesis_alignment.ThesisAlignmentModel(self.model_vgg).to(device)
         self.model = models.thesis_inpainting.ThesisInpaintingVisible().to(device)
