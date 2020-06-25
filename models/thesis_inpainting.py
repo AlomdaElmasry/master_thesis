@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 
 class ThesisInpaintingVisible(nn.Module):
 
-    def __init__(self, in_c=3):
+    def __init__(self, in_c=9):
         super(ThesisInpaintingVisible, self).__init__()
         # self.nn = models.rrdb_net.RRDBNet(in_c, 3)
         self.nn = nn.Sequential(
