@@ -43,12 +43,15 @@ class ThesisInpaintingVisible(nn.Module):
         ], dim=1)
 
         # PATH TEST
-        nn_input = xs_target_norm.repeat(1, 1, f, 1, 1).transpose(1, 2).reshape(b * f, c, h, w)
+        nn_input = xs_target_norm.unsqueeze(2).repeat(1, 1, f, 1, 1).transpose(1, 2).reshape(b * f, c, h, w)
 
         # Propagate data through the NN
         y_hat = self.nn(nn_input).reshape(b, f, c, h, w).transpose(1, 2) * self.std + self.mean
         y_hat_comp = (y_target * v_target).unsqueeze(2).repeat(1, 1, f, 1, 1) + \
                      y_hat * (1 - v_target).unsqueeze(2).repeat(1, 1, f, 1, 1)
+
+        # Hard
+        y_hat = x_target.repeat(1, 1, f, 1, 1)
 
         # Return the data
         return y_hat, y_hat_comp, visible_zones_mask
