@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 
 class ThesisInpaintingVisible(nn.Module):
 
-    def __init__(self, in_c=9):
+    def __init__(self, in_c=3):
         super(ThesisInpaintingVisible, self).__init__()
         # self.nn = models.rrdb_net.RRDBNet(in_c, 3)
         self.nn = nn.Sequential(
@@ -41,6 +41,9 @@ class ThesisInpaintingVisible(nn.Module):
             v_target.repeat(1, 1, f, 1, 1).transpose(1, 2).reshape(b * f, 1, h, w),
             visible_zones_mask.transpose(1, 2).reshape(b * f, 1, h, w)
         ], dim=1)
+
+        # PATH TEST
+        nn_input = xs_target_norm.repeat(1, 1, f, 1, 1).transpose(1, 2).reshape(b * f, c, h, w)
 
         # Propagate data through the NN
         y_hat = self.nn(nn_input).reshape(b, f, c, h, w).transpose(1, 2) * self.std + self.mean
