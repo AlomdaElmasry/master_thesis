@@ -43,7 +43,7 @@ class ThesisInpaintingVisible(nn.Module):
         ], dim=1)
 
         # Propagate data through the NN
-        y_hat = torch.clamp(self.nn(nn_input).reshape(b, f, c, h, w).transpose(1, 2) * self.std + self.mean, 0, 1)
+        y_hat = self.nn(nn_input).reshape(b, f, c, h, w).transpose(1, 2) * self.std + self.mean
         y_hat_comp = (y_target * v_target).unsqueeze(2).repeat(1, 1, f, 1, 1) + \
                      y_hat * (1 - v_target).unsqueeze(2).repeat(1, 1, f, 1, 1)
 
