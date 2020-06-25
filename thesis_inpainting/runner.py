@@ -14,8 +14,8 @@ import matplotlib.pyplot as plt
 
 
 class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
-    # checkpoint_path = '/home/ubuntu/ebs/master_thesis/experiments/align_v3_1/checkpoints/45.checkpoint.pkl'
-    checkpoint_path = '/Users/DavidAlvarezDLT/Documents/PyCharm/master_thesis/experiments/test/checkpoints/45.checkpoint.pkl'
+    checkpoint_path = '/home/ubuntu/ebs/master_thesis/experiments/align_v3_1/checkpoints/45.checkpoint.pkl'
+    # checkpoint_path = '/Users/DavidAlvarezDLT/Documents/PyCharm/master_thesis/experiments/test/checkpoints/45.checkpoint.pkl'
     model_vgg = None
     model_alignment = None
     utils_losses = None
