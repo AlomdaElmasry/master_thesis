@@ -50,8 +50,5 @@ class ThesisInpaintingVisible(nn.Module):
         y_hat_comp = (y_target * v_target).unsqueeze(2).repeat(1, 1, f, 1, 1) + \
                      y_hat * (1 - v_target).unsqueeze(2).repeat(1, 1, f, 1, 1)
 
-        # Hard
-        y_hat = x_target.repeat(1, 1, f, 1, 1)
-
         # Return the data
         return y_hat, y_hat_comp, visible_zones_mask
