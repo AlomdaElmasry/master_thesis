@@ -8,18 +8,18 @@ class ThesisInpaintingVisible(nn.Module):
 
     def __init__(self, in_c=9):
         super(ThesisInpaintingVisible, self).__init__()
-        # self.nn = models.rrdb_net.RRDBNet(in_c, 3)
-        self.nn = nn.Sequential(
-            nn.Conv2d(in_c, 128, kernel_size=3, padding=1), nn.ReLU(),
-            nn.Conv2d(128, 128, kernel_size=7, padding=3), nn.ReLU(),
-            nn.Conv2d(128, 128, kernel_size=5, padding=2), nn.ReLU(),
-            nn.Conv2d(128, 128, kernel_size=3, padding=1), nn.ReLU(),
-            nn.Conv2d(128, 128, kernel_size=3, padding=1), nn.ReLU(),
-            nn.Conv2d(128, 64, kernel_size=3, padding=1), nn.ReLU(),
-            nn.Conv2d(64, 32, kernel_size=3, padding=1), nn.ReLU(),
-            nn.Conv2d(32, 8, kernel_size=3, padding=1), nn.ReLU(),
-            nn.Conv2d(8, 3, kernel_size=3, padding=1),
-        )
+        self.nn = models.rrdb_net.RRDBNet(in_c, 3)
+        # self.nn = nn.Sequential(
+        #     nn.Conv2d(in_c, 128, kernel_size=3, padding=1), nn.ReLU(),
+        #     nn.Conv2d(128, 128, kernel_size=7, padding=3), nn.ReLU(),
+        #     nn.Conv2d(128, 128, kernel_size=5, padding=2), nn.ReLU(),
+        #     nn.Conv2d(128, 128, kernel_size=3, padding=1), nn.ReLU(),
+        #     nn.Conv2d(128, 128, kernel_size=3, padding=1), nn.ReLU(),
+        #     nn.Conv2d(128, 64, kernel_size=3, padding=1), nn.ReLU(),
+        #     nn.Conv2d(64, 32, kernel_size=3, padding=1), nn.ReLU(),
+        #     nn.Conv2d(32, 8, kernel_size=3, padding=1), nn.ReLU(),
+        #     nn.Conv2d(8, 3, kernel_size=3, padding=1),
+        # )
         self.register_buffer('mean', torch.as_tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1, 1))
         self.register_buffer('std', torch.as_tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1, 1))
 
