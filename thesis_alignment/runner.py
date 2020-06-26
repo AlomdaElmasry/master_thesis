@@ -216,7 +216,9 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
         y_vgg_feats = y_vgg_feats[3].reshape(b, f, -1, 16, 16).transpose(1, 2)
 
         # Compute L1 loss between correlation volumes
-        corr_y = utils.correlation.compute_masked_4d_correlation(y_vgg_feats, None, t, r_list)
+        corr_y = utils.correlation.compute_masked_4d_correlation(
+            y_vgg_feats[:, :, t], None, y_vgg_feats[:, :, r_list], None
+        )
         corr_loss = F.l1_loss(corr, corr_y)
 
         # Compute flow losses
