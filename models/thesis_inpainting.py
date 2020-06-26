@@ -23,22 +23,22 @@ class ThesisInpaintingVisible(nn.Module):
         self.register_buffer('mean', torch.as_tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1, 1))
         self.register_buffer('std', torch.as_tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1, 1))
 
-    def forward(self, x_target, v_target, y_target, x_aligned, v_aligned):
-        b, c, f, h, w = x_aligned.size()
+    def forward(self, x_target, v_target, y_target, x_ref_aligned, v_ref_aligned):
+        b, c, f, h, w = x_ref_aligned.size()
 
         # Normalize the input images
         xs_target_norm = (x_target - self.mean.squeeze(2)) / self.std.squeeze(2)
-        xs_aligned_norm = (x_aligned - self.mean) / self.std
+        xs_aligned_norm = (x_ref_aligned - self.mean) / self.std
 
         # Compute visible zones mask
-        visible_zones_mask = (v_aligned - v_target.unsqueeze(2)).clamp(0, 1)
+        visible_zones_mask = (v_ref_aligned - v_target.unsqueeze(2)).clamp(0, 1)
 
         # Combine the input of the NN
         nn_input = torch.cat([
             xs_target_norm.unsqueeze(2).repeat(1, 1, f, 1, 1).transpose(1, 2).reshape(b * f, c, h, w),
             xs_aligned_norm.transpose(1, 2).reshape(b * f, c, h, w),
             v_target.unsqueeze(2).repeat(1, 1, f, 1, 1).transpose(1, 2).reshape(b * f, 1, h, w),
-            v_aligned.transpose(1, 2).reshape(b * f, 1, h, w),
+            v_ref_aligned.transpose(1, 2).reshape(b * f, 1, h, w),
             visible_zones_mask.transpose(1, 2).reshape(b * f, 1, h, w)
         ], dim=1)
 

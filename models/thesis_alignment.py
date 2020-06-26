@@ -5,28 +5,6 @@ import utils.movement
 import utils.correlation
 
 
-class FeatureExtractor(nn.Module):
-    def __init__(self):
-        super(FeatureExtractor, self).__init__()
-        self.nn = nn.Sequential(
-            nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1), nn.ReLU(),
-            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1), nn.ReLU(),
-            nn.Conv2d(64, 64, kernel_size=3, stride=2, padding=1), nn.ReLU(),
-            nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1), nn.ReLU(),
-            nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1), nn.ReLU(),
-            nn.Conv2d(128, 128, kernel_size=3, stride=2, padding=1), nn.ReLU(),
-            nn.Conv2d(128, 256, kernel_size=3, stride=1, padding=1), nn.ReLU(),
-            nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1), nn.ReLU(),
-            nn.Conv2d(256, 256, kernel_size=3, stride=2, padding=1), nn.ReLU(),
-            nn.Conv2d(256, 512, kernel_size=3, stride=1, padding=1), nn.ReLU(),
-            nn.Conv2d(512, 512, kernel_size=3, stride=1, padding=1), nn.ReLU(),
-            nn.Conv2d(512, 512, kernel_size=3, stride=2, padding=1)
-        )
-
-    def forward(self, x):
-        return self.nn(x)
-
-
 class SeparableConv4d(nn.Module):
     def __init__(self, in_c=1, out_c=1):
         super(SeparableConv4d, self).__init__()
@@ -41,13 +19,13 @@ class SeparableConv4d(nn.Module):
             torch.nn.Conv2d(128, out_c, 3, padding=1)
         )
 
-    def forward(self, x):
-        x = x.unsqueeze(4)
-        b, t, h, w, c, *_ = x.size()
+    def forward(self, corr):
+        corr = corr.unsqueeze(4)
+        b, t, h, w, c, *_ = corr.size()
 
         # reshape (b*t*H*W, c, H, W)
         # shape is b, t, H*W, inter_dim, H*W then permute
-        x2_bis = self.conv_1(x.reshape(-1, c, h, w))
+        x2_bis = self.conv_1(corr.reshape(-1, c, h, w))
         x2_bis = x2_bis.reshape(b, t, h * w, x2_bis.size(1), h * w).permute(0, 1, 4, 3, 2)
 
         # reshape (b*t*H*W, inter_dim, H, W)
@@ -84,37 +62,35 @@ class CorrelationVGG(nn.Module):
     def __init__(self, model_vgg, use_softmax=False):
         super(CorrelationVGG, self).__init__()
         self.model_vgg = model_vgg
-        # self.feature_extractor = FeatureExtractor()
         self.conv = SeparableConv4d()
         self.softmax = Softmax3d() if use_softmax else None
 
-    def forward(self, x, m, t, r_list):
-        b, c, ref_n, h, w = x.size()
+    def forward(self, x_target, m_target, x_ref, m_ref):
+        b, c, ref_n, h, w = x_ref.size()
 
         # Get the features of the frames from VGG
         with torch.no_grad():
-            x_feats = self.model_vgg(x.transpose(1, 2).reshape(b * ref_n, c, h, w), normalize_input=False)
-        x_feats = x_feats[3].reshape(b, ref_n, -1, 16, 16).transpose(1, 2)
-        # x_feats = self.feature_extractor(
-        #     x.transpose(1, 2).reshape(b * ref_n, c, h, w)
-        # ).reshape(b, ref_n, -1, 16, 16).transpose(1, 2)
+            x_target_feats = self.model_vgg(x_target, normalize_input=False)
+            x_ref_feats = self.model_vgg(x_ref.transpose(1, 2).reshape(b * ref_n, c, h, w), normalize_input=False)
+        x_target_feats, x_ref_feats = x_target_feats[3], x_ref_feats[3].reshape(b, ref_n, -1, 16, 16).transpose(1, 2)
 
         # Update the parameters to the VGG features
-        b, c, ref_n, h, w = x_feats.size()
+        b, c, ref_n, h, w = x_ref_feats.size()
 
         # Interpolate the feature masks
-        corr_masks = F.interpolate(
-            1 - m.transpose(1, 2).reshape(b * ref_n, 1, m.size(3), m.size(4)), size=(h, w), mode='nearest'
+        v_target = F.interpolate(1 - m_target, size=(h, w), mode='nearest')
+        v_ref = F.interpolate(
+            1 - m_ref.transpose(1, 2).reshape(b * ref_n, 1, m_ref.size(3), m_ref.size(4)), size=(h, w), mode='nearest'
         ).reshape(b, ref_n, 1, h, w).transpose(1, 2)
 
         # Compute the feature correlation
-        corr = utils.correlation.compute_masked_4d_correlation(x_feats, corr_masks, t, r_list)
+        corr = utils.correlation.compute_masked_4d_correlation(x_target_feats, v_target, x_ref_feats, v_ref)
 
         # Fill holes in the correlation matrix using a NN
         corr = self.conv(corr)
 
         # Compute the Softmax over each pixel (b, t, h, w, h, w)
-        return self.softmax(corr) if self.softmax else corr, x_feats
+        return self.softmax(corr) if self.softmax else corr
 
 
 class AlignmentCorrelationMixer(nn.Module):
@@ -171,21 +147,20 @@ class FlowEstimator(nn.Module):
             nn.Conv2d(in_c, 2, kernel_size=3, padding=1)
         )
 
-    def forward(self, x, m, flow, t, r_list):
-        b, c, f, h, w = x.size()
+    def forward(self, x_target, m_target, x_ref, m_ref, flow_pre):
+        b, c, ref_n, h, w = x_ref.size()
 
         # Prepare data and propagate it through the model
         nn_input = torch.cat([
-            x[:, :, r_list].transpose(1, 2).reshape(b * (f - 1), c, h, w),
-            x[:, :, t].unsqueeze(1).repeat(1, f - 1, 1, 1, 1).reshape(b * (f - 1), c, h, w),
-            m[:, :, r_list].transpose(1, 2).reshape(b * (f - 1), 1, h, w),
-            m[:, :, t].unsqueeze(1).repeat(1, f - 1, 1, 1, 1).reshape(b * (f - 1), 1, h, w),
-            flow.transpose(1, 2).reshape(b * (f - 1), 2, h, w)
+            x_ref.transpose(1, 2).reshape(b * ref_n, c, h, w),
+            x_target.unsqueeze(1).repeat(1, ref_n, 1, 1, 1).reshape(b * ref_n, c, h, w),
+            m_ref.transpose(1, 2).reshape(b * ref_n, 1, h, w),
+            m_target.unsqueeze(1).repeat(1, ref_n, 1, 1, 1).reshape(b * ref_n, 1, h, w),
+            flow_pre.transpose(1, 2).reshape(b * ref_n, 2, h, w)
         ], dim=1)
-        nn_output = self.nn(nn_input).reshape(b, f - 1, 2, h, w).transpose(1, 2)
 
-        # Return flow and v_map separately
-        return nn_output[:, :2].permute(0, 2, 3, 4, 1)
+        # Return flow in the form (B,F,H,W,2)
+        return self.nn(nn_input).reshape(b, ref_n, 2, h, w).permute(0, 1, 3, 4, 2)
 
 
 class ThesisAlignmentModel(nn.Module):
@@ -199,39 +174,47 @@ class ThesisAlignmentModel(nn.Module):
         self.register_buffer('mean', torch.as_tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1, 1))
         self.register_buffer('std', torch.as_tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1, 1))
 
-    def forward(self, x, m, t, r_list):
-        b, c, f, h, w = x.size()
+    def forward(self, x_target, m_target, x_ref, m_ref):
 
         # Normalize the input
-        x = (x - self.mean) / self.std
+        x_target = (x_target - self.mean.squeeze(2)) / self.std.squeeze(2)
+        x_ref = (x_ref - self.mean) / self.std
 
         # Apply the CorrelationVGG module. Corr is (b, t, h, w, h, w)
-        corr, x_feats = self.corr(x, m, t, r_list)
+        corr = self.corr(x_target, m_target, x_ref, m_ref)
 
         # Mix the corr 4D volume to obtain a 16x16 dense flow estimation of size (b, t, 16, 16, 2)
         flow_16 = self.corr_mixer(corr)
 
-        # Interpolate x, m and corr_mixed to be 64x64
-        x_64 = F.interpolate(
-            x.transpose(1, 2).reshape(b * f, c, h, w), (64, 64), mode='bilinear'
-        ).reshape(b, f, c, 64, 64).transpose(1, 2)
-        m_64 = F.interpolate(
-            m.transpose(1, 2).reshape(b * f, 1, h, w), (64, 64), mode='nearest'
-        ).reshape(b, f, 1, 64, 64).transpose(1, 2)
-        flow_64_pre = F.interpolate(
-            flow_16.reshape(b * (f - 1), 16, 16, 2).permute(0, 3, 1, 2), (64, 64), mode='bilinear'
-        ).reshape(b, f - 1, 2, 64, 64).transpose(1, 2)
+        # Interpolate x, m and flow_16 to be 64x64
+        x_target_64, m_target_64, x_ref_64, m_ref_64 = self.interpolate_data(x_target, m_target, x_ref, m_ref, 64, 64)
+        flow_64_pre = self.interpolate_flow(flow_16, 64, 64)
 
         # Estimate 64x64 flow correction of size (b, t, 64, 64, 2)
-        flow_64 = self.flow_64(x_64, m_64, flow_64_pre, t, r_list)
+        flow_64 = self.flow_64(x_target_64, m_target_64, x_ref_64, m_ref_64, flow_64_pre)
 
         # Interpolate flow_64 to be 256x256
-        flow_256_pre = F.interpolate(
-            flow_64.reshape(b * (f - 1), 64, 64, 2).permute(0, 3, 1, 2), (h, w), mode='bilinear'
-        ).reshape(b, f - 1, 2, h, w).transpose(1, 2)
+        flow_256_pre = self.interpolate_flow(flow_64, 256, 256)
 
         # Estimate 256x256 flow correction of size (b, t, 256, 256, 2)
-        flow_256 = self.flow_256(x, m, flow_256_pre, t, r_list)
+        flow_256 = self.flow_256(x_target, m_target, x_ref, m_ref, flow_256_pre)
 
         # Return both corr and corr_mixed
-        return x_feats, corr, flow_16, flow_64, flow_256
+        return corr, flow_16, flow_64, flow_256
+
+    def interpolate_data(self, x_target, m_target, x_ref, m_ref, h_new, w_new):
+        b, c, ref_n, h, w = x_ref.size()
+        x_target_res = F.interpolate(x_target, (h_new, w_new), mode='bilinear')
+        m_target_res = F.interpolate(m_target, (h_new, w_new), mode='nearest')
+        x_ref_res = F.interpolate(x_ref.transpose(1, 2).reshape(b * ref_n, c, h, w), (h_new, w_new), mode='bilinear') \
+            .reshape(b, ref_n, c, h_new, w_new).transpose(1, 2)
+        m_ref_res = F.interpolate(m_ref.transpose(1, 2).reshape(b * ref_n, 1, h, w), (h_new, w_new), mode='nearest')\
+            .reshape(b, ref_n, 1, h_new, w_new).transpose(1, 2)
+        return x_target_res, m_target_res, x_ref_res, m_ref_res
+
+    def interpolate_flow(self, flow, h_new, w_new):
+        b, ref_n, h, w, _ = flow.size()
+        return F.interpolate(
+            flow.reshape(b * ref_n, flow.size(2), flow.size(3), 2).permute(0, 3, 1, 2), (h_new, w_new), mode='bilinear'
+        ).reshape(b, ref_n, 2, h_new, w_new).transpose(1, 2)
+

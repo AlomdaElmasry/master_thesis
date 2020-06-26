@@ -33,8 +33,9 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
             gamma=self.experiment.configuration.get('training', 'lr_scheduler_gamma')
         )
         self.utils_losses = utils.losses.LossesUtils(device)
-        self.losses_items_ids = ['corr_loss', 'flow_16', 'flow_64', 'flow_256', 'alignment_recons_64',
-                                 'alignment_recons_256']
+        self.losses_items_ids = [
+            'corr_loss', 'flow_16', 'flow_64', 'flow_256', 'alignment_recons_64', 'alignment_recons_256'
+        ]
         super().init_others(device)
 
     def train_step(self, it_data, device):
@@ -46,15 +47,12 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
         r_list.pop(t)
 
         # Propagate through the model
-        x_feats, corr, xs, vs, ys, xs_aligned, xs_aligned_gt, vs_aligned, vs_aligned_gt, flows, flows_gt, flows_use, \
-        v_maps, v_maps_gt = ThesisAlignmentRunner.train_step_propagate(
-            self.model, x, m, y, flow_gt, flows_use, t, r_list
-        )
+        corr, xs, vs, ys, xs_aligned, xs_aligned_gt, vs_aligned, vs_aligned_gt, flows, flows_gt, flows_use, v_maps, \
+            v_maps_gt = ThesisAlignmentRunner.train_step_propagate(self.model, x, m, y, flow_gt, flows_use, t, r_list)
 
         # Get both total loss and loss items
         loss, loss_items = ThesisAlignmentRunner.compute_loss(
-            self.model_vgg, self.utils_losses, x_feats, corr, xs, vs, ys, xs_aligned, xs_aligned_gt, vs_aligned,
-            vs_aligned_gt, flows, flows_gt, flows_use, v_maps, v_maps_gt, t, r_list
+            self.model_vgg, self.utils_losses, corr, xs, vs, ys, xs_aligned, flows, flows_gt, flows_use, t, r_list
         )
 
         # Append loss items to epoch dictionary
@@ -95,7 +93,7 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
             t, r_list = x.size(2) // 2, list(range(x.size(2)))
             r_list.pop(t)
             with torch.no_grad():
-                _, _, xs, vs, ys, xs_aligned, xs_aligned_gt, vs_aligned, vs_aligned_gt, flows, flows_gt, \
+                _, xs, vs, ys, xs_aligned, xs_aligned_gt, vs_aligned, vs_aligned_gt, flows, flows_gt, \
                 flows_use, v_maps, v_maps_gt = ThesisAlignmentRunner.train_step_propagate(
                     self.model, x, m, y, flow_gt, flows_use, t, r_list
                 )
@@ -155,12 +153,12 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
 
     @staticmethod
     def infer_step_propagate(model, x, m, t, r_list):
-        _, _, _, _, flow_256 = model(x, m, t, r_list)
+        *_, flow_256 = model(x[:, :, t], m[:, :, t], x[:, :, r_list], m[:, :, r_list])
         return utils.flow.align_set(x[:, :, r_list], (1 - m)[:, :, r_list], flow_256)
 
     @staticmethod
     def train_step_propagate(model, x, m, y, flow_gt, flows_use, t, r_list):
-        x_feats, corr, flow_16, flow_64, flow_256 = model(x, m, t, r_list)
+        corr, flow_16, flow_64, flow_256 = model(x[:, :, t], m[:, :, t], x[:, :, r_list], m[:, :, r_list])
 
         # Resize the data to multiple resolutions
         x_16, v_16, y_16 = utils.transforms.resize_set(x, 1 - m, y, 16)
@@ -205,12 +203,11 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
         v_maps, v_maps_gt = (v_map_64, v_map_256), (v_map_64_gt, v_map_256_gt)
 
         # Return packed data
-        return x_feats, corr, xs, vs, ys, xs_aligned, xs_aligned_gt, vs_aligned, vs_aligned_gt, flows, flows_gt, \
-               flows_use, v_maps, v_maps_gt
+        return corr, xs, vs, ys, xs_aligned, xs_aligned_gt, vs_aligned, vs_aligned_gt, flows, flows_gt, flows_use, \
+               v_maps, v_maps_gt
 
     @staticmethod
-    def compute_loss(model_vgg, utils_losses, x_feats, corr, xs, vs, ys, xs_aligned, xs_aligned_gt, vs_aligned,
-                     vs_aligned_gt, flows, flows_gt, flows_use, v_maps, v_maps_gt, t, r_list):
+    def compute_loss(model_vgg, utils_losses, corr, xs, vs, ys, xs_aligned, flows, flows_gt, flows_use, t, r_list):
 
         # Get the features of the frames from VGG
         b, c, f, h, w = ys[2].size()
@@ -246,5 +243,6 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
         # Compute sum of losses and return them
         total_loss = corr_loss + flow_loss_16 + flow_loss_64 + flow_loss_256
         total_loss += alignment_recons_64 + alignment_recons_256
-        return total_loss, [corr_loss, flow_loss_16, flow_loss_64, flow_loss_256, alignment_recons_64,
-                            alignment_recons_256]
+        return total_loss, [
+            corr_loss, flow_loss_16, flow_loss_64, flow_loss_256, alignment_recons_64, alignment_recons_256
+        ]

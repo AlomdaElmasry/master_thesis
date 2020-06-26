@@ -114,7 +114,9 @@ class ContentProvider(torch.utils.data.Dataset):
         sequence_last_frame_index = self.items_limits[sequence_index] - 1
         frames_indexes = list(range(sequence_first_frame_index, sequence_last_frame_index + 1))
         y, m = self.get_items(frames_indexes)
-        return y, m, self.items_names[sequence_index]
+        gt_movement = torch.zeros((len(frames_indexes), y.size(2), y.size(3), 2))
+        m_movement = torch.zeros((len(frames_indexes), m.size(2), m.size(3), 2))
+        return y, m, self.items_names[sequence_index], frames_indexes, gt_movement, m_movement
 
     def len_sequences(self):
         """Return the number of different sequences."""
@@ -244,10 +246,7 @@ class MaskedSequenceDataset(torch.utils.data.Dataset):
 
         # Return entire sequence. Used only in the test.
         if self.frames_n == -1:
-            y, m, gt_name = self.gts_dataset.get_sequence(item)
-            gt_indexes = None
-            gt_movement = None
-            m_movement = None
+            y, m, gt_name, gt_indexes, gt_movement, m_movement = self.gts_dataset.get_sequence(item)
 
         # Return patches of training data
         else:
@@ -273,6 +272,9 @@ class MaskedSequenceDataset(torch.utils.data.Dataset):
         # Apply Mask transformations
         if self.image_size != (m.size(2), m.size(3)):
             m = utils.transforms.ImageTransforms.resize(m, self.image_size, mode='nearest', keep_ratio=self.keep_ratio)
+            m_movement = utils.flow.resize_flow(m_movement.unsqueeze(0), self.image_size).squeeze(0)
+
+        # Apply a dilatation to the mask
         m = utils.transforms.ImageTransforms.dilatate(m, self.dilatation_filter_size, self.dilatation_iterations)
 
         # Compute x
