@@ -37,8 +37,8 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
             step_size=self.experiment.configuration.get('training', 'lr_scheduler_step_size'),
             gamma=self.experiment.configuration.get('training', 'lr_scheduler_gamma')
         )
-        self.utils_losses = utils.losses.LossesUtils(device)
-        self.losses_items_ids = ['loss_nh', 'loss_vh', 'loss_nvh']
+        self.utils_losses = utils.losses.LossesUtils(self.model_vgg, device)
+        self.losses_items_ids = ['loss_nh', 'loss_vh', 'loss_nvh', 'loss_perceptual']
         super().init_others(device)
 
     def load_alignment_state(self, device):
@@ -47,7 +47,6 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
             self.model_alignment.load_state_dict(torch.load(checkpoint_file, map_location=device)['model'])
 
     def train_step(self, it_data, device):
-        self.test(None, device)
         (x, m), y, info = it_data
         x, m, y, flows_use, flow_gt = x.to(device), m.to(device), y.to(device), info[2], info[5].to(device)
         t, r_list = self.get_indexes(x.size(2))
@@ -74,8 +73,8 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
         self.model.eval()
         if epoch is not None:
             self.load_states(epoch, device)
-        self.test_sequence(self.test_sequence_individual_handler, 'test_seq_individual', device)
-        self.test_frames(self.test_frames_handler, device)
+        # self.test_sequence(self.test_sequence_individual_handler, 'test_seq_individual', device)
+        # self.test_frames(self.test_frames_handler, device)
 
     def test_frames_handler(self, x, m, y, t, r_list):
         return ThesisInpaintingRunner.infer_step_propagate(
@@ -131,6 +130,7 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
 
     @staticmethod
     def compute_loss(utils_losses, y_target, v_target, y_hat, y_hat_comp, v_map):
+        b, c, h, w = y_target.size()
         target_img = y_target.unsqueeze(2).repeat(1, 1, y_hat.size(2), 1, 1)
         nh_mask = v_target.unsqueeze(2).repeat(1, 1, y_hat.size(2), 1, 1)
         vh_mask = v_map
@@ -138,5 +138,8 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
         loss_nh = utils_losses.masked_l1(y_hat, target_img, nh_mask, reduction='sum', weight=2)
         loss_vh = utils_losses.masked_l1(y_hat, target_img, vh_mask, reduction='sum', weight=2)
         loss_nvh = utils_losses.masked_l1(y_hat, target_img, nvh_mask, reduction='sum', weight=0.5)
-        loss = loss_nh + loss_vh + loss_nvh
-        return loss, [loss_nh, loss_vh, loss_nvh]
+        loss_perceptual, *_ = utils_losses.perceptual(
+            y_hat.transpose(1, 2).reshape(-1, c, h, w), target_img.transpose(1, 2).reshape(-1, c, h, w), weight=2
+        )
+        loss = loss_nh + loss_vh + loss_nvh + loss_perceptual
+        return loss, [loss_nh, loss_vh, loss_nvh, loss_perceptual]

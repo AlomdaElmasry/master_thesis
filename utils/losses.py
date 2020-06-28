@@ -9,7 +9,8 @@ class LossesUtils:
     grad_horz = None
     grad_vert = None
 
-    def __init__(self, device):
+    def __init__(self, model_vgg, device):
+        self.model_vgg = model_vgg
         self.grad_horz = torch.tensor(
             [[1, 0, -1], [2, 0, -2], [1, 0, -1]], dtype=torch.float32
         ).unsqueeze(0).unsqueeze(0).repeat((3, 1, 1, 1)).to(device)
@@ -36,13 +37,13 @@ class LossesUtils:
         bce_loss = F.binary_cross_entropy(input * mask, target * mask, reduction=reduction)
         return weight * bce_loss / (torch.sum(mask) if reduction == 'sum' else 1)
 
-    def perceptual(self, x, x_hat, weight=1):
-        x_vgg = self.model_vgg(x.contiguous())
-        x_hat_vgg = self.model_vgg(x_hat.contiguous())
+    def perceptual(self, input, target, weight=1):
+        input_vgg = self.model_vgg(input.contiguous())
+        target_vgg = self.model_vgg(target.contiguous())
         loss_perceptual = 0
-        for p in range(len(x_vgg)):
-            loss_perceptual += F.l1_loss(x_hat_vgg[p], x_vgg[p])
-        return loss_perceptual * weight / len(x_vgg), x_vgg, x_hat_vgg
+        for p in range(len(input_vgg)):
+            loss_perceptual += F.l1_loss(input_vgg[p], target_vgg[p])
+        return loss_perceptual * weight / len(input_vgg), input_vgg, target_vgg
 
     def style(self, x_vgg, x_hat_vgg, weight=1):
         loss_style = 0
