@@ -98,7 +98,7 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
                 m_target -= v_map[:, :, 0]
                 x_target = (1 - m_target) * y_hat_comp[:, :, 0] + m_target.repeat(1, 3, 1, 1) * fill_color
                 y_target = (1 - m_target) * y_hat_comp[:, :, 0] + m_target.repeat(1, 3, 1, 1) * y_target
-            y_inpainted[:, t] = y_hat_comp[0, :, 0]
+            y_inpainted[:, t] = y_hat[0, :, 0]
         return y_inpainted
 
     @staticmethod
