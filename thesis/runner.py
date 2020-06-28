@@ -153,7 +153,7 @@ class ThesisRunner(skeltorch.Runner):
         for it_data in self.experiment.data.datasets['test']:
             (x, m), y, info = it_data
             x, m, y = x.to(device), m.to(device), y.to(device)
-            self._save_sample(handler(x, m, y).numpy() * 255, folder_name, info[0])
+            self._save_sample(handler(x, m, y).cpu().numpy() * 255, folder_name, info[0])
 
     def get_indexes(self, size):
         t, r_list = size // 2, list(range(size))
