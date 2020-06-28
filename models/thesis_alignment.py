@@ -156,7 +156,7 @@ class FlowEstimator(nn.Module):
             x_target.unsqueeze(1).repeat(1, ref_n, 1, 1, 1).reshape(b * ref_n, c, h, w),
             m_ref.transpose(1, 2).reshape(b * ref_n, 1, h, w),
             m_target.unsqueeze(1).repeat(1, ref_n, 1, 1, 1).reshape(b * ref_n, 1, h, w),
-            flow_pre.transpose(1, 2).reshape(b * ref_n, 2, h, w)
+            flow_pre.reshape(b * ref_n, h, w, 2).permute(0, 3, 1, 2)
         ], dim=1)
 
         # Return flow in the form (B,F,H,W,2)
@@ -175,18 +175,22 @@ class ThesisAlignmentModel(nn.Module):
         self.register_buffer('std', torch.as_tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1, 1))
 
     def forward(self, x_target, m_target, x_ref, m_ref):
+        b, c, ref_n, h, w = x_ref.size()
 
         # Normalize the input
         x_target = (x_target - self.mean.squeeze(2)) / self.std.squeeze(2)
         x_ref = (x_ref - self.mean) / self.std
 
+        # Resize the data to be squared 256x256
+        x_target_sq, m_target_sq, x_ref_sq, m_ref_sq = self.interpolate_data(x_target, m_target, x_ref, m_ref, 256, 256)
+
         # Apply the CorrelationVGG module. Corr is (b, t, h, w, h, w)
-        corr = self.corr(x_target, m_target, x_ref, m_ref)
+        corr = self.corr(x_target_sq, m_target_sq, x_ref_sq, m_ref_sq)
 
         # Mix the corr 4D volume to obtain a 16x16 dense flow estimation of size (b, t, 16, 16, 2)
         flow_16 = self.corr_mixer(corr)
 
-        # Interpolate x, m and flow_16 to be 64x64
+        # Interpolate x, m and flow_16 to be 64xW
         x_target_64, m_target_64, x_ref_64, m_ref_64 = self.interpolate_data(x_target, m_target, x_ref, m_ref, 64, 64)
         flow_64_pre = self.interpolate_flow(flow_16, 64, 64)
 
@@ -197,13 +201,15 @@ class ThesisAlignmentModel(nn.Module):
         flow_256_pre = self.interpolate_flow(flow_64, 256, 256)
 
         # Estimate 256x256 flow correction of size (b, t, 256, 256, 2)
-        flow_256 = self.flow_256(x_target, m_target, x_ref, m_ref, flow_256_pre)
+        flow_256 = self.flow_256(x_target_sq, m_target_sq, x_ref_sq, m_ref_sq, flow_256_pre)
 
         # Return both corr and corr_mixed
-        return corr, flow_16, flow_64, flow_256
+        return corr, flow_16, flow_64, self.interpolate_flow(flow_256, h, w)
 
     def interpolate_data(self, x_target, m_target, x_ref, m_ref, h_new, w_new):
         b, c, ref_n, h, w = x_ref.size()
+        if h == h_new and w == w_new:
+            return x_target, m_target, x_ref, m_ref
         x_target_res = F.interpolate(x_target, (h_new, w_new), mode='bilinear')
         m_target_res = F.interpolate(m_target, (h_new, w_new), mode='nearest')
         x_ref_res = F.interpolate(x_ref.transpose(1, 2).reshape(b * ref_n, c, h, w), (h_new, w_new), mode='bilinear') \
@@ -216,5 +222,5 @@ class ThesisAlignmentModel(nn.Module):
         b, ref_n, h, w, _ = flow.size()
         return F.interpolate(
             flow.reshape(b * ref_n, flow.size(2), flow.size(3), 2).permute(0, 3, 1, 2), (h_new, w_new), mode='bilinear'
-        ).reshape(b, ref_n, 2, h_new, w_new).transpose(1, 2)
+        ).reshape(b, ref_n, 2, h_new, w_new).permute(0, 1, 3, 4, 2)
 

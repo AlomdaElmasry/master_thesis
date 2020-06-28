@@ -2,7 +2,11 @@ import skeltorch
 import numpy as np
 import os
 import utils
+import torch
+import torch.utils
+import torch.utils.data
 from PIL import Image
+import utils.draws
 
 
 class ThesisRunner(skeltorch.Runner):
@@ -87,23 +91,89 @@ class ThesisRunner(skeltorch.Runner):
     def test(self, epoch, device):
         raise NotImplemented
 
-    def _generate_random_samples(self, device):
-        raise NotImplemented
+    def test_frames(self, test_handler, device):
+        # Create a Subset using self.experiment.data.test_frames_indexes defined frames
+        subset_dataset = torch.utils.data.Subset(
+            self.experiment.data.datasets['validation'], self.experiment.data.validation_frames_indexes
+        )
+        loader = torch.utils.data.DataLoader(
+            subset_dataset, self.experiment.configuration.get('training', 'batch_size')
+        )
+
+        # Create variables with the images to log inside TensorBoard -> (b,c,h,w)
+        x_tbx, m_tbx, y_tbx, x_aligned_tbx, y_hat_tbx, y_hat_comp_tbx, v_map_tbx = [], [], [], [], [], [], []
+
+        # Iterate over the samples
+        for it_data in loader:
+            (x, m), y, info = it_data
+            x, m, y, flows_use, flow_gt = x.to(device), m.to(device), y.to(device), info[2], info[5].to(device)
+
+            # Use middle frame as the target frame
+            t, r_list = x.size(2) // 2, list(range(x.size(2)))
+            r_list.pop(t)
+
+            # Propagate using the handler
+            y_hat, y_hat_comp, v_map, x_aligned, v_aligned = test_handler(x, m, y, t, r_list)
+
+            # Add items to the lists
+            x_tbx.append(x.cpu().numpy())
+            m_tbx.append(m.cpu().numpy())
+            y_tbx.append(y.cpu().numpy())
+            x_aligned_tbx.append(x_aligned.cpu().numpy())
+            y_hat_tbx.append(y_hat.cpu().numpy())
+            y_hat_comp_tbx.append(y_hat_comp.cpu().numpy())
+            v_map_tbx.append(v_map.cpu().numpy())
+
+        # Concatenate the results along dim=0
+        x_tbx = np.concatenate(x_tbx)
+        m_tbx = np.concatenate(m_tbx)
+        y_tbx = np.concatenate(y_tbx)
+        x_aligned_tbx = np.concatenate(x_aligned_tbx)
+        y_hat_tbx = np.concatenate(y_hat_tbx)
+        y_hat_comp_tbx = np.concatenate(y_hat_comp_tbx)
+        v_map_tbx = np.concatenate(v_map_tbx)
+
+        # Add each batch item individually
+        for b in range(x_tbx.shape[0]):
+            x_aligned_sample = np.insert(arr=x_aligned_tbx[b], obj=t, values=x_tbx[b, :, t], axis=1)
+            x_aligned_sample = utils.draws.add_border(x_aligned_sample, m_tbx[b, :, t])
+            v_map_rep, m_rep = v_map_tbx[b].repeat(3, axis=0), m_tbx[b, :, t].repeat(3, axis=0)
+            v_map_sample = np.insert(arr=v_map_rep, obj=t, values=m_rep, axis=1)
+            y_hat_sample = np.insert(arr=y_hat_tbx[b], obj=t, values=y_tbx[b, :, t], axis=1)
+            y_hat_sample = utils.draws.add_border(y_hat_sample, m_tbx[b, :, t])
+            y_hat_comp_sample = np.insert(arr=y_hat_comp_tbx[b], obj=t, values=y_tbx[b, :, t], axis=1)
+            sample = np.concatenate(
+                (x_tbx[b], x_aligned_sample, v_map_sample, y_hat_sample, y_hat_comp_sample), axis=2
+            ).transpose(1, 0, 2, 3)
+            self.experiment.tbx.add_images(
+                'test_frames/{}'.format(b + 1), sample, global_step=self.counters['epoch']
+            )
+
+    def test_sequence(self, handler, folder_name, device):
+        for it_data in self.experiment.data.datasets['test']:
+            (x, m), y, info = it_data
+            x, m, y = x.to(device), m.to(device), y.to(device)
+            self._save_sample(handler(x, m, y).numpy() * 255, folder_name, info[0])
+
+    def get_indexes(self, size):
+        t, r_list = size // 2, list(range(size))
+        r_list.pop(t)
+        return t, r_list
 
     def _save_sample(self, y_hat_comp, folder_name, file_name, save_as_video=True):
         """Saves a set of samples.
 
         Args:
-            y_hat_comp (np.Array): array of size (F,H,W,C) containing the frames to save.
+            y_hat_comp (np.Array): array of size (C,F,H,W) containing the frames to save.
             folder_name (str): name of the folder where the results should be stored inside.
-            file_name (list[str]): list containing the names of the sequences to be stored.
+            file_name (str): name of the sequences to be stored.
             save_as_video (bool): whether to store the sequence as a video.
         """
         path = os.path.join(self.experiment.paths['results'], folder_name, 'epoch-{}'.format(self.counters['epoch']))
         if not os.path.exists(path):
             os.makedirs(path)
 
-        # Permute Tensor
+        # Permute the Array to be (F,H,W,C)
         y_hat_comp = y_hat_comp.transpose(1, 2, 3, 0)
 
         # Save sequence as video
@@ -111,8 +181,6 @@ class ThesisRunner(skeltorch.Runner):
             frames_to_video = utils.FramesToVideo(0, 10, None)
             frames_to_video.add_sequence(y_hat_comp)
             frames_to_video.save(path, file_name)
-
-        # Save sequence as frames
         else:
             for t in range(y_hat_comp.shape[1]):
                 bt_path = os.path.join(path, file_name)

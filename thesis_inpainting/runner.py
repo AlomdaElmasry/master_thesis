@@ -21,11 +21,10 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
     utils_losses = None
 
     def init_model(self, device):
-        self.checkpoint_path = self.checkpoint_path_cuda if device == 'cuda' else self.checkpoint_path_cpu
         self.model_vgg = models.vgg_16.get_pretrained_model(device)
         self.model_alignment = models.thesis_alignment.ThesisAlignmentModel(self.model_vgg).to(device)
         self.model = models.thesis_inpainting.ThesisInpaintingVisible().to(device)
-        self.load_alignment_state(self.checkpoint_path, device)
+        self.load_alignment_state(device)
 
     def init_optimizer(self, device):
         self.optimizer = torch.optim.Adam(
@@ -42,26 +41,21 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
         self.losses_items_ids = ['loss_nh', 'loss_vh', 'loss_nvh']
         super().init_others(device)
 
-    def load_alignment_state(self, checkpoint_path, device):
+    def load_alignment_state(self, device):
+        checkpoint_path = self.checkpoint_path_cuda if device == 'cuda' else self.checkpoint_path_cpu
         with open(checkpoint_path, 'rb') as checkpoint_file:
             self.model_alignment.load_state_dict(torch.load(checkpoint_file, map_location=device)['model'])
 
     def train_step(self, it_data, device):
+        self.test(None, device)
         (x, m), y, info = it_data
         x, m, y, flows_use, flow_gt = x.to(device), m.to(device), y.to(device), info[2], info[5].to(device)
+        t, r_list = self.get_indexes(x.size(2))
 
         # Compute t and r_list
-        t, r_list = x.size(2) // 2, list(range(x.size(2)))
-        r_list.pop(t)
-
-        # Propagate through alignment network
-        with torch.no_grad():
-            x_aligned, v_aligned = thesis_alignment.runner.ThesisAlignmentRunner.infer_step_propagate(
-                self.model_alignment, x, m, t, r_list
-            )
-
-        # Propagate through inpainting network
-        y_hat, y_hat_comp, v_map = self.model(x[:, :, t], (1 - m)[:, :, t], y[:, :, t], x_aligned, v_aligned)
+        y_hat, y_hat_comp, v_map, *_ = ThesisInpaintingRunner.train_step_propagate(
+            self.model_alignment, self.model, x[:, :, t], m[:, :, t], y[:, :, t], x[:, :, r_list], m[:, :, r_list]
+        )
 
         # Get both total loss and loss items
         loss, loss_items = ThesisInpaintingRunner.compute_loss(
@@ -77,78 +71,61 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
         return loss
 
     def test(self, epoch, device):
-        # Load state if epoch is set
+        self.model.eval()
         if epoch is not None:
             self.load_states(epoch, device)
+        self.test_sequence(self.test_sequence_individual_handler, 'test_seq_individual', device)
+        self.test_frames(self.test_frames_handler, device)
 
-        # Set model in evaluation mode
-        self.model.eval()
-
-        # Create a Subset using self.experiment.data.test_frames_indexes defined frames
-        subset_dataset = torch.utils.data.Subset(
-            self.experiment.data.datasets['validation'], self.experiment.data.validation_frames_indexes
-        )
-        loader = torch.utils.data.DataLoader(
-            subset_dataset, self.experiment.configuration.get('training', 'batch_size')
+    def test_frames_handler(self, x, m, y, t, r_list):
+        return ThesisInpaintingRunner.infer_step_propagate(
+            self.model_alignment, self.model, x[:, :, t], m[:, :, t], y[:, :, t], x[:, :, r_list], m[:, :, r_list]
         )
 
-        # Create variables with the images to log inside TensorBoard -> (b,c,h,w)
-        x_tbx, m_tbx, y_tbx, x_aligned_tbx, y_hat_tbx, y_hat_comp_tbx, v_map_tbx = [], [], [], [], [], [], []
-
-        # Iterate over the samples
-        for it_data in loader:
-            (x, m), y, info = it_data
-            x, m, y, flows_use, flow_gt = x.to(device), m.to(device), y.to(device), info[2], info[5].to(device)
-
-            # Propagate through the model
-            t, r_list = x.size(2) // 2, list(range(x.size(2)))
-            r_list.pop(t)
-            with torch.no_grad():
-                x_aligned, v_aligned = thesis_alignment.runner.ThesisAlignmentRunner.infer_step_propagate(
-                    self.model_alignment, x, m, t, r_list
+    def test_sequence_individual_handler(self, x, m, y):
+        fill_color = torch.as_tensor([0.485, 0.456, 0.406], dtype=torch.float32).view(1, 3, 1, 1).to(x.device)
+        y_inpainted = torch.zeros_like(x)
+        for t in range(x.size(1)):
+            x_target, m_target, y_target = x[:, t].unsqueeze(0), m[:, t].unsqueeze(0), y[:, t].unsqueeze(0)
+            t_candidates = ThesisInpaintingRunner.compute_priority_indexes(t, x.size(1), d_step=2, max_d=4)
+            while len(t_candidates) > 0 and torch.sum(m_target) * 100 / m_target.numel() > 1:
+                r_index = [t_candidates.pop(0)]
+                x_ref, m_ref = x[:, r_index].unsqueeze(0), m[:, r_index].unsqueeze(0)
+                y_hat, y_hat_comp, v_map, *_ = ThesisInpaintingRunner.infer_step_propagate(
+                    self.model_alignment, self.model, x_target, m_target, y_target, x_ref, m_ref
                 )
-                y_hat, y_hat_comp, v_map = self.model(x[:, :, t], (1 - m)[:, :, t], y[:, :, t], x_aligned, v_aligned)
+                m_target -= v_map[:, :, 0]
+                x_target = (1 - m_target) * y_hat[:, :, 0] + (m_target.repeat(1, 3, 1, 1) * fill_color)
+            y_inpainted[:, t] = y_hat[0, :, 0]
+        return y_inpainted
 
-            # Add items to the lists
-            x_tbx.append(x.cpu().numpy())
-            m_tbx.append(m.cpu().numpy())
-            y_tbx.append(y.cpu().numpy())
-            x_aligned_tbx.append(x_aligned.cpu().numpy())
-            y_hat_tbx.append(y_hat.cpu().numpy())
-            y_hat_comp_tbx.append(y_hat_comp.cpu().numpy())
-            v_map_tbx.append(v_map.cpu().numpy())
+    @staticmethod
+    def compute_priority_indexes(t, max_t, d_step, max_d):
+        ref_candidates = list(range(max_t))
+        ref_candidates.pop(t)
+        ref_candidates_dist = list(map(lambda x: abs(x - t), ref_candidates))
+        ref_candidates_sorted = [r[1] for r in sorted(zip(ref_candidates_dist, ref_candidates))]
+        return list(
+            filter(lambda x: abs(x - t) <= max_d and abs(x - t) % d_step == 0, ref_candidates_sorted)
+        )
 
-        # Concatenate the results along dim=0
-        x_tbx = np.concatenate(x_tbx)
-        m_tbx = np.concatenate(m_tbx)
-        y_tbx = np.concatenate(y_tbx)
-        x_aligned_tbx = np.concatenate(x_aligned_tbx)
-        y_hat_tbx = np.concatenate(y_hat_tbx)
-        y_hat_comp_tbx = np.concatenate(y_hat_comp_tbx)
-        v_map_tbx = np.concatenate(v_map_tbx)
+    @staticmethod
+    def train_step_propagate(model_alignment, model, x_target, m_target, y_target, x_ref, m_ref):
+        with torch.no_grad():
+            x_ref_aligned, v_ref_aligned = thesis_alignment.runner.ThesisAlignmentRunner.infer_step_propagate(
+                model_alignment, x_target, m_target, x_ref, m_ref
+            )
+        y_hat, y_hat_comp, v_map = model(x_target, 1 - m_target, y_target, x_ref_aligned, v_ref_aligned)
+        return y_hat, y_hat_comp, v_map, x_ref_aligned, v_ref_aligned
 
-        # Define a function to add images to TensorBoard
-        def add_sample_tbx(x, m, y, x_aligned, v_map, y_hat, y_hat_comp, t, res_size):
-            for b in range(x.shape[0]):
-                x_aligned_sample = np.insert(arr=x_aligned[b], obj=t, values=x[b, :, t], axis=1)
-                x_aligned_sample = utils.draws.add_border(x_aligned_sample, m[b, :, t])
-                v_map_rep, m_rep = v_map[b].repeat(3, axis=0), m[b, :, t].repeat(3, axis=0)
-                v_map_sample = np.insert(arr=v_map_rep, obj=t, values=m_rep, axis=1)
-                y_hat_sample = np.insert(arr=y_hat[b], obj=t, values=y[b, :, t], axis=1)
-                y_hat_sample = utils.draws.add_border(y_hat_sample, m[b, :, t])
-                y_hat_comp_sample = np.insert(arr=y_hat_comp[b], obj=t, values=y[b, :, t], axis=1)
-                # y_sample = np.insert(arr=np.zeros_like(x_aligned[b]), obj=t, values=y_hat[b], axis=1)
-                # y_sample[:, t - 1] = y[b, :, t]
-                # y_sample[:, t + 1] = y_hat_comp[b]
-                sample = np.concatenate(
-                    (x[b], x_aligned_sample, v_map_sample, y_hat_sample, y_hat_comp_sample), axis=2
-                ).transpose(1, 0, 2, 3)
-                self.experiment.tbx.add_images(
-                    '{}_sample_{}/{}'.format('validation', res_size, b + 1), sample, global_step=self.counters['epoch']
-                )
-
-        # Add different resolutions to TensorBoard
-        add_sample_tbx(x_tbx, m_tbx, y_tbx, x_aligned_tbx, v_map_tbx, y_hat_tbx, y_hat_comp_tbx, t, '256')
+    @staticmethod
+    def infer_step_propagate(model_alignment, model, x_target, m_target, y_target, x_ref, m_ref):
+        with torch.no_grad():
+            x_ref_aligned, v_ref_aligned = thesis_alignment.runner.ThesisAlignmentRunner.infer_step_propagate(
+                model_alignment, x_target, m_target, x_ref, m_ref
+            )
+            y_hat, y_hat_comp, v_map = model(x_target, 1 - m_target, y_target, x_ref_aligned, v_ref_aligned)
+        return y_hat, y_hat_comp, v_map, x_ref_aligned, v_ref_aligned
 
     @staticmethod
     def compute_loss(utils_losses, y_target, v_target, y_hat, y_hat_comp, v_map):

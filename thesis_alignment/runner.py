@@ -152,11 +152,6 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
         add_alignment_tbx(x_256_tbx, m_256_tbx, x_256_aligned_tbx, x_256_aligned_gt_tbx, v_map_256_tbx, '256')
 
     @staticmethod
-    def infer_step_propagate(model, x, m, t, r_list):
-        *_, flow_256 = model(x[:, :, t], m[:, :, t], x[:, :, r_list], m[:, :, r_list])
-        return utils.flow.align_set(x[:, :, r_list], (1 - m)[:, :, r_list], flow_256)
-
-    @staticmethod
     def train_step_propagate(model, x, m, y, flow_gt, flows_use, t, r_list):
         corr, flow_16, flow_64, flow_256 = model(x[:, :, t], m[:, :, t], x[:, :, r_list], m[:, :, r_list])
 
@@ -205,6 +200,12 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
         # Return packed data
         return corr, xs, vs, ys, xs_aligned, xs_aligned_gt, vs_aligned, vs_aligned_gt, flows, flows_gt, flows_use, \
                v_maps, v_maps_gt
+
+    @staticmethod
+    def infer_step_propagate(model, x_target, m_target, x_ref, m_ref):
+        with torch.no_grad():
+            *_, flow_256 = model(x_target, m_target, x_ref, m_ref)
+        return utils.flow.align_set(x_ref, (1 - m_ref), flow_256)
 
     @staticmethod
     def compute_loss(model_vgg, utils_losses, corr, xs, vs, ys, xs_aligned, flows, flows_gt, flows_use, t, r_list):
