@@ -92,9 +92,13 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
             while len(t_candidates) > 0 and torch.sum(m_target) * 100 / m_target.numel() > 1:
                 r_index = [t_candidates.pop(0)]
                 x_ref, m_ref = x[:, r_index].unsqueeze(0), m[:, r_index].unsqueeze(0)
-                y_hat, y_hat_comp, v_map, *_ = ThesisInpaintingRunner.infer_step_propagate(
+                y_hat, y_hat_comp, v_map, x_ref_aligned, _ = ThesisInpaintingRunner.infer_step_propagate(
                     self.model_alignment, self.model, x_target, m_target, y_target, x_ref, m_ref
                 )
+                plt.imshow(x_target[0].permute(1, 2, 0))
+                plt.show()
+                plt.imshow(x_ref_aligned[0, :, 0].permute(1, 2, 0))
+                plt.show()
                 m_target = m_target - v_map[:, :, 0]
                 x_target = (1 - m_target) * y_hat_comp[:, :, 0] + m_target.repeat(1, 3, 1, 1) * fill_color
                 y_target = (1 - m_target) * y_hat_comp[:, :, 0] + m_target.repeat(1, 3, 1, 1) * y_target
