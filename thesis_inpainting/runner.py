@@ -89,8 +89,6 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
             self.logger.info('Step {}/{}'.format(t, x.size(1)))
             x_target, m_target, y_target = x[:, t].unsqueeze(0), m[:, t].unsqueeze(0), y[:, t].unsqueeze(0)
             t_candidates = ThesisInpaintingRunner.compute_priority_indexes(t, x.size(1), d_step=3, max_d=9E9)
-            plt.imshow(x_target[0].permute(1, 2, 0))
-            plt.show()
             while len(t_candidates) > 0 and torch.sum(m_target) * 100 / m_target.numel() > 1:
                 r_index = [t_candidates.pop(0)]
                 x_ref, m_ref = x[:, r_index].unsqueeze(0), m[:, r_index].unsqueeze(0)
@@ -100,8 +98,6 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
                 m_target = m_target - v_map[:, :, 0]
                 x_target = (1 - m_target) * y_hat_comp[:, :, 0] + m_target.repeat(1, 3, 1, 1) * fill_color
                 y_target = (1 - m_target) * y_hat_comp[:, :, 0] + m_target.repeat(1, 3, 1, 1) * y_target
-                plt.imshow(x_target[0].permute(1, 2, 0))
-                plt.show()
             y_inpainted[:, t] = y_hat[0, :, 0]
         return y_inpainted
 
