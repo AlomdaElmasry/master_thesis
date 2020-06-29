@@ -123,6 +123,7 @@ class ThesisRunner(skeltorch.Runner):
             y_hat_tbx.append(y_hat.cpu().numpy())
             y_hat_comp_tbx.append(y_hat_comp.cpu().numpy())
             v_map_tbx.append(v_map.cpu().numpy())
+            break
 
         # Concatenate the results along dim=0
         x_tbx = np.concatenate(x_tbx)
@@ -150,8 +151,11 @@ class ThesisRunner(skeltorch.Runner):
             )
 
     def test_sequence(self, handler, folder_name, device):
+        allowed_sequences = ['car-turn', 'hockey', 'tennis']
         for it_data in self.experiment.data.datasets['test']:
             (x, m), y, info = it_data
+            if info[0] not in allowed_sequences:
+                continue
             x, m, y = x.to(device), m.to(device), y.to(device)
             self._save_sample(handler(x, m, y).cpu().numpy() * 255, folder_name, info[0])
 
