@@ -9,6 +9,8 @@ import torch.utils.data
 import models.rrdb_net
 import models.adversarial_discriminators
 import torch.optim
+import cv2
+import os
 
 parser = argparse.ArgumentParser(description='Visualize samples from the dataset')
 parser.add_argument('--data-path', required=True, help='Path where the images are stored')
@@ -41,7 +43,7 @@ dataset = thesis.data.MaskedSequenceDataset(
 )
 
 # Created Loader object
-loader = iter(torch.utils.data.DataLoader(dataset, batch_size=8, shuffle=True))
+loader = iter(torch.utils.data.DataLoader(dataset, batch_size=32, shuffle=True))
 
 # Create the models
 netG = models.rrdb_net.RRDBNet(in_nc=4, out_nc=3).to(args.device)
@@ -53,7 +55,7 @@ optimizerD = torch.optim.Adam(netD.parameters(), lr=0.0002, betas=(0.5, 0.999))
 criterion = nn.BCELoss()
 
 # Iterate over the data
-for it_data in loader:
+for i, it_data in enumerate(loader):
     (x, m), y, info = it_data
     x = x.transpose(1, 2).reshape(-1, 3, 256, 256).to(args.device)
     m = m.transpose(1, 2).reshape(-1, 1, 256, 256).to(args.device)
@@ -121,6 +123,17 @@ for it_data in loader:
 
     # Update G
     optimizerG.step()
+
+    ############################
+    # (3) Save samples every 1000 iterations
+    ###########################
+    if i > 0 and i % 1000 == 0:
+        folder_dir = os.path.join(os.path.dirname(__file__), 'it-{}'.format(i))
+        os.makedirs(folder_dir)
+        with torch.no_grad():
+            y_hat = netG(fake_input)
+        for b in range(10):
+            cv2.imwrite(os.path.join(folder_dir, "{}.png".format(b)), y_hat[b].permute(1, 2, 0).cpu().numpy() * 255)
 
     # Print iteration results
     print('errG: {} | errD: {}'.format(D_G_z1, D_G_z2))
