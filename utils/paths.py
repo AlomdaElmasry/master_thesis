@@ -8,16 +8,16 @@ class DatasetPaths:
     def get_items(dataset_name, data_folder, split, return_gts=True, return_masks=True):
         assert return_gts or return_masks
         if dataset_name == 'davis-2017':
-            return DatasetPaths.get_davis(data_folder, split, return_gts, return_masks)
+            return DatasetPaths.get_davis(data_folder)
         elif dataset_name == 'got-10k':
-            return DatasetPaths.get_got10k(data_folder, split, return_gts, return_masks)
+            return DatasetPaths.get_got10k(data_folder, split)
         elif dataset_name == 'youtube-vos':
             return DatasetPaths.get_youtube_vos(data_folder, split, return_gts, return_masks)
 
     @staticmethod
-    def get_davis(data_folder, split, return_gts, return_masks):
+    def get_davis(data_folder):
         dataset_folder = os.path.join(data_folder, 'DAVIS-2017')
-        split_filename = 'train.txt' if split == 'train' else 'val.txt'
+        split_filename = 'custom.txt'
         items_file = open(os.path.join(dataset_folder, 'ImageSets', '2017', split_filename))
         items_meta = {}
         for item_name in sorted(items_file.read().splitlines()):
@@ -25,7 +25,7 @@ class DatasetPaths:
                 glob.glob(os.path.join(dataset_folder, 'JPEGImages', '480p', item_name, '*.jpg'))
             )
             item_masks_path = sorted(
-                glob.glob(os.path.join(dataset_folder, 'Annotations', '480p', item_name, '*.png'))
+                glob.glob(os.path.join(dataset_folder, 'Annotations_Dense', '480p', item_name, '*.png'))
             )
             item_gts_paths = [os.path.relpath(path, data_folder) for path in item_gts_paths]
             item_masks_path = [os.path.relpath(path, data_folder) for path in item_masks_path]
@@ -33,7 +33,7 @@ class DatasetPaths:
         return items_meta
 
     @staticmethod
-    def get_got10k(data_folder, split, return_gts, return_masks):
+    def get_got10k(data_folder, split):
         dataset_folder = os.path.join(data_folder, 'GOT10k')
         split_folder = 'train' if split == 'train' else 'val' if split == 'validation' else 'test'
         items_file = open(os.path.join(dataset_folder, split_folder, 'list.txt'))

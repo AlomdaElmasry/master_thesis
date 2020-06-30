@@ -28,17 +28,17 @@ class ThesisData(skeltorch.Data):
             split='train',
             return_masks=False
         )
-        self.validation_gts_meta = utils.paths.DatasetPaths.get_items(
-            dataset_name=self.experiment.configuration.get('data', 'validation_gts_dataset'),
-            data_folder=data_path,
-            split='validation',
-            return_masks=False
-        )
         self.train_masks_meta = utils.paths.DatasetPaths.get_items(
             dataset_name=self.experiment.configuration.get('data', 'train_masks_dataset'),
             data_folder=data_path,
             split='train',
             return_gts=False
+        )
+        self.validation_gts_meta = utils.paths.DatasetPaths.get_items(
+            dataset_name=self.experiment.configuration.get('data', 'validation_gts_dataset'),
+            data_folder=data_path,
+            split='validation',
+            return_masks=False
         )
         self.validation_masks_meta = utils.paths.DatasetPaths.get_items(
             dataset_name=self.experiment.configuration.get('data', 'validation_masks_dataset'),
@@ -49,7 +49,7 @@ class ThesisData(skeltorch.Data):
         self.test_meta = utils.paths.DatasetPaths.get_items(
             dataset_name=self.experiment.configuration.get('data', 'test_dataset'),
             data_folder=data_path,
-            split='train'
+            split='test'
         )
 
         # Clean masks that are too big
