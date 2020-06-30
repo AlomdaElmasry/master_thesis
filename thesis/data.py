@@ -128,16 +128,23 @@ class ThesisData(skeltorch.Data):
         self.datasets['test'] = MaskedSequenceDataset(
             gts_dataset=gts_datasets[2],
             masks_dataset=masks_datasets[1],
-            gts_simulator=None,
-            masks_simulator=None,
-            image_size=(256, 256),
+            gts_simulator=utils.movement.MovementSimulator(
+                *self.experiment.configuration.get('data', 'gts_movement_params')
+            ),
+            masks_simulator=utils.movement.MovementSimulator(
+                *self.experiment.configuration.get('data', 'masks_movement_params')
+            ),
+            image_size=tuple(self.experiment.configuration.get('data', 'train_size')),
             frames_n=self.experiment.configuration.get('data', 'frames_n'),
             frames_spacing=self.experiment.configuration.get('data', 'frames_spacing'),
             frames_randomize=self.experiment.configuration.get('data', 'frames_randomize'),
             dilatation_filter_size=tuple(self.experiment.configuration.get('data', 'dilatation_filter_size')),
             dilatation_iterations=self.experiment.configuration.get('data', 'dilatation_iterations'),
-            force_resize=False,
-            keep_ratio=True
+            force_resize=self.experiment.configuration.get('data', 'train_resize'),
+            keep_ratio=True,
+            p_simulator_gts=self.experiment.configuration.get('data', 'p_simulator_gts'),
+            p_simulator_masks=self.experiment.configuration.get('data', 'p_simulator_masks'),
+            p_repeat=self.experiment.configuration.get('data', 'p_repeat')
         )
         self.datasets['test_sequences'] = MaskedSequenceDataset(
             gts_dataset=gts_datasets[2],
