@@ -44,8 +44,8 @@ dataset = thesis.data.MaskedSequenceDataset(
 loader = iter(torch.utils.data.DataLoader(dataset, batch_size=8, shuffle=True))
 
 # Create the models
-netG = models.rrdb_net.RRDBNet(in_nc=4, out_nc=3)
-netD = models.adversarial_discriminators.AdversarialDiscriminator(nc=3)
+netG = models.rrdb_net.RRDBNet(in_nc=4, out_nc=3).to(device)
+netD = models.adversarial_discriminators.AdversarialDiscriminator(nc=3).to(device)
 
 # Create the optimizers
 optimizerG = torch.optim.Adam(netG.parameters(), lr=0.0002, betas=(0.5, 0.999))
