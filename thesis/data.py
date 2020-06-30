@@ -171,19 +171,24 @@ class ThesisData(skeltorch.Data):
     def load_loaders(self, data_path, num_workers):
         batch_size = self.experiment.configuration.get('training', 'batch_size')
 
-        # Check that the number of items in the GT do not surpass it
+        # Generate training samples of the epoch
         train_max_items = batch_size * self.experiment.configuration.get('training', 'train_max_iterations')
         if len(self.datasets['train']) > train_max_items:
             train_gts_indexes = random.sample(list(range(len(self.datasets['train']))), train_max_items)
         else:
             train_gts_indexes = list(range(len(self.datasets['train'])))
 
+        # Generate validation samples of the epoch
         validation_max_items = batch_size * self.experiment.configuration.get('training', 'validation_max_iterations')
         if len(self.datasets['validation']) > validation_max_items:
             val_gts_indexes = random.sample(list(range(len(self.datasets['validation']))), validation_max_items)
         else:
             val_gts_indexes = list(range(len(self.datasets['validation'])))
 
+        # Generate test samples of the epoch
+        test_gts_indexes = random.sample(list(range(len(self.datasets['test']))), 100)
+
+        # Create loader objects
         self.loaders['train'] = torch.utils.data.DataLoader(
             dataset=self.datasets['train'],
             sampler=torch.utils.data.SubsetRandomSampler(indices=train_gts_indexes),
@@ -200,6 +205,7 @@ class ThesisData(skeltorch.Data):
         )
         self.loaders['test'] = torch.utils.data.DataLoader(
             dataset=self.datasets['test'],
+            sampler=torch.utils.data.SubsetRandomSampler(indices=test_gts_indexes),
             batch_size=batch_size,
             num_workers=num_workers,
             pin_memory=True
