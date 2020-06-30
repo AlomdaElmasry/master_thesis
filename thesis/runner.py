@@ -7,6 +7,7 @@ import torch.utils
 import torch.utils.data
 from PIL import Image
 import utils.draws
+import matplotlib.pyplot as plt
 
 
 class ThesisRunner(skeltorch.Runner):
