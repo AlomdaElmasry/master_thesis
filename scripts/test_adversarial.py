@@ -43,7 +43,7 @@ dataset = thesis.data.MaskedSequenceDataset(
 )
 
 # Created Loader object
-loader = iter(torch.utils.data.DataLoader(dataset, batch_size=32, shuffle=True))
+loader = iter(torch.utils.data.DataLoader(dataset, batch_size=16, shuffle=True))
 
 # Create the models
 netG = models.rrdb_net.RRDBNet(in_nc=4, out_nc=3).to(args.device)
