@@ -136,4 +136,4 @@ for i, it_data in enumerate(loader):
             cv2.imwrite(os.path.join(folder_dir, "{}.png".format(b)), y_hat[b].permute(1, 2, 0).cpu().numpy() * 255)
 
     # Print iteration results
-    print('errG: {} | errD: {}'.format(D_G_z1, D_G_z2))
+    print('{} | errG: {} | errD: {}'.format(i, D_G_z1, D_G_z2))
