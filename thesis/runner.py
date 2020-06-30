@@ -91,6 +91,21 @@ class ThesisRunner(skeltorch.Runner):
     def test(self, epoch, device):
         raise NotImplemented
 
+    def test_losses(self, test_losses_handler, losses_items_ids, device):
+        loss_t, losses_items_t = [], [[] for _ in range(len(losses_items_ids))]
+        for it_data in self.experiment.data.loaders['test']:
+            (x, m), y, info = it_data
+            x, m, y, flows_use, flow_gt = x.to(device), m.to(device), y.to(device), info[2], info[5].to(device)
+            t, r_list = self.get_indexes(x.size(2))
+            loss, loss_items = test_losses_handler(x, m, y, t, r_list)
+            loss_t.append(loss.item())
+            for i, loss_item in enumerate(loss_items):
+                losses_items_t[i].append(loss_item.item())
+        self.experiment.tbx.add_scalar('loss/epoch/test', np.mean(loss_t), self.counters['epoch'])
+        for i, loss_item_id in enumerate(losses_items_ids):
+            self.experiment.tbx.add_scalar(
+                'loss_items_test/epoch/{}'.format(loss_item_id), np.mean(losses_items_t[i]), self.counters['epoch'])
+
     def test_frames(self, test_handler, device):
         # Create a Subset using self.experiment.data.test_frames_indexes defined frames
         subset_dataset = torch.utils.data.Subset(

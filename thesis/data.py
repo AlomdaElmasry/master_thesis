@@ -127,11 +127,27 @@ class ThesisData(skeltorch.Data):
         )
         self.datasets['test'] = MaskedSequenceDataset(
             gts_dataset=gts_datasets[2],
+            masks_dataset=masks_datasets[1],
+            gts_simulator=None,
+            masks_simulator=utils.movement.MovementSimulator(
+                *self.experiment.configuration.get('data', 'masks_movement_params')
+            ),
+            image_size=tuple(self.experiment.configuration.get('data', 'test_size')),
+            frames_n=self.experiment.configuration.get('data', 'frames_n'),
+            frames_spacing=self.experiment.configuration.get('data', 'frames_spacing'),
+            frames_randomize=self.experiment.configuration.get('data', 'frames_randomize'),
+            dilatation_filter_size=tuple(self.experiment.configuration.get('data', 'dilatation_filter_size')),
+            dilatation_iterations=self.experiment.configuration.get('data', 'dilatation_iterations'),
+            force_resize=True,
+            keep_ratio=False
+        )
+        self.datasets['test_sequences'] = MaskedSequenceDataset(
+            gts_dataset=gts_datasets[2],
             masks_dataset=masks_datasets[2],
             gts_simulator=None,
             masks_simulator=None,
             image_size=tuple(self.experiment.configuration.get('data', 'test_size')),
-            frames_n=-1,
+            frames_n=self.experiment.configuration.get('data', 'frames_n'),
             frames_spacing=self.experiment.configuration.get('data', 'frames_spacing'),
             frames_randomize=self.experiment.configuration.get('data', 'frames_randomize'),
             dilatation_filter_size=tuple(self.experiment.configuration.get('data', 'dilatation_filter_size')),

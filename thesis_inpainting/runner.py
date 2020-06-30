@@ -73,9 +73,27 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
         self.model.eval()
         if epoch is not None:
             self.load_states(epoch, device)
+
+        # Compute the losses on the test set
+        self.test_losses(self.test_losses_handler, self.losses_items_ids, device)
+
+        # Inpaint individual frames on the test set
+        self.test_frames(self.test_frames_handler, device)
+
+        # Inpaint test sequences every 10 epochs
         if epoch is not None or self.counters['epoch'] % 10 == 0:
             self.test_sequence(self.test_sequence_individual_handler, 'test_seq_individual', device)
-        self.test_frames(self.test_frames_handler, device)
+
+    def test_losses_handler(self, x, m, y, t, r_list):
+        # Propagate through the model using inference mode
+        y_hat, y_hat_comp, v_map, *_ = ThesisInpaintingRunner.infer_step_propagate(
+            self.model_alignment, self.model, x[:, :, t], m[:, :, t], y[:, :, t], x[:, :, r_list], m[:, :, r_list]
+        )
+
+        # Return both total loss and loss items
+        return ThesisInpaintingRunner.compute_loss(
+            self.utils_losses, y[:, :, t], (1 - m)[:, :, t], y_hat, y_hat_comp, v_map
+        )
 
     def test_frames_handler(self, x, m, y, t, r_list):
         return ThesisInpaintingRunner.infer_step_propagate(
@@ -87,9 +105,9 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
         y_inpainted = torch.zeros_like(x)
         for t in range(x.size(1)):
             self.logger.info('Step {}/{}'.format(t, x.size(1)))
-            x_target, m_target, y_target = x[:, t].unsqueeze(0), m[:, t].unsqueeze(0), y[:, t].unsqueeze(0)
+            x_target, m_target, y_target, y_hat = x[:, t].unsqueeze(0), m[:, t].unsqueeze(0), y[:, t].unsqueeze(0), None
             t_candidates = ThesisInpaintingRunner.compute_priority_indexes(t, x.size(1), d_step=3, max_d=9E9)
-            while len(t_candidates) > 0 and torch.sum(m_target) * 100 / m_target.numel() > 1:
+            while (len(t_candidates) > 0 and torch.sum(m_target) * 100 / m_target.numel() > 1) or y_hat is None:
                 r_index = [t_candidates.pop(0)]
                 x_ref, m_ref = x[:, r_index].unsqueeze(0), m[:, r_index].unsqueeze(0)
                 y_hat, y_hat_comp, v_map, x_ref_aligned, _ = ThesisInpaintingRunner.infer_step_propagate(
