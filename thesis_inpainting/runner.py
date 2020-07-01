@@ -78,7 +78,8 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
         self.test_losses(self.test_losses_handler, self.losses_items_ids, device)
 
         # Inpaint individual frames on the test set
-        self.test_frames(self.test_frames_handler, device)
+        self.test_frames(self.test_frames_handler, 'validation', device)
+        self.test_frames(self.test_frames_handler, 'test', device)
 
         # Inpaint test sequences every 10 epochs
         if epoch is not None or self.counters['epoch'] % 25 == 0:

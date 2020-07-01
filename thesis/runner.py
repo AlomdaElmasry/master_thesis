@@ -106,15 +106,22 @@ class ThesisRunner(skeltorch.Runner):
         for i, loss_item_id in enumerate(losses_items_ids):
             self.experiment.tbx.add_scalar(
                 'loss_items_test_epoch/{}'.format(loss_item_id), np.mean(losses_items_t[i]), self.counters['epoch'])
+        self.logger.info('Epoch: {} | Average Test Loss: {}'.format(self.counters['epoch'], np.mean(loss_t)))
 
-    def test_frames(self, test_handler, device):
+    def test_frames(self, test_handler, split, device):
         # Create a Subset using self.experiment.data.test_frames_indexes defined frames
-        subset_dataset = torch.utils.data.Subset(
-            self.experiment.data.datasets['validation'], self.experiment.data.validation_frames_indexes
-        )
-        loader = torch.utils.data.DataLoader(
-            subset_dataset, self.experiment.configuration.get('training', 'batch_size')
-        )
+        if split == 'validation':
+            subset_dataset = torch.utils.data.Subset(
+                self.experiment.data.datasets['validation'], self.experiment.data.validation_frames_indexes
+            )
+        else:
+            subset_dataset = torch.utils.data.Subset(
+                self.experiment.data.datasets['test'], self.experiment.data.test_frames_indexes
+            )
+
+        # Create a loader using the previous subset
+        batch_size = self.experiment.configuration.get('training', 'batch_size')
+        loader = torch.utils.data.DataLoader(subset_dataset, batch_size )
 
         # Create variables with the images to log inside TensorBoard -> (b,c,h,w)
         x_tbx, m_tbx, y_tbx, x_aligned_tbx, y_hat_tbx, y_hat_comp_tbx, v_map_tbx = [], [], [], [], [], [], []
@@ -162,7 +169,7 @@ class ThesisRunner(skeltorch.Runner):
                 (x_tbx[b], x_aligned_sample, v_map_sample, y_hat_sample, y_hat_comp_sample), axis=2
             ).transpose(1, 0, 2, 3)
             self.experiment.tbx.add_images(
-                'test_frames/{}'.format(b + 1), sample, global_step=self.counters['epoch']
+                'frames_{}/{}'.format(split, b + 1), sample, global_step=self.counters['epoch']
             )
 
     def test_sequence(self, handler, folder_name, device):
