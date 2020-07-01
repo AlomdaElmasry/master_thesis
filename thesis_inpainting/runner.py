@@ -78,14 +78,14 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
         # Compute the losses on the test set
         self.test_losses(self.test_losses_handler, self.losses_items_ids, device)
 
-        exit()
-
         # Inpaint individual frames on the test set
         self.test_frames(self.test_frames_handler, device)
 
         # Inpaint test sequences every 10 epochs
         if epoch is not None or self.counters['epoch'] % 10 == 0:
-            pass # self.test_sequence(self.test_sequence_individual_handler, 'test_seq_individual', device)
+            self.test_sequence(self.test_sequence_individual_handler, 'test_seq_individual', device)
+
+        exit()
 
     def test_losses_handler(self, x, m, y, t, r_list):
         # Propagate through the model using inference mode
