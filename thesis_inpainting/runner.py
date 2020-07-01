@@ -47,7 +47,6 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
             self.model_alignment.load_state_dict(torch.load(checkpoint_file, map_location=device)['model'])
 
     def train_step(self, it_data, device):
-        self.test(None, device)
         (x, m), y, info = it_data
         x, m, y, flows_use, flow_gt = x.to(device), m.to(device), y.to(device), info[2], info[5].to(device)
         t, r_list = self.get_indexes(x.size(2))
@@ -82,10 +81,8 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
         self.test_frames(self.test_frames_handler, device)
 
         # Inpaint test sequences every 10 epochs
-        # if epoch is not None or self.counters['epoch'] % 10 == 0:
-        self.test_sequence(self.test_sequence_individual_handler, 'test_seq_individual', device)
-
-        exit()
+        if epoch is not None or self.counters['epoch'] % 25 == 0:
+            self.test_sequence(self.test_sequence_individual_handler, 'test_seq_individual', device)
 
     def test_losses_handler(self, x, m, y, t, r_list):
         # Propagate through the model using inference mode
