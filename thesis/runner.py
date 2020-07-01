@@ -166,7 +166,7 @@ class ThesisRunner(skeltorch.Runner):
             )
 
     def test_sequence(self, handler, folder_name, device):
-        for it_data in self.experiment.data.datasets['test']:
+        for it_data in self.experiment.data.datasets['test_sequences']:
             (x, m), y, info = it_data
             x, m, y = x.to(device), m.to(device), y.to(device)
             self._save_sample(handler(x, m, y).cpu().numpy() * 255, folder_name, info[0])
