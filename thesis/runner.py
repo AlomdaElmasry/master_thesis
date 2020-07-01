@@ -103,6 +103,7 @@ class ThesisRunner(skeltorch.Runner):
             for i, loss_item in enumerate(loss_items):
                 losses_items_t[i].append(loss_item.item())
         self.experiment.tbx.add_scalar('loss/epoch/test', np.mean(loss_t), self.counters['epoch'])
+        print('finish')
         for i, loss_item_id in enumerate(losses_items_ids):
             self.experiment.tbx.add_scalar(
                 'loss_items_test_epoch/{}'.format(loss_item_id), np.mean(losses_items_t[i]), self.counters['epoch'])
