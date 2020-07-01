@@ -47,6 +47,7 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
             self.model_alignment.load_state_dict(torch.load(checkpoint_file, map_location=device)['model'])
 
     def train_step(self, it_data, device):
+        self.test(None, device)
         (x, m), y, info = it_data
         x, m, y, flows_use, flow_gt = x.to(device), m.to(device), y.to(device), info[2], info[5].to(device)
         t, r_list = self.get_indexes(x.size(2))
@@ -76,6 +77,8 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
 
         # Compute the losses on the test set
         self.test_losses(self.test_losses_handler, self.losses_items_ids, device)
+
+        exit()
 
         # Inpaint individual frames on the test set
         self.test_frames(self.test_frames_handler, device)
