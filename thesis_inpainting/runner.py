@@ -6,16 +6,13 @@ import models.thesis_inpainting
 import torch
 import utils.losses
 import thesis_alignment.runner
-import torch.nn.functional as F
 import utils.flow
-import numpy as np
 import utils.draws
+import os.path
 import matplotlib.pyplot as plt
 
 
 class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
-    checkpoint_path_cuda = '/home/ubuntu/ebs/master_thesis/experiments/align_v3_1/checkpoints/45.checkpoint.pkl'
-    checkpoint_path_cpu = '/Users/DavidAlvarezDLT/Documents/PyCharm/master_thesis/experiments/test/checkpoints/45.checkpoint.pkl'
     model_vgg = None
     model_alignment = None
     utils_losses = None
@@ -24,7 +21,13 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
         self.model_vgg = models.vgg_16.get_pretrained_model(device)
         self.model_alignment = models.thesis_alignment.ThesisAlignmentModel(self.model_vgg).to(device)
         self.model = models.thesis_inpainting.ThesisInpaintingVisible().to(device)
-        self.load_alignment_state(device)
+        self.init_model_load_alignment_state(device)
+
+    def init_model_load_alignment_state(self, device, experiment_name='align_v3_1', epoch=45):
+        experiment_path = os.path.join(os.path.dirname(self.experiment.paths['experiment']), experiment_name)
+        checkpoint_path = os.path.join(experiment_path, 'checkpoints', '{}.checkpoint.pkl'.format(epoch))
+        with open(checkpoint_path, 'rb') as checkpoint_file:
+            self.model_alignment.load_state_dict(torch.load(checkpoint_file, map_location=device)['model'])
 
     def init_optimizer(self, device):
         self.optimizer = torch.optim.Adam(
@@ -41,18 +44,13 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
         self.losses_items_ids = ['loss_nh', 'loss_vh', 'loss_nvh', 'loss_perceptual']
         super().init_others(device)
 
-    def load_alignment_state(self, device):
-        checkpoint_path = self.checkpoint_path_cuda if device == 'cuda' else self.checkpoint_path_cpu
-        with open(checkpoint_path, 'rb') as checkpoint_file:
-            self.model_alignment.load_state_dict(torch.load(checkpoint_file, map_location=device)['model'])
-
     def train_step(self, it_data, device):
         (x, m), y, info = it_data
         x, m, y, flows_use, flow_gt = x.to(device), m.to(device), y.to(device), info[2], info[5].to(device)
         t, r_list = self.get_indexes(x.size(2))
 
         # Compute t and r_list
-        y_hat, y_hat_comp, v_map, *_ = ThesisInpaintingRunner.train_step_propagate(
+        *_, v_map, y_hat, y_hat_comp = ThesisInpaintingRunner.train_step_propagate(
             self.model_alignment, self.model, x[:, :, t], m[:, :, t], y[:, :, t], x[:, :, r_list], m[:, :, r_list]
         )
 
@@ -77,6 +75,8 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
         # Compute the losses on the test set
         self.test_losses(self.test_losses_handler, self.losses_items_ids, device)
 
+        # Compute objective measures
+
         # Inpaint individual frames on the test set
         self.test_frames(self.test_frames_handler, 'validation', device)
         self.test_frames(self.test_frames_handler, 'test', device)
@@ -85,13 +85,10 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
         if epoch is not None or self.counters['epoch'] % 25 == 0:
             self.test_sequence(self.test_sequence_individual_handler, 'test_seq_individual', device)
 
-    def test_losses_handler(self, x, m, y, t, r_list):
-        # Propagate through the model using inference mode
-        y_hat, y_hat_comp, v_map, *_ = ThesisInpaintingRunner.infer_step_propagate(
+    def test_losses_handler(self, x, m, y, flows_use, flow_gt, t, r_list):
+        *_, v_map, y_hat, y_hat_comp = ThesisInpaintingRunner.infer_step_propagate(
             self.model_alignment, self.model, x[:, :, t], m[:, :, t], y[:, :, t], x[:, :, r_list], m[:, :, r_list]
         )
-
-        # Return both total loss and loss items
         return ThesisInpaintingRunner.compute_loss(
             self.utils_losses, y[:, :, t], (1 - m)[:, :, t], y_hat, y_hat_comp, v_map
         )
@@ -117,7 +114,7 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
                 m_target = m_target - v_map[:, :, 0]
                 x_target = (1 - m_target) * y_hat_comp[:, :, 0] + m_target.repeat(1, 3, 1, 1) * fill_color
                 y_target = (1 - m_target) * y_hat_comp[:, :, 0] + m_target.repeat(1, 3, 1, 1) * y_target
-            y_inpainted[:, t] = y_hat[0, :, 0]
+            y_inpainted[:, t] = x_target
         return y_inpainted
 
     @staticmethod
@@ -133,23 +130,28 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
     @staticmethod
     def train_step_propagate(model_alignment, model, x_target, m_target, y_target, x_ref, m_ref):
         with torch.no_grad():
-            x_ref_aligned, v_ref_aligned = thesis_alignment.runner.ThesisAlignmentRunner.infer_step_propagate(
+            x_ref_aligned, v_ref_aligned, v_map = thesis_alignment.runner.ThesisAlignmentRunner.infer_step_propagate(
                 model_alignment, x_target, m_target, x_ref, m_ref
             )
-        y_hat, y_hat_comp, v_map = model(x_target, 1 - m_target, y_target, x_ref_aligned, v_ref_aligned)
-        return y_hat, y_hat_comp, v_map, x_ref_aligned, v_ref_aligned
+        y_hat, y_hat_comp = model(x_target, 1 - m_target, y_target, x_ref_aligned, v_ref_aligned, v_map)
+        return x_ref_aligned, v_ref_aligned, v_map, y_hat, y_hat_comp
 
     @staticmethod
     def infer_step_propagate(model_alignment, model, x_target, m_target, y_target, x_ref, m_ref):
         with torch.no_grad():
-            x_ref_aligned, v_ref_aligned = thesis_alignment.runner.ThesisAlignmentRunner.infer_step_propagate(
+            x_ref_aligned, v_ref_aligned, v_map = thesis_alignment.runner.ThesisAlignmentRunner.infer_step_propagate(
                 model_alignment, x_target, m_target, x_ref, m_ref
             )
-            y_hat, y_hat_comp, v_map = model(x_target, 1 - m_target, y_target, x_ref_aligned, v_ref_aligned)
-        return y_hat, y_hat_comp, v_map, x_ref_aligned, v_ref_aligned
+            y_hat, y_hat_comp = model(x_target, 1 - m_target, y_target, x_ref_aligned, v_ref_aligned, v_map)
+        return x_ref_aligned, v_ref_aligned, v_map, y_hat, y_hat_comp
 
     @staticmethod
     def compute_loss(utils_losses, y_target, v_target, y_hat, y_hat_comp, v_map):
+        # 1. Hard copy TBX
+        # 2. Loss of the hard copy
+        # 3. Split trunk
+        # 4. Zero loss NVH
+        # 5. Investigate and improve alignment network
         b, c, h, w = y_target.size()
         target_img = y_target.unsqueeze(2).repeat(1, 1, y_hat.size(2), 1, 1)
         nh_mask = v_target.unsqueeze(2).repeat(1, 1, y_hat.size(2), 1, 1)

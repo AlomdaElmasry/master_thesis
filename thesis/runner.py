@@ -98,7 +98,7 @@ class ThesisRunner(skeltorch.Runner):
             (x, m), y, info = it_data
             x, m, y, flows_use, flow_gt = x.to(device), m.to(device), y.to(device), info[2], info[5].to(device)
             t, r_list = self.get_indexes(x.size(2))
-            loss, loss_items = test_losses_handler(x, m, y, t, r_list)
+            loss, loss_items = test_losses_handler(x, m, y, flows_use, flow_gt, t, r_list)
             loss_t.append(loss.item())
             for i, loss_item in enumerate(loss_items):
                 losses_items_t[i].append(loss_item.item())
@@ -108,7 +108,7 @@ class ThesisRunner(skeltorch.Runner):
                 'loss_items_test_epoch/{}'.format(loss_item_id), np.mean(losses_items_t[i]), self.counters['epoch'])
         self.logger.info('Epoch: {} | Average Test Loss: {}'.format(self.counters['epoch'], np.mean(loss_t)))
 
-    def test_frames(self, test_handler, split, device):
+    def test_frames(self, test_handler, split, device, include_y_hat=True, include_y_hat_comp=True):
         # Create a Subset using self.experiment.data.test_frames_indexes defined frames
         if split == 'validation':
             subset_dataset = torch.utils.data.Subset(
@@ -124,7 +124,7 @@ class ThesisRunner(skeltorch.Runner):
         loader = torch.utils.data.DataLoader(subset_dataset, batch_size )
 
         # Create variables with the images to log inside TensorBoard -> (b,c,h,w)
-        x_tbx, m_tbx, y_tbx, x_aligned_tbx, y_hat_tbx, y_hat_comp_tbx, v_map_tbx = [], [], [], [], [], [], []
+        x_tbx, m_tbx, y_tbx, x_aligned_tbx, v_map_tbx, y_hat_tbx, y_hat_comp_tbx = [], [], [], [], [], [], []
 
         # Iterate over the samples
         for it_data in loader:
@@ -136,25 +136,27 @@ class ThesisRunner(skeltorch.Runner):
             r_list.pop(t)
 
             # Propagate using the handler
-            y_hat, y_hat_comp, v_map, x_aligned, v_aligned = test_handler(x, m, y, t, r_list)
+            x_ref_aligned, v_ref_aligned, v_map, y_hat, y_hat_comp = test_handler(x, m, y, t, r_list)
 
             # Add items to the lists
             x_tbx.append(x.cpu().numpy())
             m_tbx.append(m.cpu().numpy())
             y_tbx.append(y.cpu().numpy())
-            x_aligned_tbx.append(x_aligned.cpu().numpy())
-            y_hat_tbx.append(y_hat.cpu().numpy())
-            y_hat_comp_tbx.append(y_hat_comp.cpu().numpy())
+            x_aligned_tbx.append(x_ref_aligned.cpu().numpy())
             v_map_tbx.append(v_map.cpu().numpy())
+            if include_y_hat:
+                y_hat_tbx.append(y_hat.cpu().numpy())
+            if include_y_hat_comp:
+                y_hat_comp_tbx.append(y_hat_comp.cpu().numpy())
 
         # Concatenate the results along dim=0
         x_tbx = np.concatenate(x_tbx)
         m_tbx = np.concatenate(m_tbx)
         y_tbx = np.concatenate(y_tbx)
         x_aligned_tbx = np.concatenate(x_aligned_tbx)
-        y_hat_tbx = np.concatenate(y_hat_tbx)
-        y_hat_comp_tbx = np.concatenate(y_hat_comp_tbx)
         v_map_tbx = np.concatenate(v_map_tbx)
+        y_hat_tbx = np.concatenate(y_hat_tbx) if len(y_hat_tbx) > 0 else y_hat_tbx
+        y_hat_comp_tbx = np.concatenate(y_hat_comp_tbx) if len(y_hat_comp_tbx) > 0 else y_hat_tbx
 
         # Add each batch item individually
         for b in range(x_tbx.shape[0]):
@@ -162,14 +164,16 @@ class ThesisRunner(skeltorch.Runner):
             x_aligned_sample = utils.draws.add_border(x_aligned_sample, m_tbx[b, :, t])
             v_map_rep, m_rep = v_map_tbx[b].repeat(3, axis=0), m_tbx[b, :, t].repeat(3, axis=0)
             v_map_sample = np.insert(arr=v_map_rep, obj=t, values=m_rep, axis=1)
-            y_hat_sample = np.insert(arr=y_hat_tbx[b], obj=t, values=y_tbx[b, :, t], axis=1)
-            y_hat_sample = utils.draws.add_border(y_hat_sample, m_tbx[b, :, t])
-            y_hat_comp_sample = np.insert(arr=y_hat_comp_tbx[b], obj=t, values=y_tbx[b, :, t], axis=1)
-            sample = np.concatenate(
-                (x_tbx[b], x_aligned_sample, v_map_sample, y_hat_sample, y_hat_comp_sample), axis=2
-            ).transpose(1, 0, 2, 3)
+            sample = np.concatenate((x_tbx[b], x_aligned_sample, v_map_sample), axis=2)
+            if include_y_hat:
+                y_hat_sample = np.insert(arr=y_hat_tbx[b], obj=t, values=y_tbx[b, :, t], axis=1)
+                y_hat_sample = utils.draws.add_border(y_hat_sample, m_tbx[b, :, t])
+                sample = np.concatenate((sample, y_hat_sample), axis=2)
+            if include_y_hat_comp:
+                y_hat_comp_sample = np.insert(arr=y_hat_comp_tbx[b], obj=t, values=y_tbx[b, :, t], axis=1)
+                sample = np.concatenate((sample, y_hat_comp_sample), axis=2)
             self.experiment.tbx.add_images(
-                'frames_{}/{}'.format(split, b + 1), sample, global_step=self.counters['epoch']
+                'frames_{}/{}'.format(split, b + 1), sample.transpose(1, 0, 2, 3), global_step=self.counters['epoch']
             )
 
     def test_sequence(self, handler, folder_name, device):

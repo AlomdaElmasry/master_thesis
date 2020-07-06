@@ -10,6 +10,7 @@ import models.vgg_16
 import utils.correlation
 import utils.transforms
 import torch.utils.data
+import matplotlib.pyplot as plt
 
 
 class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
@@ -32,7 +33,7 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
             step_size=self.experiment.configuration.get('training', 'lr_scheduler_step_size'),
             gamma=self.experiment.configuration.get('training', 'lr_scheduler_gamma')
         )
-        self.utils_losses = utils.losses.LossesUtils(device)
+        self.utils_losses = utils.losses.LossesUtils(self.model_vgg, device)
         self.losses_items_ids = [
             'corr_loss', 'flow_16', 'flow_64', 'flow_256', 'alignment_recons_64', 'alignment_recons_256'
         ]
@@ -64,92 +65,29 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
         return loss
 
     def test(self, epoch, device):
-        # Load state if epoch is set
+        self.model.eval()
         if epoch is not None:
             self.load_states(epoch, device)
 
-        # Set model in evaluation mode
-        self.model.eval()
+        # Compute the losses on the test set
+        self.test_losses(self.test_losses_handler, self.losses_items_ids, device)
 
-        # Create a Subset using self.experiment.data.test_frames_indexes defined frames
-        subset_dataset = torch.utils.data.Subset(
-            self.experiment.data.datasets['validation'], self.experiment.data.validation_frames_indexes
+        # Inpaint individual frames on the test set
+        self.test_frames(self.test_frames_handler, 'validation', device, include_y_hat=False, include_y_hat_comp=False)
+        self.test_frames(self.test_frames_handler, 'test', device, include_y_hat=False, include_y_hat_comp=False)
+
+    def test_losses_handler(self, x, m, y, flows_use, flow_gt, t, r_list):
+        corr, xs, vs, ys, xs_aligned, xs_aligned_gt, vs_aligned, vs_aligned_gt, flows, flows_gt, flows_use, v_maps, \
+            v_maps_gt = ThesisAlignmentRunner.train_step_propagate(self.model, x, m, y, flow_gt, flows_use, t, r_list)
+        return ThesisAlignmentRunner.compute_loss(
+            self.model_vgg, self.utils_losses, corr, xs, vs, ys, xs_aligned, flows, flows_gt, flows_use, t, r_list
         )
-        loader = torch.utils.data.DataLoader(
-            subset_dataset, self.experiment.configuration.get('training', 'batch_size')
+
+    def test_frames_handler(self, x, m, y, t, r_list):
+        x_ref_aligned, v_ref_aligned, v_map = ThesisAlignmentRunner.infer_step_propagate(
+            self.model, x[:, :, t], m[:, :, t], x[:, :, r_list], m[:, :, r_list]
         )
-
-        # Create variables with the images to log inside TensorBoard -> (b,c,h,w)
-        x_64_tbx, m_64_tbx, x_64_aligned_tbx, x_64_aligned_gt_tbx = [], [], [], []
-        x_256_tbx, m_256_tbx, x_256_aligned_tbx, x_256_aligned_gt_tbx = [], [], [], []
-        v_map_64_tbx, v_map_64_gt_tbx, v_map_256_tbx, v_map_256_gt_tbx = [], [], [], []
-
-        # Iterate over the samples
-        for it_data in loader:
-            (x, m), y, info = it_data
-            x, m, y, flows_use, flow_gt = x.to(device), m.to(device), y.to(device), info[2], info[5].to(device)
-
-            # Propagate through the model
-            t, r_list = x.size(2) // 2, list(range(x.size(2)))
-            r_list.pop(t)
-            with torch.no_grad():
-                _, xs, vs, ys, xs_aligned, xs_aligned_gt, vs_aligned, vs_aligned_gt, flows, flows_gt, \
-                flows_use, v_maps, v_maps_gt = ThesisAlignmentRunner.train_step_propagate(
-                    self.model, x, m, y, flow_gt, flows_use, t, r_list
-                )
-
-            # Get GT alignment
-            x_64_aligned_gt, _ = utils.flow.align_set(xs[1][:, :, r_list], 1 - vs[1][:, :, r_list], flows_gt[1])
-            x_256_aligned_gt, _ = utils.flow.align_set(xs[2][:, :, r_list], 1 - vs[2][:, :, r_list], flows_gt[2])
-
-            # Add items to the lists
-            x_64_tbx.append(xs[1].cpu().numpy())
-            m_64_tbx.append(1 - vs[1].cpu().numpy())
-            x_64_aligned_tbx.append(xs_aligned[1].cpu().numpy())
-            x_64_aligned_gt_tbx.append(x_64_aligned_gt.cpu().numpy())
-            x_256_tbx.append(xs[2].cpu().numpy())
-            m_256_tbx.append(1 - vs[2].cpu().numpy())
-            x_256_aligned_tbx.append(xs_aligned[2].cpu().numpy())
-            x_256_aligned_gt_tbx.append(x_256_aligned_gt.cpu().numpy())
-            v_map_64_tbx.append((v_maps[0] > 0.5).float().cpu().numpy())
-            v_map_64_gt_tbx.append(v_maps_gt[0].cpu().numpy())
-            v_map_256_tbx.append((v_maps[1] > 0.5).float().cpu().numpy())
-            v_map_256_gt_tbx.append(v_maps_gt[1].cpu().numpy())
-
-        # Concatenate the results along dim=0
-        x_64_tbx = np.concatenate(x_64_tbx)
-        m_64_tbx = np.concatenate(m_64_tbx)
-        x_64_aligned_tbx = np.concatenate(x_64_aligned_tbx)
-        x_64_aligned_gt_tbx = np.concatenate(x_64_aligned_gt_tbx)
-        v_map_64_tbx = np.concatenate(v_map_64_tbx)
-        v_map_64_gt_tbx = np.concatenate(v_map_64_gt_tbx)
-        x_256_tbx = np.concatenate(x_256_tbx)
-        m_256_tbx = np.concatenate(m_256_tbx)
-        x_256_aligned_tbx = np.concatenate(x_256_aligned_tbx)
-        x_256_aligned_gt_tbx = np.concatenate(x_256_aligned_gt_tbx)
-        v_map_256_tbx = np.concatenate(v_map_256_tbx)
-        v_map_256_gt_tbx = np.concatenate(v_map_256_gt_tbx)
-
-        # Define a function to add images to TensorBoard
-        def add_alignment_tbx(x, m, x_aligned, x_aligned_gt, v_map, res_size):
-            for b in range(x.shape[0]):
-                x_aligned_gt_sample = np.insert(arr=x_aligned_gt[b], obj=t, values=x[b, :, t], axis=1)
-                x_aligned_gt_sample = utils.draws.add_border(x_aligned_gt_sample, m[b, :, t])
-                x_aligned_sample = np.insert(arr=x_aligned[b], obj=t, values=x[b, :, t], axis=1)
-                x_aligned_sample = utils.draws.add_border(x_aligned_sample, m[b, :, t])
-                v_map_rep, m_rep = v_map[b].repeat(3, axis=0), m[b, :, t].repeat(3, axis=0)
-                v_map_sample = np.insert(arr=v_map_rep, obj=t, values=m_rep, axis=1)
-                sample = np.concatenate(
-                    (x[b], x_aligned_gt_sample, x_aligned_sample, v_map_sample), axis=2
-                ).transpose(1, 0, 2, 3)
-                self.experiment.tbx.add_images(
-                    '{}_sample_{}/{}'.format('validation', res_size, b + 1), sample,
-                    global_step=self.counters['epoch']
-                )
-
-        # Add different resolutions to TensorBoard
-        add_alignment_tbx(x_64_tbx, m_64_tbx, x_64_aligned_tbx, x_64_aligned_gt_tbx, v_map_64_tbx, '64')
-        add_alignment_tbx(x_256_tbx, m_256_tbx, x_256_aligned_tbx, x_256_aligned_gt_tbx, v_map_256_tbx, '256')
+        return x_ref_aligned, v_ref_aligned, v_map, None, None
 
     @staticmethod
     def train_step_propagate(model, x, m, y, flow_gt, flows_use, t, r_list):
@@ -205,7 +143,9 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
     def infer_step_propagate(model, x_target, m_target, x_ref, m_ref):
         with torch.no_grad():
             *_, flow_256 = model(x_target, m_target, x_ref, m_ref)
-        return utils.flow.align_set(x_ref, (1 - m_ref), flow_256)
+        x_ref_aligned, v_ref_aligned = utils.flow.align_set(x_ref, (1 - m_ref), flow_256)
+        v_map = (v_ref_aligned - (1 - m_target).unsqueeze(2)).clamp(0, 1)
+        return x_ref_aligned, v_ref_aligned, v_map
 
     @staticmethod
     def compute_loss(model_vgg, utils_losses, corr, xs, vs, ys, xs_aligned, flows, flows_gt, flows_use, t, r_list):

@@ -48,7 +48,7 @@ class RRDB(nn.Module):
 
 
 class RRDBNet(nn.Module):
-    def __init__(self, in_nc, out_nc, nf=64, nb=10, gc=32):
+    def __init__(self, in_nc, out_nc, nb=10, nf=64, gc=32):
         super(RRDBNet, self).__init__()
         self.conv_first = nn.Sequential(
             nn.Conv2d(in_nc, nf, 3, padding=1),
@@ -78,20 +78,57 @@ class RRDBNet(nn.Module):
         return out
 
 
-class RRDBNetInpainting(nn.Module):
+class RRDBNetSeparable(nn.Module):
 
-    def __init__(self, in_c, out_c=3, mid_c=16, add_c=4, n_blocks=10):
-        super(RRDBNetInpainting, self).__init__()
-        self.conv_first = nn.Conv2d(in_c, mid_c, 3, 1, 1, bias=True)
-        self.RRDB_trunk = make_layer(functools.partial(RRDB, nf=mid_c, gc=add_c), n_blocks)
-        self.conv_trunk = nn.Conv2d(mid_c, mid_c, 3, 1, 1)
-        self.convs_last = nn.Sequential(
-            nn.Conv2d(mid_c, mid_c, 3, 1, 1), nn.LeakyReLU(negative_slope=0.2),
-            nn.Conv2d(mid_c, mid_c, 3, 1, 1), nn.LeakyReLU(negative_slope=0.2),
-            nn.Conv2d(mid_c, out_c, 3, 1, 1)
+    def __init__(self, in_nc, out_nc, nb=15, nf=64, gc=32):
+        super(RRDBNetSeparable, self).__init__()
+
+        # Encoding
+        self.conv_first = nn.Sequential(
+            nn.Conv2d(in_nc, nf, 3, padding=1),
+            nn.Conv2d(nf, nf, 3, padding=1),
+            nn.Conv2d(nf, nf, 3, stride=2, padding=1),
+            nn.Conv2d(nf, nf, 3, padding=1),
+            nn.Conv2d(nf, nf, 3, stride=2, padding=1)
         )
+        RRDB_block_f = functools.partial(RRDB, nf=nf, gc=gc)
+        self.RRDB_trunk = make_layer(RRDB_block_f, nb // 3)
+        self.trunk_conv = nn.Conv2d(nf, nf, 3, 1, 1, bias=True)
 
-    def forward(self, x):
-        y = self.conv_first(x)
-        trunk = self.conv_trunk(self.RRDB_trunk(y))
-        return self.convs_last(y + trunk)
+        # After the encoding
+        self.conv_second = nn.Conv2d(2 * nf + 1, nf, 3, padding=1)
+        self.RRDB_trunk_second = make_layer(RRDB_block_f, nb // 2)
+        self.trunk_conv_second = nn.Conv2d(nf, nf, 3, 1, 1, bias=True)
+
+        self.upconv1 = nn.Conv2d(nf, nf, 3, 1, 1, bias=True)
+        self.upconv2 = nn.Conv2d(nf, nf, 3, 1, 1, bias=True)
+        self.HRconv = nn.Conv2d(nf, nf, 3, 1, 1, bias=True)
+        self.conv_last = nn.Conv2d(nf, out_nc, 3, 1, 1, bias=True)
+        self.lrelu = nn.LeakyReLU(negative_slope=0.2, inplace=True)
+
+    def forward(self, x_target, x_ref_aligned, v_target, v_ref_aligned, v_map):
+        # Encode the frames separately
+        x_target_enc = self._encode_frame(x_target)
+        x_ref_aligned_enc = self._encode_frame(x_ref_aligned)
+
+        # Mask the encodings using the visibilty maps
+        x_target_enc = x_target_enc * F.interpolate(v_target, (64, 64), mode='nearest')
+        x_aligned_enc = x_ref_aligned_enc * F.interpolate(v_ref_aligned, (64, 64), mode='nearest')
+        v_map_resized = F.interpolate(v_map, (64, 64))
+
+        # Concatenate the channels and propagate second part
+        y_hat = self.conv_second(torch.cat((x_target_enc, x_aligned_enc, v_map_resized), dim=1))
+        y_hat = self.trunk_conv_second(y_hat)
+
+        # Upsample and return
+        y_hat = self.lrelu(self.upconv1(F.interpolate(y_hat, scale_factor=2, mode='nearest')))
+        y_hat = self.lrelu(self.upconv2(F.interpolate(y_hat, scale_factor=2, mode='nearest')))
+        y_hat = self.lrelu(self.upconv1(y_hat))
+        y_hat = self.lrelu(self.upconv2(y_hat))
+        y_hat = self.conv_last(self.lrelu(self.HRconv(y_hat)))
+        return y_hat
+
+    def _encode_frame(self, x):
+        fea = self.conv_first(x)
+        trunk = self.trunk_conv(self.RRDB_trunk(fea))
+        return fea + trunk
