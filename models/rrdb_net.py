@@ -112,9 +112,11 @@ class RRDBNetSeparable(nn.Module):
         x_ref_aligned_enc = self._encode_frame(x_ref_aligned)
 
         # Mask the encodings using the visibilty maps
-        x_target_enc = x_target_enc * F.interpolate(v_target, (64, 64), mode='nearest')
-        x_aligned_enc = x_ref_aligned_enc * F.interpolate(v_ref_aligned, (64, 64), mode='nearest')
-        v_map_resized = F.interpolate(v_map, (64, 64))
+        x_target_enc = x_target_enc * F.interpolate(v_target, (x_target_enc.size(2), x_target_enc.size(3)))
+        x_aligned_enc = x_ref_aligned_enc * F.interpolate(
+            v_ref_aligned, (x_target_enc.size(2), x_target_enc.size(3))
+        )
+        v_map_resized = F.interpolate(v_map, (x_target_enc.size(2), x_target_enc.size(3)))
 
         # Concatenate the channels and propagate second part
         y_hat = self.conv_second(torch.cat((x_target_enc, x_aligned_enc, v_map_resized), dim=1))

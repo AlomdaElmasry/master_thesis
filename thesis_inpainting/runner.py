@@ -149,8 +149,8 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
     def compute_loss(utils_losses, y_target, v_target, y_hat, y_hat_comp, v_map):
         # 1. Hard copy TBX
         # 2. Loss of the hard copy
-        # 3. Split trunk
-        # 4. Zero loss NVH
+        # 3. Split trunk (Done)
+        # 4. Zero loss NVH (Done)
         # 5. Investigate and improve alignment network
         b, c, h, w = y_target.size()
         target_img = y_target.unsqueeze(2).repeat(1, 1, y_hat.size(2), 1, 1)
