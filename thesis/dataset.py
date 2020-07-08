@@ -148,7 +148,7 @@ class ContentProvider(torch.utils.data.Dataset):
             frame_indexes_candidates = set(frame_indexes_candidates_pre).union(set(frame_indexes_candidates_post))
             if frame_index in frame_indexes_candidates:
                 frame_indexes_candidates.remove(frame_index)
-            frames_indexes = sorted(random.sample(frame_indexes_candidates, 2 * (frames_n // 2)))
+            frames_indexes = sorted(random.sample(frame_indexes_candidates, frames_n - 1))
             frames_indexes.insert(frames_n // 2, frame_index)
         else:
             frames_indexes_before = frame_indexes_candidates_pre[::frames_spacing]

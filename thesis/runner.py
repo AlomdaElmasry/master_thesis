@@ -94,6 +94,7 @@ class ThesisRunner(skeltorch.Runner):
 
     def test_losses(self, test_losses_handler, losses_items_ids, device):
         loss_t, losses_items_t = [], [[] for _ in range(len(losses_items_ids))]
+
         for it_data in self.experiment.data.loaders['test']:
             (x, m), y, info = it_data
             x, m, y, flows_use, flow_gt = x.to(device), m.to(device), y.to(device), info[2], info[5].to(device)
@@ -108,7 +109,8 @@ class ThesisRunner(skeltorch.Runner):
                 'loss_items_test_epoch/{}'.format(loss_item_id), np.mean(losses_items_t[i]), self.counters['epoch'])
         self.logger.info('Epoch: {} | Average Test Loss: {}'.format(self.counters['epoch'], np.mean(loss_t)))
 
-    def test_frames(self, test_handler, split, device, include_y_hat=True, include_y_hat_comp=True):
+    def test_frames(self, test_handler, split, device, include_y_hat=True, include_y_hat_comp=True,
+                    include_y_hat_trivial=True):
         # Create a Subset using self.experiment.data.test_frames_indexes defined frames
         if split == 'validation':
             subset_dataset = torch.utils.data.Subset(
@@ -121,10 +123,11 @@ class ThesisRunner(skeltorch.Runner):
 
         # Create a loader using the previous subset
         batch_size = self.experiment.configuration.get('training', 'batch_size')
-        loader = torch.utils.data.DataLoader(subset_dataset, batch_size )
+        loader = torch.utils.data.DataLoader(subset_dataset, batch_size)
 
         # Create variables with the images to log inside TensorBoard -> (b,c,h,w)
-        x_tbx, m_tbx, y_tbx, x_aligned_tbx, v_map_tbx, y_hat_tbx, y_hat_comp_tbx = [], [], [], [], [], [], []
+        x_tbx, m_tbx, y_tbx, x_aligned_tbx, v_map_tbx = [], [], [], [], []
+        y_hat_trivial_tbx, y_hat_tbx, y_hat_comp_tbx = [], [], []
 
         # Iterate over the samples
         for it_data in loader:
@@ -148,6 +151,8 @@ class ThesisRunner(skeltorch.Runner):
                 y_hat_tbx.append(y_hat.cpu().numpy())
             if include_y_hat_comp:
                 y_hat_comp_tbx.append(y_hat_comp.cpu().numpy())
+            if include_y_hat_trivial:
+                y_hat_trivial_tbx.append(self._test_frames_trivial(x[:, :, t], x_ref_aligned, v_map).cpu().numpy())
 
         # Concatenate the results along dim=0
         x_tbx = np.concatenate(x_tbx)
@@ -157,6 +162,7 @@ class ThesisRunner(skeltorch.Runner):
         v_map_tbx = np.concatenate(v_map_tbx)
         y_hat_tbx = np.concatenate(y_hat_tbx) if len(y_hat_tbx) > 0 else y_hat_tbx
         y_hat_comp_tbx = np.concatenate(y_hat_comp_tbx) if len(y_hat_comp_tbx) > 0 else y_hat_tbx
+        y_hat_trivial_tbx = np.concatenate(y_hat_trivial_tbx) if len(y_hat_trivial_tbx) > 0 else y_hat_tbx
 
         # Add each batch item individually
         for b in range(x_tbx.shape[0]):
@@ -165,6 +171,9 @@ class ThesisRunner(skeltorch.Runner):
             v_map_rep, m_rep = v_map_tbx[b].repeat(3, axis=0), m_tbx[b, :, t].repeat(3, axis=0)
             v_map_sample = np.insert(arr=v_map_rep, obj=t, values=m_rep, axis=1)
             sample = np.concatenate((x_tbx[b], x_aligned_sample, v_map_sample), axis=2)
+            if include_y_hat_trivial:
+                y_hat_trivial_sample = np.insert(arr=y_hat_trivial_tbx[b], obj=t, values=y_tbx[b, :, t], axis=1)
+                sample = np.concatenate((sample, y_hat_trivial_sample), axis=2)
             if include_y_hat:
                 y_hat_sample = np.insert(arr=y_hat_tbx[b], obj=t, values=y_tbx[b, :, t], axis=1)
                 y_hat_sample = utils.draws.add_border(y_hat_sample, m_tbx[b, :, t])
@@ -175,6 +184,10 @@ class ThesisRunner(skeltorch.Runner):
             self.experiment.tbx.add_images(
                 'frames_{}/{}'.format(split, b + 1), sample.transpose(1, 0, 2, 3), global_step=self.counters['epoch']
             )
+
+    def _test_frames_trivial(self, x_target, x_ref_aligned, v_map):
+        b, c, ref_n, h, w = x_ref_aligned.size()
+        return x_target.unsqueeze(2).repeat(1, 1, ref_n, 1, 1) * (1 - v_map) + x_ref_aligned * v_map
 
     def test_sequence(self, handler, folder_name, device):
         for it_data in self.experiment.data.datasets['test_sequences']:

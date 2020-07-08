@@ -108,7 +108,7 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
             while (len(t_candidates) > 0 and torch.sum(m_target) * 100 / m_target.numel() > 1) or y_hat is None:
                 r_index = [t_candidates.pop(0)]
                 x_ref, m_ref = x[:, r_index].unsqueeze(0), m[:, r_index].unsqueeze(0)
-                y_hat, y_hat_comp, v_map, x_ref_aligned, _ = ThesisInpaintingRunner.infer_step_propagate(
+                x_ref_aligned, _, v_map, y_hat, y_hat_comp = ThesisInpaintingRunner.infer_step_propagate(
                     self.model_alignment, self.model, x_target, m_target, y_target, x_ref, m_ref
                 )
                 m_target = m_target - v_map[:, :, 0]
@@ -147,11 +147,6 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
 
     @staticmethod
     def compute_loss(utils_losses, y_target, v_target, y_hat, y_hat_comp, v_map):
-        # 1. Hard copy TBX
-        # 2. Loss of the hard copy
-        # 3. Split trunk (Done)
-        # 4. Zero loss NVH (Done)
-        # 5. Investigate and improve alignment network
         b, c, h, w = y_target.size()
         target_img = y_target.unsqueeze(2).repeat(1, 1, y_hat.size(2), 1, 1)
         nh_mask = v_target.unsqueeze(2).repeat(1, 1, y_hat.size(2), 1, 1)

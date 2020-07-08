@@ -2,7 +2,6 @@ import torch.optim
 import models.thesis_alignment
 import torch.nn.functional as F
 import utils.losses
-import numpy as np
 import utils.draws
 import utils.flow
 import thesis.runner
@@ -42,10 +41,7 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
     def train_step(self, it_data, device):
         (x, m), y, info = it_data
         x, m, y, flows_use, flow_gt = x.to(device), m.to(device), y.to(device), info[2], info[5].to(device)
-
-        # Compute t and r_list
-        t, r_list = x.size(2) // 2, list(range(x.size(2)))
-        r_list.pop(t)
+        t, r_list = self.get_indexes(x.size(2))
 
         # Propagate through the model
         corr, xs, vs, ys, xs_aligned, xs_aligned_gt, vs_aligned, vs_aligned_gt, flows, flows_gt, flows_use, v_maps, \

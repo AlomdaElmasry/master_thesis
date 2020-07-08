@@ -111,7 +111,7 @@ class RRDBNetSeparable(nn.Module):
         x_target_enc = self._encode_frame(x_target)
         x_ref_aligned_enc = self._encode_frame(x_ref_aligned)
 
-        # Mask the encodings using the visibilty maps
+        # Mask the encodings using the visibility maps
         x_target_enc = x_target_enc * F.interpolate(v_target, (x_target_enc.size(2), x_target_enc.size(3)))
         x_aligned_enc = x_ref_aligned_enc * F.interpolate(
             v_ref_aligned, (x_target_enc.size(2), x_target_enc.size(3))
