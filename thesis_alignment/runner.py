@@ -39,13 +39,14 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
         super().init_others(device)
 
     def train_step(self, it_data, device):
+        self.test(None, device)
         (x, m), y, info = it_data
         x, m, y, flows_use, flow_gt = x.to(device), m.to(device), y.to(device), info[2], info[5].to(device)
         t, r_list = self.get_indexes(x.size(2))
 
         # Propagate through the model
         corr, xs, vs, ys, xs_aligned, xs_aligned_gt, vs_aligned, vs_aligned_gt, flows, flows_gt, flows_use, v_maps, \
-            v_maps_gt = ThesisAlignmentRunner.train_step_propagate(self.model, x, m, y, flow_gt, flows_use, t, r_list)
+        v_maps_gt = ThesisAlignmentRunner.train_step_propagate(self.model, x, m, y, flow_gt, flows_use, t, r_list)
 
         # Get both total loss and loss items
         loss, loss_items = ThesisAlignmentRunner.compute_loss(
@@ -73,8 +74,11 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
         self.test_frames(self.test_frames_handler, 'test', device, include_y_hat=False, include_y_hat_comp=False)
 
     def test_losses_handler(self, x, m, y, flows_use, flow_gt, t, r_list):
-        corr, xs, vs, ys, xs_aligned, xs_aligned_gt, vs_aligned, vs_aligned_gt, flows, flows_gt, flows_use, v_maps, \
-            v_maps_gt = ThesisAlignmentRunner.train_step_propagate(self.model, x, m, y, flow_gt, flows_use, t, r_list)
+        with torch.no_grad():
+            corr, xs, vs, ys, xs_aligned, xs_aligned_gt, vs_aligned, vs_aligned_gt, flows, flows_gt, flows_use, \
+            v_maps, v_maps_gt = ThesisAlignmentRunner.train_step_propagate(
+                self.model, x, m, y, flow_gt, flows_use, t, r_list
+            )
         return ThesisAlignmentRunner.compute_loss(
             self.model_vgg, self.utils_losses, corr, xs, vs, ys, xs_aligned, flows, flows_gt, flows_use, t, r_list
         )
