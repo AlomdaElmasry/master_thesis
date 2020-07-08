@@ -116,7 +116,10 @@ class ThesisData(skeltorch.Data):
             dilatation_filter_size=tuple(self.experiment.configuration.get('data', 'dilatation_filter_size')),
             dilatation_iterations=self.experiment.configuration.get('data', 'dilatation_iterations'),
             force_resize=self.experiment.configuration.get('data', 'train_resize'),
-            keep_ratio=True
+            keep_ratio=True,
+            p_simulator_gts=self.experiment.configuration.get('data', 'p_simulator_gts'),
+            p_simulator_masks=self.experiment.configuration.get('data', 'p_simulator_masks'),
+            p_repeat=self.experiment.configuration.get('data', 'p_repeat')
         )
         self.datasets['test'] = MaskedSequenceDataset(
             gts_dataset=gts_datasets[2],

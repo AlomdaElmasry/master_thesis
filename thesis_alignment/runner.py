@@ -39,7 +39,6 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
         super().init_others(device)
 
     def train_step(self, it_data, device):
-        self.test(None, device)
         (x, m), y, info = it_data
         x, m, y, flows_use, flow_gt = x.to(device), m.to(device), y.to(device), info[2], info[5].to(device)
         t, r_list = self.get_indexes(x.size(2))
