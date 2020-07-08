@@ -228,18 +228,18 @@ class MaskedSequenceDataset(torch.utils.data.Dataset):
         self.dilatation_filter_size = dilatation_filter_size
         self.dilatation_iterations = dilatation_iterations
         self.p_simulator_gts = p_simulator_gts
-        self.pp_simulator_masks = p_simulator_masks
+        self.p_simulator_masks = p_simulator_masks
         self.p_repeat = p_repeat
         self.fill_color = torch.as_tensor([0.485, 0.456, 0.406], dtype=torch.float32)
         assert 0 <= self.p_simulator_gts <= 1
-        assert 0 <= self.pp_simulator_masks <= 1
-        assert not self.p_simulator_gts > 0 and self.gts_simulator is None
-        assert not self.p_simulator_masks > 0 and self.masks_simulator is None
+        assert 0 <= self.p_simulator_masks <= 1
+        assert not (self.p_simulator_gts > 0 and self.gts_simulator is None)
+        assert not (self.p_simulator_masks > 0 and self.masks_simulator is None)
 
     def __getitem__(self, item):
         # Define if the current item is going to be a real video or a simulated one
         use_simulator_gts = np.random.choice([False, True], p=[1 - self.p_simulator_gts, self.p_simulator_gts])
-        use_simulator_masks = np.random.choice([False, True], p=[1 - self.pp_simulator_masks, self.pp_simulator_masks])
+        use_simulator_masks = np.random.choice([False, True], p=[1 - self.p_simulator_masks, self.p_simulator_masks])
         gts_simulator_item = self.gts_simulator if use_simulator_gts == 1 else None
         masks_simulator_item = self.masks_simulator if use_simulator_masks == 1 else None
 
