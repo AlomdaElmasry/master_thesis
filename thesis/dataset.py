@@ -233,6 +233,8 @@ class MaskedSequenceDataset(torch.utils.data.Dataset):
         self.fill_color = torch.as_tensor([0.485, 0.456, 0.406], dtype=torch.float32)
         assert 0 <= self.p_simulator_gts <= 1
         assert 0 <= self.pp_simulator_masks <= 1
+        assert not self.p_simulator_gts > 0 and self.gts_simulator is None
+        assert not self.p_simulator_masks > 0 and self.masks_simulator is None
 
     def __getitem__(self, item):
         # Define if the current item is going to be a real video or a simulated one

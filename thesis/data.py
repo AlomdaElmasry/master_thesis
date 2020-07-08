@@ -107,8 +107,12 @@ class ThesisData(skeltorch.Data):
         self.datasets['validation'] = MaskedSequenceDataset(
             gts_dataset=gts_datasets[1],
             masks_dataset=masks_datasets[1],
-            gts_simulator=None,
-            masks_simulator=None,
+            gts_simulator=utils.movement.MovementSimulator(
+                *self.experiment.configuration.get('data', 'gts_movement_params')
+            ),
+            masks_simulator=utils.movement.MovementSimulator(
+                *self.experiment.configuration.get('data', 'masks_movement_params')
+            ),
             image_size=tuple(self.experiment.configuration.get('data', 'train_size')),
             frames_n=self.experiment.configuration.get('data', 'frames_n'),
             frames_spacing=self.experiment.configuration.get('data', 'frames_spacing'),
