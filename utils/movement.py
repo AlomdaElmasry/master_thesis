@@ -36,8 +36,11 @@ class MovementSimulator:
         # Create a Tensor with n affine transformations. random_affine \in (n_frames, 3, 3)
         if affine_matrices is None:
             affine_matrices = [self.random_affine() for _ in range(n - 1)]
-            affine_matrices = affine_matrices[:(n - 1) // 2] + [MovementSimulator.identity_affine()] + \
-                              affine_matrices[(n - 1) // 2:]
+            if n == 2:
+                affine_matrices = affine_matrices + [MovementSimulator.identity_affine()]
+            else:
+                affine_matrices = affine_matrices[:(n - 1) // 2] + [MovementSimulator.identity_affine()] + \
+                                  affine_matrices[(n - 1) // 2:]
             affine_matrices_inv = [MovementSimulator.affine_inverse(affine_mat) for affine_mat in affine_matrices]
 
         # Stack matrices
