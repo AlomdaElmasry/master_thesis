@@ -47,8 +47,8 @@ class MovementSimulator:
         affine_matrices, affine_matrices_inv = torch.stack(affine_matrices), torch.stack(affine_matrices_inv)
 
         # Stack affine transformations with respect to the central frame
-        affine_matrices = MovementSimulator.stack_transformations(affine_matrices, t=(n - 1) // 2)
-        affine_matrices_inv = MovementSimulator.stack_transformations(affine_matrices_inv, t=(n - 1) // 2)
+        affine_matrices = MovementSimulator.stack_transformations(affine_matrices, t=n // 2)
+        affine_matrices_inv = MovementSimulator.stack_transformations(affine_matrices_inv, t=n // 2)
         affine_matrices_theta = torch.stack([MovementSimulator.affine2theta(ra, h, w) for ra in affine_matrices])
         affine_matrices_inv_theta = torch.stack([
             MovementSimulator.affine2theta(ra, h, w) for ra in affine_matrices_inv])
