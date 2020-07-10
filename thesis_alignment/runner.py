@@ -152,7 +152,11 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
         # Get the features of the frames from VGG
         b, c, f, h, w = ys[2].size()
         with torch.no_grad():
-            y_vgg_feats = model_vgg(ys[2].transpose(1, 2).reshape(b * f, c, h, w))
+            if h == 256 and w == 256:
+                y_vgg_input = ys[2].transpose(1, 2).reshape(b * f, c, h, w)
+            else:
+                y_vgg_input = F.interpolate(ys[2].transpose(1, 2).reshape(b * f, c, h, w), (256, 256), mode='bilinear')
+            y_vgg_feats = model_vgg(y_vgg_input)
         y_vgg_feats = y_vgg_feats[3].reshape(b, f, -1, 16, 16).transpose(1, 2)
 
         # Compute L1 loss between correlation volumes
