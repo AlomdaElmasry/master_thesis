@@ -123,7 +123,7 @@ class ThesisData(skeltorch.Data):
             masks_dataset=masks_datasets[1],
             gts_simulator=None,
             masks_simulator=None,
-            image_size=tuple(self.experiment.configuration.get('data', 'test_size')),
+            image_size=tuple(self.experiment.configuration.get('data', 'train_size')),
             frames_n=self.experiment.configuration.get('data', 'frames_n'),
             frames_spacing=self.experiment.configuration.get('data', 'frames_spacing'),
             frames_randomize=self.experiment.configuration.get('data', 'frames_randomize'),
