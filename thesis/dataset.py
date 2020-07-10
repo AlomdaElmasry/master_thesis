@@ -152,7 +152,7 @@ class ContentProvider(torch.utils.data.Dataset):
             frames_indexes.insert(frames_n // 2, frame_index)
         else:
             frames_indexes_before = frame_indexes_candidates_pre[::frames_spacing]
-            frames_indexes_after = frame_indexes_candidates_post[1::frames_spacing]
+            frames_indexes_after = frame_indexes_candidates_post[1::frames_spacing] if frames_n > 2 else []
             frames_indexes = frames_indexes_before + [frame_index] + frames_indexes_after
         y, m = self.get_items(frames_indexes)
         gt_movement = None if y is None else torch.zeros((len(frames_indexes), y.size(2), y.size(3), 2))
