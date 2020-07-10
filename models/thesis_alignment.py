@@ -147,27 +147,27 @@ class FlowEstimator(nn.Module):
         #     nn.Conv2d(in_c, 2, kernel_size=3, padding=1)
         # )
         self.nn = nn.Sequential(
-            nn.Conv2d(in_c, 256, kernel_size=5, padding=2), nn.ReLU(),
-            nn.Conv2d(256, 256, kernel_size=3, padding=1), nn.ReLU(),
-            nn.Conv2d(256, 256, kernel_size=5, stride=2, padding=2), nn.ReLU(),
-            nn.Conv2d(256, 256, kernel_size=5, padding=2), nn.ReLU(),
-            nn.Conv2d(256, 256, kernel_size=3, padding=1), nn.ReLU(),
-            nn.Conv2d(256, 256, kernel_size=3, stride=2, padding=1), nn.ReLU(),
-            nn.Conv2d(256, 256, kernel_size=5, padding=2), nn.ReLU(),
-            nn.Conv2d(256, 256, kernel_size=3, padding=1), nn.ReLU(),
-            nn.Conv2d(256, 256, kernel_size=3, stride=2, padding=1), nn.ReLU(),
-            nn.Conv2d(256, 256, kernel_size=5, padding=2), nn.ReLU(),
-            nn.Conv2d(256, 256, kernel_size=3, padding=1), nn.ReLU(),
-            nn.ConvTranspose2d(256, 256, kernel_size=3, padding=1, output_padding=1, stride=2), nn.ReLU(),
-            nn.Conv2d(256, 256, kernel_size=5, padding=2), nn.ReLU(),
-            nn.Conv2d(256, 256, kernel_size=3, padding=1), nn.ReLU(),
-            nn.ConvTranspose2d(256, 256, kernel_size=3, padding=1, output_padding=1, stride=2), nn.ReLU(),
-            nn.Conv2d(256, 256, kernel_size=5, padding=2), nn.ReLU(),
-            nn.Conv2d(256, 256, kernel_size=3, padding=1), nn.ReLU(),
-            nn.ConvTranspose2d(256, 256, kernel_size=5, padding=2, output_padding=1, stride=2), nn.ReLU(),
-            nn.Conv2d(256, 256, kernel_size=5, padding=2), nn.ReLU(),
-            nn.Conv2d(256, 256, kernel_size=3, padding=1), nn.ReLU(),
-            nn.Conv2d(256, 2, kernel_size=3, padding=1)
+            nn.Conv2d(in_c, 128, kernel_size=5, padding=2), nn.ReLU(),
+            nn.Conv2d(128, 128, kernel_size=3, padding=1), nn.ReLU(),
+            nn.Conv2d(128, 128, kernel_size=5, stride=2, padding=2), nn.ReLU(),
+            nn.Conv2d(128, 128, kernel_size=5, padding=2), nn.ReLU(),
+            nn.Conv2d(128, 128, kernel_size=3, padding=1), nn.ReLU(),
+            nn.Conv2d(128, 128, kernel_size=3, stride=2, padding=1), nn.ReLU(),
+            nn.Conv2d(128, 128, kernel_size=5, padding=2), nn.ReLU(),
+            nn.Conv2d(128, 128, kernel_size=3, padding=1), nn.ReLU(),
+            nn.Conv2d(128, 128, kernel_size=3, stride=2, padding=1), nn.ReLU(),
+            nn.Conv2d(128, 128, kernel_size=5, padding=2), nn.ReLU(),
+            nn.Conv2d(128, 128, kernel_size=3, padding=1), nn.ReLU(),
+            nn.ConvTranspose2d(128, 128, kernel_size=3, padding=1, output_padding=1, stride=2), nn.ReLU(),
+            nn.Conv2d(128, 128, kernel_size=5, padding=2), nn.ReLU(),
+            nn.Conv2d(128, 128, kernel_size=3, padding=1), nn.ReLU(),
+            nn.ConvTranspose2d(128, 128, kernel_size=3, padding=1, output_padding=1, stride=2), nn.ReLU(),
+            nn.Conv2d(128, 128, kernel_size=5, padding=2), nn.ReLU(),
+            nn.Conv2d(128, 128, kernel_size=3, padding=1), nn.ReLU(),
+            nn.ConvTranspose2d(128, 128, kernel_size=5, padding=2, output_padding=1, stride=2), nn.ReLU(),
+            nn.Conv2d(128, 128, kernel_size=5, padding=2), nn.ReLU(),
+            nn.Conv2d(128, 128, kernel_size=3, padding=1), nn.ReLU(),
+            nn.Conv2d(128, 2, kernel_size=3, padding=1)
         )
 
     def forward(self, x_target, m_target, x_ref, m_ref, flow_pre):
