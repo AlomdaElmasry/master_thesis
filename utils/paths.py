@@ -8,14 +8,14 @@ class DatasetPaths:
     def get_items(dataset_name, data_folder, split, return_gts=True, return_masks=True):
         assert return_gts or return_masks
         if dataset_name == 'davis-2017':
-            return DatasetPaths.get_davis(data_folder)
+            return DatasetPaths.get_davis(data_folder, return_gts, return_masks)
         elif dataset_name == 'got-10k':
             return DatasetPaths.get_got10k(data_folder, split)
         elif dataset_name == 'youtube-vos':
             return DatasetPaths.get_youtube_vos(data_folder, split, return_gts, return_masks)
 
     @staticmethod
-    def get_davis(data_folder):
+    def get_davis(data_folder, return_gts, return_masks):
         dataset_folder = os.path.join(data_folder, 'DAVIS-2017')
         split_filename = 'custom.txt'
         items_file = open(os.path.join(dataset_folder, 'ImageSets', '2017', split_filename))
@@ -27,8 +27,8 @@ class DatasetPaths:
             item_masks_path = sorted(
                 glob.glob(os.path.join(dataset_folder, 'Annotations_Dense', '480p', item_name, '*.png'))
             )
-            item_gts_paths = [os.path.relpath(path, data_folder) for path in item_gts_paths]
-            item_masks_path = [os.path.relpath(path, data_folder) for path in item_masks_path]
+            item_gts_paths = [os.path.relpath(path, data_folder) for path in item_gts_paths] if return_gts else None
+            item_masks_path = [os.path.relpath(path, data_folder) for path in item_masks_path] if return_masks else None
             items_meta[item_name] = (item_gts_paths, item_masks_path)
         return items_meta
 

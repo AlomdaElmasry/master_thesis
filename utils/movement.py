@@ -38,7 +38,7 @@ class MovementSimulator:
             affine_matrices = [self.random_affine() for _ in range(n - 1)]
             affine_matrices = affine_matrices[:n // 2] + [MovementSimulator.identity_affine()] + \
                               affine_matrices[n // 2:]
-            affine_matrices_inv = [MovementSimulator.affine_inverse(affine_mat) for affine_mat in affine_matrices]
+        affine_matrices_inv = [MovementSimulator.affine_inverse(affine_mat) for affine_mat in affine_matrices]
 
         # Stack matrices
         affine_matrices, affine_matrices_inv = torch.stack(affine_matrices), torch.stack(affine_matrices_inv)
