@@ -37,7 +37,7 @@ class ThesisData(skeltorch.Data):
         self.validation_gts_meta = utils.paths.DatasetPaths.get_items(
             dataset_name=self.experiment.configuration.get('data', 'validation_gts_dataset'),
             data_folder=data_path,
-            split='validation',
+            split='test',
             return_masks=False
         )
         self.validation_masks_meta = utils.paths.DatasetPaths.get_items(
