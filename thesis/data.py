@@ -104,7 +104,7 @@ class ThesisData(skeltorch.Data):
             p_simulator_masks=self.experiment.configuration.get('data', 'p_simulator_masks'),
             p_repeat=self.experiment.configuration.get('data', 'p_repeat')
         )
-        self.datasets['test'] = MaskedSequenceDataset(
+        self.datasets['validation'] = MaskedSequenceDataset(
             gts_dataset=gts_datasets[1],
             masks_dataset=masks_datasets[1],
             gts_simulator=None,
@@ -118,7 +118,7 @@ class ThesisData(skeltorch.Data):
             force_resize=self.experiment.configuration.get('data', 'train_resize'),
             keep_ratio=True
         )
-        self.datasets['validation'] = MaskedSequenceDataset(
+        self.datasets['test'] = MaskedSequenceDataset(
             gts_dataset=gts_datasets[2],
             masks_dataset=masks_datasets[1],
             gts_simulator=None,
