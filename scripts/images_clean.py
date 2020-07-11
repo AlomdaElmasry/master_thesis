@@ -36,14 +36,21 @@ def verify_sequence(sequence_path, bar, i, remove_sequence=False):
                 image = cv2.imread(image_path, cv2.IMREAD_COLOR)
             else:
                 raise ValueError('Format not known.')
+
             # Check image is not None
             if image is None:
                 raise ValueError('Image is None')
+
+            # Check that the proportion of the image is correct
+            if image.shape[0] > image.shape[1]:
+                raise ValueError('Image size is not rectangular')
+
             # Verify that the image size is the same in all images inside a folder
             if image_size is not None and image.shape != image_size:
                 raise ValueError('Image size is not the same')
             elif image_size is None:
                 image_size = image.shape
+
         except Exception as e:
             print('Incorrect image {} - {}'.format(image_path, str(e)))
             if remove_sequence:

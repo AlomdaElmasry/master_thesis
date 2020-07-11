@@ -37,7 +37,7 @@ class ThesisData(skeltorch.Data):
         self.validation_gts_meta = utils.paths.DatasetPaths.get_items(
             dataset_name=self.experiment.configuration.get('data', 'validation_gts_dataset'),
             data_folder=data_path,
-            split='test',
+            split='validation',
             return_masks=False
         )
         self.validation_masks_meta = utils.paths.DatasetPaths.get_items(
@@ -104,7 +104,7 @@ class ThesisData(skeltorch.Data):
             p_simulator_masks=self.experiment.configuration.get('data', 'p_simulator_masks'),
             p_repeat=self.experiment.configuration.get('data', 'p_repeat')
         )
-        self.datasets['validation'] = MaskedSequenceDataset(
+        self.datasets['test'] = MaskedSequenceDataset(
             gts_dataset=gts_datasets[1],
             masks_dataset=masks_datasets[1],
             gts_simulator=None,
@@ -118,7 +118,7 @@ class ThesisData(skeltorch.Data):
             force_resize=self.experiment.configuration.get('data', 'train_resize'),
             keep_ratio=True
         )
-        self.datasets['test'] = MaskedSequenceDataset(
+        self.datasets['validation'] = MaskedSequenceDataset(
             gts_dataset=gts_datasets[2],
             masks_dataset=masks_datasets[1],
             gts_simulator=None,
