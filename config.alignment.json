@@ -1,8 +1,8 @@
 {
   "data": {
-    "train_gts_dataset": "davis-2017",
+    "train_gts_dataset": "got-10k",
     "train_masks_dataset": "youtube-vos",
-    "validation_gts_dataset": "davis-2017",
+    "validation_gts_dataset": "got-10k",
     "validation_masks_dataset": "youtube-vos",
     "test_dataset": "davis-2017",
     "train_resize": false,
@@ -18,7 +18,7 @@
     "dilatation_iterations": 4,
     "p_simulator_gts": 0.50,
     "p_simulator_masks": 0,
-    "gts_movement_params": [25, 0.05, 0.10],
+    "gts_movement_params": [50, 0.10, 0.20],
     "masks_movement_params": [25, 0.05, 0.10],
     "p_repeat": 0
   },
