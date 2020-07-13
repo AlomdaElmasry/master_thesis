@@ -23,7 +23,7 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
         self.model = models.thesis_inpainting.ThesisInpaintingVisible().to(device)
         self.init_model_load_alignment_state(device)
 
-    def init_model_load_alignment_state(self, device, experiment_name='align_v3_1', epoch=45):
+    def init_model_load_alignment_state(self, device, experiment_name='align_double', epoch=66):
         experiment_path = os.path.join(os.path.dirname(self.experiment.paths['experiment']), experiment_name)
         checkpoint_path = os.path.join(experiment_path, 'checkpoints', '{}.checkpoint.pkl'.format(epoch))
         with open(checkpoint_path, 'rb') as checkpoint_file:
@@ -152,9 +152,9 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
         nh_mask = v_target.unsqueeze(2).repeat(1, 1, y_hat.size(2), 1, 1)
         vh_mask = v_map
         nvh_mask = (1 - nh_mask) - vh_mask
-        loss_nh = utils_losses.masked_l1(y_hat, target_img, nh_mask, reduction='sum', weight=1)
+        loss_nh = utils_losses.masked_l1(y_hat, target_img, nh_mask, reduction='sum', weight=0.25)
         loss_vh = utils_losses.masked_l1(y_hat, target_img, vh_mask, reduction='sum', weight=2)
-        loss_nvh = utils_losses.masked_l1(y_hat, target_img, nvh_mask, reduction='sum', weight=0)
+        loss_nvh = utils_losses.masked_l1(y_hat_comp, target_img, nvh_mask, reduction='sum', weight=0)
         loss_perceptual, *_ = utils_losses.perceptual(
             y_hat.transpose(1, 2).reshape(-1, c, h, w), target_img.transpose(1, 2).reshape(-1, c, h, w), weight=1
         )

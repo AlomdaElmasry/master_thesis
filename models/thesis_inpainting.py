@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 class ThesisInpaintingVisible(nn.Module):
     model_type = None
 
-    def __init__(self, in_c=9, model_type='separable'):
+    def __init__(self, in_c=9, model_type='default'):
         super(ThesisInpaintingVisible, self).__init__()
         self.model_type = model_type
         if model_type == 'separable':
@@ -22,21 +22,25 @@ class ThesisInpaintingVisible(nn.Module):
 
         # Normalize the input images
         x_target_norm = (x_target - self.mean.squeeze(2)) / self.std.squeeze(2)
-        x_aligned_norm = (x_ref_aligned - self.mean) / self.std
+        x_ref_aligned_norm = (x_ref_aligned - self.mean) / self.std
+
+        # Combine x_target with the aligned version
+        x_target_inpainted_norm = v_map * x_ref_aligned_norm + \
+                                  (1 - v_map) * x_target_norm.unsqueeze(2).repeat(1, 1, f, 1, 1)
 
         # Predict output depending on the NN
         if self.model_type == 'separable':
             nn_output = self.nn(
                 x_target_norm.unsqueeze(2).repeat(1, 1, f, 1, 1).transpose(1, 2).reshape(b * f, c, h, w),
-                x_aligned_norm.transpose(1, 2).reshape(b * f, c, h, w),
+                x_ref_aligned_norm.transpose(1, 2).reshape(b * f, c, h, w),
                 v_target.unsqueeze(2).repeat(1, 1, f, 1, 1).transpose(1, 2).reshape(b * f, 1, h, w),
                 v_ref_aligned.transpose(1, 2).reshape(b * f, 1, h, w),
                 v_map.transpose(1, 2).reshape(b * f, 1, h, w)
             ).reshape(b, f, c, h, w).transpose(1, 2)
         else:
             nn_input = torch.cat([
-                x_target_norm.unsqueeze(2).repeat(1, 1, f, 1, 1).transpose(1, 2).reshape(b * f, c, h, w),
-                x_aligned_norm.transpose(1, 2).reshape(b * f, c, h, w),
+                x_target_inpainted_norm.transpose(1, 2).reshape(b * f, c, h, w),
+                x_ref_aligned_norm.transpose(1, 2).reshape(b * f, c, h, w),
                 v_target.unsqueeze(2).repeat(1, 1, f, 1, 1).transpose(1, 2).reshape(b * f, 1, h, w),
                 v_ref_aligned.transpose(1, 2).reshape(b * f, 1, h, w),
                 v_map.transpose(1, 2).reshape(b * f, 1, h, w)
