@@ -41,7 +41,7 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
             gamma=self.experiment.configuration.get('training', 'lr_scheduler_gamma')
         )
         self.utils_losses = utils.losses.LossesUtils(self.model_vgg, device)
-        self.losses_items_ids = ['loss_nh', 'loss_vh', 'loss_vh_ref', 'loss_nvh', 'loss_perceptual']
+        self.losses_items_ids = ['loss_nh', 'loss_vh', 'loss_nvh', 'loss_perceptual']
         super().init_others(device)
 
     def train_step(self, it_data, device):
@@ -160,4 +160,4 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
             y_hat.transpose(1, 2).reshape(-1, c, h, w), target_img.transpose(1, 2).reshape(-1, c, h, w), weight=1
         )
         loss = loss_nh + loss_vh + loss_vh_ref + loss_nvh + loss_perceptual
-        return loss, [loss_nh, loss_vh, loss_vh_ref, loss_nvh, loss_perceptual]
+        return loss, [loss_nh, loss_vh, loss_vh_ref, loss_perceptual]
