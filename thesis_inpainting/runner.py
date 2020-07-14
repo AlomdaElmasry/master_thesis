@@ -41,7 +41,7 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
             gamma=self.experiment.configuration.get('training', 'lr_scheduler_gamma')
         )
         self.utils_losses = utils.losses.LossesUtils(self.model_vgg, device)
-        self.losses_items_ids = ['loss_nh', 'loss_vh', 'loss_nvh', 'loss_perceptual']
+        self.losses_items_ids = ['loss_nh', 'loss_vh', 'loss_vh_ref', 'loss_nvh', 'loss_perceptual']
         super().init_others(device)
 
     def train_step(self, it_data, device):
@@ -50,13 +50,13 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
         t, r_list = self.get_indexes(x.size(2))
 
         # Compute t and r_list
-        *_, v_map, y_hat, y_hat_comp = ThesisInpaintingRunner.train_step_propagate(
+        x_ref_aligned, v_ref_aligned, v_map, y_hat, y_hat_comp = ThesisInpaintingRunner.train_step_propagate(
             self.model_alignment, self.model, x[:, :, t], m[:, :, t], y[:, :, t], x[:, :, r_list], m[:, :, r_list]
         )
 
         # Get both total loss and loss items
         loss, loss_items = ThesisInpaintingRunner.compute_loss(
-            self.utils_losses, y[:, :, t], (1 - m)[:, :, t], y_hat, y_hat_comp, v_map
+            self.utils_losses, y[:, :, t], x_ref_aligned, (1 - m)[:, :, t], y_hat, y_hat_comp, v_map
         )
 
         # Append loss items to epoch dictionary
@@ -86,11 +86,11 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
             self.test_sequence(self.test_sequence_individual_handler, 'test_seq_individual', device)
 
     def test_losses_handler(self, x, m, y, flows_use, flow_gt, t, r_list):
-        *_, v_map, y_hat, y_hat_comp = ThesisInpaintingRunner.infer_step_propagate(
+        x_ref_aligned, v_ref_aligned, v_map, y_hat, y_hat_comp = ThesisInpaintingRunner.infer_step_propagate(
             self.model_alignment, self.model, x[:, :, t], m[:, :, t], y[:, :, t], x[:, :, r_list], m[:, :, r_list]
         )
         return ThesisInpaintingRunner.compute_loss(
-            self.utils_losses, y[:, :, t], (1 - m)[:, :, t], y_hat, y_hat_comp, v_map
+            self.utils_losses, y[:, :, t], x_ref_aligned, (1 - m)[:, :, t], y_hat, y_hat_comp, v_map
         )
 
     def test_frames_handler(self, x, m, y, t, r_list):
@@ -146,7 +146,7 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
         return x_ref_aligned, v_ref_aligned, v_map, y_hat, y_hat_comp
 
     @staticmethod
-    def compute_loss(utils_losses, y_target, v_target, y_hat, y_hat_comp, v_map):
+    def compute_loss(utils_losses, y_target, x_ref_aligned, v_target, y_hat, y_hat_comp, v_map):
         b, c, h, w = y_target.size()
         target_img = y_target.unsqueeze(2).repeat(1, 1, y_hat.size(2), 1, 1)
         nh_mask = v_target.unsqueeze(2).repeat(1, 1, y_hat.size(2), 1, 1)
@@ -154,9 +154,10 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
         nvh_mask = (1 - nh_mask) - vh_mask
         loss_nh = utils_losses.masked_l1(y_hat, target_img, nh_mask, reduction='sum', weight=0.25)
         loss_vh = utils_losses.masked_l1(y_hat, target_img, vh_mask, reduction='sum', weight=2)
+        loss_vh_ref = utils_losses.masked_l1(y_hat, x_ref_aligned, vh_mask, reduction='sum', weight=0.10)
         loss_nvh = utils_losses.masked_l1(y_hat_comp, target_img, nvh_mask, reduction='sum', weight=0)
         loss_perceptual, *_ = utils_losses.perceptual(
             y_hat.transpose(1, 2).reshape(-1, c, h, w), target_img.transpose(1, 2).reshape(-1, c, h, w), weight=1
         )
-        loss = loss_nh + loss_vh + loss_nvh + loss_perceptual
-        return loss, [loss_nh, loss_vh, loss_nvh, loss_perceptual]
+        loss = loss_nh + loss_vh + loss_vh_ref + loss_nvh + loss_perceptual
+        return loss, [loss_nh, loss_vh, loss_vh_ref, loss_nvh, loss_perceptual]
