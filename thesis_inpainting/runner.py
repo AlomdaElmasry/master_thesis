@@ -157,7 +157,7 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
         loss_vh_ref = utils_losses.masked_l1(y_hat, x_ref_aligned, vh_mask, reduction='sum', weight=0.10)
         loss_nvh = utils_losses.masked_l1(y_hat_comp, target_img, nvh_mask, reduction='sum', weight=0)
         loss_perceptual, *_ = utils_losses.perceptual(
-            y_hat.transpose(1, 2).reshape(-1, c, h, w), target_img.transpose(1, 2).reshape(-1, c, h, w), weight=1
+            y_hat.transpose(1, 2).reshape(-1, c, h, w), target_img.transpose(1, 2).reshape(-1, c, h, w), weight=0.25
         )
         loss = loss_nh + loss_vh + loss_vh_ref + loss_nvh + loss_perceptual
         return loss, [loss_nh, loss_vh, loss_vh_ref, loss_perceptual]
