@@ -26,7 +26,7 @@ class ThesisData(skeltorch.Data):
             dataset_name=self.experiment.configuration.get('data', 'train_gts_dataset'),
             data_folder=data_path,
             split='train',
-            return_masks=True # Added True
+            return_masks=True  # Added True
         )
         self.train_masks_meta = utils.paths.DatasetPaths.get_items(
             dataset_name=self.experiment.configuration.get('data', 'train_masks_dataset'),
@@ -38,7 +38,7 @@ class ThesisData(skeltorch.Data):
             dataset_name=self.experiment.configuration.get('data', 'validation_gts_dataset'),
             data_folder=data_path,
             split='validation',
-            return_masks=True # Added True
+            return_masks=True  # Added True
         )
         self.validation_masks_meta = utils.paths.DatasetPaths.get_items(
             dataset_name=self.experiment.configuration.get('data', 'validation_masks_dataset'),
@@ -162,7 +162,37 @@ class ThesisData(skeltorch.Data):
         return train_masks_dataset, validation_masks_dataset, None
 
     def load_loaders(self, data_path, num_workers):
-        self.logger.info('Sampling samples from the dataset...')
+        self.loaders['train'] = torch.utils.data.DataLoader(
+            dataset=self.datasets['train'],
+            sampler=torch.utils.data.SubsetRandomSampler(indices=[]),
+            batch_size=self.experiment.configuration.get('training', 'batch_size'),
+            num_workers=num_workers,
+            worker_init_fn=self.load_loaders_fn
+        )
+        self.loaders['validation'] = torch.utils.data.DataLoader(
+            dataset=self.datasets['validation'],
+            sampler=torch.utils.data.SubsetRandomSampler(indices=[]),
+            batch_size=self.experiment.configuration.get('training', 'batch_size'),
+            num_workers=num_workers,
+            worker_init_fn=self.load_loaders_fn
+        )
+        self.loaders['test'] = torch.utils.data.DataLoader(
+            dataset=self.datasets['test'],
+            sampler=torch.utils.data.SubsetRandomSampler(indices=[]),
+            batch_size=self.experiment.configuration.get('training', 'batch_size'),
+            num_workers=num_workers,
+            worker_init_fn=self.load_loaders_fn
+        )
+
+    def load_loaders_fn(self, worker_id):
+        random_seed = random.randint(0, 1E9)
+        random.seed(random_seed)
+        np.random.seed(random_seed)
+        torch.manual_seed(random_seed)
+        torch.cuda.manual_seed_all(random_seed)
+
+    def regenerate_loader_indexes(self):
+        self.logger.info('Regenerating indexes for the data loaders...')
         batch_size = self.experiment.configuration.get('training', 'batch_size')
 
         # Generate training samples of the epoch
@@ -186,22 +216,7 @@ class ThesisData(skeltorch.Data):
         else:
             test_gts_indexes = list(range(len(self.datasets['test'])))
 
-        # Create loader objects
-        self.loaders['train'] = torch.utils.data.DataLoader(
-            dataset=self.datasets['train'],
-            sampler=torch.utils.data.SubsetRandomSampler(indices=train_gts_indexes),
-            batch_size=batch_size,
-            num_workers=0
-        )
-        self.loaders['validation'] = torch.utils.data.DataLoader(
-            dataset=self.datasets['validation'],
-            sampler=torch.utils.data.SubsetRandomSampler(indices=val_gts_indexes),
-            batch_size=batch_size,
-            num_workers=num_workers
-        )
-        self.loaders['test'] = torch.utils.data.DataLoader(
-            dataset=self.datasets['test'],
-            sampler=torch.utils.data.SubsetRandomSampler(indices=test_gts_indexes),
-            batch_size=batch_size,
-            num_workers=num_workers
-        )
+        # Assign the indexes directly
+        self.loaders['train'].sampler.indices = train_gts_indexes
+        self.loaders['validation'].sampler.indices = val_gts_indexes
+        self.loaders['test'].sampler.indices = test_gts_indexes

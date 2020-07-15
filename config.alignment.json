@@ -26,10 +26,10 @@
     "loss_lambdas": [100, 1]
   },
   "training": {
-    "batch_size": 8,
-    "train_max_iterations": 2000,
-    "validation_max_iterations": 20,
-    "test_max_iterations": 20,
+    "batch_size": 4,
+    "train_max_iterations": 3,
+    "validation_max_iterations": 1,
+    "test_max_iterations": 1,
     "lr": 2e-4,
     "lr_scheduler_step_size": 50,
     "lr_scheduler_gamma": 0.5
