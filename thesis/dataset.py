@@ -257,7 +257,8 @@ class MaskedSequenceDataset(torch.utils.data.Dataset):
             )
 
             # If self.gts_dataset and self.masks_dataset are not the same, obtain new mask
-            if self.masks_dataset is not None:
+            # Added if m is None
+            if m is None and self.masks_dataset is not None:
                 masks_n = self.frames_n if self.frames_n != -1 else y.size(1)
                 _, m, m_name, m_indexes, _, m_movement = self.masks_dataset.get_patch_random(
                     masks_n, self.frames_spacing, self.frames_randomize, masks_simulator_item
@@ -272,8 +273,8 @@ class MaskedSequenceDataset(torch.utils.data.Dataset):
             gt_movement = utils.flow.crop_flow(gt_movement.unsqueeze(0), self.image_size, crop_position).squeeze(0)
 
         # Apply Mask transformations
-        if self.image_size != (m.size(2), m.size(3)):
-            m = utils.transforms.ImageTransforms.resize(m, self.image_size, mode='nearest', keep_ratio=self.keep_ratio)
+        if self.image_size != (m.size(2), m.size(3)): # keep_ratio = self.keep_ratio
+            m = utils.transforms.ImageTransforms.resize(m, self.image_size, mode='nearest', keep_ratio=False)
             m_movement = utils.flow.resize_flow(m_movement.unsqueeze(0), self.image_size).squeeze(0)
 
         # Apply a dilatation to the mask

@@ -26,7 +26,7 @@ class ThesisData(skeltorch.Data):
             dataset_name=self.experiment.configuration.get('data', 'train_gts_dataset'),
             data_folder=data_path,
             split='train',
-            return_masks=False
+            return_masks=True # Added True
         )
         self.train_masks_meta = utils.paths.DatasetPaths.get_items(
             dataset_name=self.experiment.configuration.get('data', 'train_masks_dataset'),
