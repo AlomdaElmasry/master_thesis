@@ -4,14 +4,33 @@ import models.rrdb_net
 import matplotlib.pyplot as plt
 
 
+class ThesisInpaintingModel(nn.Module):
+
+    def __init__(self, in_c):
+        super(ThesisInpaintingModel, self).__init__()
+        self.nn = nn.Sequential(
+            nn.Conv2d(in_c, 512, kernel_size=3, stride=1, padding=1), nn.ReLU(),
+            nn.Conv2d(512, 512, kernel_size=3, stride=1, padding=1), nn.ReLU(),
+            nn.Conv2d(512, 512, kernel_size=3, stride=1, padding=1), nn.ReLU(),
+            nn.Conv2d(512, 512, kernel_size=3, stride=1, padding=1), nn.ReLU(),
+            nn.Conv2d(512, 512, kernel_size=3, stride=1, padding=1), nn.ReLU(),
+            nn.Conv2d(512, 3, kernel_size=3, stride=1, padding=1), nn.ReLU(),
+        )
+
+    def forward(self, x):
+        return self.nn(x)
+
+
 class ThesisInpaintingVisible(nn.Module):
     model_type = None
 
-    def __init__(self, in_c=9, model_type='default'):
+    def __init__(self, in_c=9, model_type='simple'):
         super(ThesisInpaintingVisible, self).__init__()
         self.model_type = model_type
         if model_type == 'separable':
             self.nn = models.rrdb_net.RRDBNetSeparable(in_nc=3, out_nc=3, nb=15)
+        elif model_type == 'simple':
+            self.nn = ThesisInpaintingModel(in_c=in_c)
         else:
             self.nn = models.rrdb_net.RRDBNet(in_nc=in_c, out_nc=3, nb=10)
         self.register_buffer('mean', torch.as_tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1, 1))
