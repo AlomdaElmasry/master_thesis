@@ -190,7 +190,7 @@ class ThesisData(skeltorch.Data):
         # Create loader objects
         self.loaders['train'] = torch.utils.data.DataLoader(
             dataset=self.datasets['train'],
-            sampler=torch.utils.data.SubsetRandomSampler(indices=train_gts_indexes),
+            shuffle=True,
             batch_size=batch_size,
             num_workers=num_workers,
             pin_memory=True
