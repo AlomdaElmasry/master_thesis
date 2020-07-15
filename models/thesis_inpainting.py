@@ -9,12 +9,12 @@ class ThesisInpaintingModel(nn.Module):
     def __init__(self, in_c):
         super(ThesisInpaintingModel, self).__init__()
         self.nn = nn.Sequential(
-            nn.Conv2d(in_c, 512, kernel_size=3, stride=1, padding=1), nn.ReLU(),
-            nn.Conv2d(512, 512, kernel_size=3, stride=1, padding=1), nn.ReLU(),
-            nn.Conv2d(512, 512, kernel_size=3, stride=1, padding=1), nn.ReLU(),
-            nn.Conv2d(512, 512, kernel_size=3, stride=1, padding=1), nn.ReLU(),
-            nn.Conv2d(512, 512, kernel_size=3, stride=1, padding=1), nn.ReLU(),
-            nn.Conv2d(512, 3, kernel_size=3, stride=1, padding=1), nn.ReLU(),
+            nn.Conv2d(in_c, 128, kernel_size=3, stride=1, padding=1), nn.ReLU(),
+            nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1), nn.ReLU(),
+            nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1), nn.ReLU(),
+            nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1), nn.ReLU(),
+            nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1), nn.ReLU(),
+            nn.Conv2d(128, 3, kernel_size=3, stride=1, padding=1), nn.ReLU(),
         )
 
     def forward(self, x):
