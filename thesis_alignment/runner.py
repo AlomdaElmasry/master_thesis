@@ -41,6 +41,9 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
     def train_step(self, it_data, device):
         (x, m), y, info = it_data
 
+        # Log flow-4 loss
+        print(info[0])
+
         x, m, y, flows_use, flow_gt = x.to(device), m.to(device), y.to(device), info[2], info[5].to(device)
         t, r_list = self.get_indexes(x.size(2))
 
@@ -57,9 +60,6 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
         e_losses_items = self.e_train_losses_items if self.model.training else self.e_validation_losses_items
         for i, loss_item in enumerate(self.losses_items_ids):
             e_losses_items[loss_item].append(loss_items[i].item())
-
-        # Log flow-64 loss
-        self.logger.info('It {}: Loss: {}'.format(self.counters['train_it'], loss_items[2]))
 
         # Return total loss
         return loss

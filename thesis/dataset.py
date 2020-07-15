@@ -290,7 +290,7 @@ class MaskedSequenceDataset(torch.utils.data.Dataset):
             gt_indexes = ','.join(['-' for _ in range(self.frames_n)])
 
         # Return data
-        return (x, m), y, (gt_name, gt_indexes, use_simulator_gts, use_simulator_masks, repeat_item, gt_movement,
+        return (x, m), y, (item, gt_indexes, use_simulator_gts, use_simulator_masks, repeat_item, gt_movement,
                            m_movement)
 
     def __len__(self):
