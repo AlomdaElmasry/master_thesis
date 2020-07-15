@@ -111,7 +111,7 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
         for t in range(x.size(1)):
             self.logger.info('Step {}/{}'.format(t, x.size(1)))
             x_target, m_target, y_target, y_hat = x[:, t].unsqueeze(0), m[:, t].unsqueeze(0), y[:, t].unsqueeze(0), None
-            t_candidates = ThesisInpaintingRunner.compute_priority_indexes(t, x.size(1), d_step=1, max_d=6)
+            t_candidates = ThesisInpaintingRunner.compute_priority_indexes(t, x.size(1), d_step=1, max_d=2)
             while (len(t_candidates) > 0 and torch.sum(m_target) * 100 / m_target.numel() > 1) or y_hat is None:
                 r_index = [t_candidates.pop(0)]
                 x_ref, m_ref = x[:, r_index].unsqueeze(0), m[:, r_index].unsqueeze(0)
