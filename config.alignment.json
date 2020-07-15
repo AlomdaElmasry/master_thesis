@@ -27,9 +27,9 @@
   },
   "training": {
     "batch_size": 8,
-    "train_max_iterations": 200,
-    "validation_max_iterations": 20,
-    "test_max_iterations": 20,
+    "train_max_iterations": 50,
+    "validation_max_iterations": 10,
+    "test_max_iterations": 10,
     "lr": 1e-4,
     "lr_scheduler_step_size": 50,
     "lr_scheduler_gamma": 0.5
