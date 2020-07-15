@@ -53,8 +53,6 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
             self.model_vgg, self.utils_losses, corr, xs, vs, ys, xs_aligned, flows, flows_gt, flows_use, t, r_list
         )
 
-        print(loss_items[2])
-
         # Append loss items to epoch dictionary
         e_losses_items = self.e_train_losses_items if self.model.training else self.e_validation_losses_items
         for i, loss_item in enumerate(self.losses_items_ids):

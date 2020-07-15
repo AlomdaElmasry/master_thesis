@@ -191,7 +191,7 @@ class ThesisData(skeltorch.Data):
             dataset=self.datasets['train'],
             sampler=torch.utils.data.SubsetRandomSampler(indices=train_gts_indexes),
             batch_size=batch_size,
-            num_workers=num_workers
+            num_workers=0
         )
         self.loaders['validation'] = torch.utils.data.DataLoader(
             dataset=self.datasets['validation'],
