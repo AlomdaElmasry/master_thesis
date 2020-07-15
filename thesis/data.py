@@ -164,6 +164,7 @@ class ThesisData(skeltorch.Data):
     def load_loaders(self, data_path, num_workers):
         self.logger.info('Sampling samples from the dataset...')
         batch_size = self.experiment.configuration.get('training', 'batch_size')
+        batch_size = 2
 
         # Generate training samples of the epoch
         train_max_items = batch_size * self.experiment.configuration.get('training', 'train_max_iterations')
