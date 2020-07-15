@@ -41,9 +41,6 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
     def train_step(self, it_data, device):
         (x, m), y, info = it_data
 
-        # Log flow-4 loss
-        print(info[0])
-
         x, m, y, flows_use, flow_gt = x.to(device), m.to(device), y.to(device), info[2], info[5].to(device)
         t, r_list = self.get_indexes(x.size(2))
 
@@ -55,6 +52,8 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
         loss, loss_items = ThesisAlignmentRunner.compute_loss(
             self.model_vgg, self.utils_losses, corr, xs, vs, ys, xs_aligned, flows, flows_gt, flows_use, t, r_list
         )
+
+        print(loss_items[2])
 
         # Append loss items to epoch dictionary
         e_losses_items = self.e_train_losses_items if self.model.training else self.e_validation_losses_items
