@@ -59,7 +59,7 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
             e_losses_items[loss_item].append(loss_items[i].item())
 
         # Log flow-64 loss
-        self.logger.info('It {}: Loss: {}'.format(self.counters['iteration'], loss_items[2]))
+        self.logger.info('It {}: Loss: {}'.format(self.counters['train_it'], loss_items[2]))
 
         # Return total loss
         return loss
