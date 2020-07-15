@@ -23,7 +23,7 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
         self.model = models.thesis_inpainting.ThesisInpaintingVisible().to(device)
         self.init_model_load_alignment_state(device)
 
-    def init_model_load_alignment_state(self, device, experiment_name='align_double', epoch=66):
+    def init_model_load_alignment_state(self, device, experiment_name='align_double', epoch=64):
         experiment_path = os.path.join(os.path.dirname(self.experiment.paths['experiment']), experiment_name)
         checkpoint_path = os.path.join(experiment_path, 'checkpoints', '{}.checkpoint.pkl'.format(epoch))
         with open(checkpoint_path, 'rb') as checkpoint_file:
@@ -69,6 +69,13 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
 
     def test(self, epoch, device):
         self.model.eval()
+
+        # Inpainting with hard alignment if required
+        if epoch == 0:
+            self.test_sequence(self.test_sequence_individual_hard_handler, 'test_seq_individual_hard', device)
+            exit()
+
+        # If epoch != 0, loadit
         if epoch is not None:
             self.load_states(epoch, device)
 
@@ -97,6 +104,25 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
         return ThesisInpaintingRunner.infer_step_propagate(
             self.model_alignment, self.model, x[:, :, t], m[:, :, t], y[:, :, t], x[:, :, r_list], m[:, :, r_list]
         )
+
+    def test_sequence_individual_hard_handler(self, x, m, y):
+        fill_color = torch.as_tensor([0.485, 0.456, 0.406], dtype=torch.float32).view(1, 3, 1, 1).to(x.device)
+        y_inpainted = torch.zeros_like(x)
+        for t in range(x.size(1)):
+            x_target, m_target, y_target, y_hat = x[:, t].unsqueeze(0), m[:, t].unsqueeze(0), y[:, t].unsqueeze(0), None
+            t_candidates = ThesisInpaintingRunner.compute_priority_indexes(t, x.size(1), d_step=1, max_d=6)
+            while (len(t_candidates) > 0 and torch.sum(m_target) * 100 / m_target.numel() > 1) or y_hat is None:
+                r_index = [t_candidates.pop(0)]
+                x_ref, m_ref = x[:, r_index].unsqueeze(0), m[:, r_index].unsqueeze(0)
+                x_ref_aligned, v_ref_aligned, v_map = thesis_alignment.runner.ThesisAlignmentRunner.infer_step_propagate(
+                    self.model_alignment, x_target, m_target, x_ref, m_ref
+                )
+                y_hat = (1 - m_target) * x_target + v_map[:, :, 0] * x_ref_aligned[:, :, 0]
+                m_target = m_target - v_map[:, :, 0]
+                x_target = (1 - m_target) * y_hat + m_target.repeat(1, 3, 1, 1) * fill_color
+                y_target = (1 - m_target) * y_hat + m_target.repeat(1, 3, 1, 1) * y_target
+            y_inpainted[:, t] = x_target
+        return y_inpainted
 
     def test_sequence_individual_handler(self, x, m, y):
         fill_color = torch.as_tensor([0.485, 0.456, 0.406], dtype=torch.float32).view(1, 3, 1, 1).to(x.device)
