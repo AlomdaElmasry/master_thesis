@@ -60,10 +60,10 @@ class LossesUtils:
         loss_tv = (loss_tv_h + loss_tv_w) / (x_hat.size(0) * x_hat.size(1) * x_hat.size(2) * x_hat.size(3))
         return loss_tv * weight
 
-    def grad(self, x, x_hat, mask, reduction, weight=1):
-        x_grads = torch.cat((self._grad_horizontal(x), self._grad_vertical(x)), dim=1)
-        x_hat_grads = torch.cat((self._grad_horizontal(x_hat), self._grad_vertical(x_hat)), dim=1)
-        return self.masked_l1(x_grads, x_hat_grads, mask, reduction, weight)
+    def grad(self, input, target, mask, reduction, weight=1):
+        input_grads = torch.cat((self._grad_horizontal(input), self._grad_vertical(input)), dim=1)
+        target_grads = torch.cat((self._grad_horizontal(target), self._grad_vertical(target)), dim=1)
+        return self.masked_l1(input_grads, target_grads, mask, reduction, weight)
 
     def _grad_horizontal(self, x):
         return F.conv2d(x, padding=1, weight=self.grad_horz, groups=3)

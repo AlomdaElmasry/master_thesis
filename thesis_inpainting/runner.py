@@ -41,7 +41,7 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
             gamma=self.experiment.configuration.get('training', 'lr_scheduler_gamma')
         )
         self.utils_losses = utils.losses.LossesUtils(self.model_vgg, device)
-        self.losses_items_ids = ['loss_nh', 'loss_vh', 'loss_nvh', 'loss_perceptual']
+        self.losses_items_ids = ['loss_nh', 'loss_vh', 'loss_nvh', 'loss_perceptual', 'loss_grad']
         super().init_others(device)
 
     def train_step(self, it_data, device):
@@ -152,12 +152,12 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
         nh_mask = v_target.unsqueeze(2).repeat(1, 1, y_hat.size(2), 1, 1)
         vh_mask = v_map
         nvh_mask = (1 - nh_mask) - vh_mask
-        loss_nh = utils_losses.masked_l1(y_hat, target_img, nh_mask, reduction='sum', weight=0.25)
+        loss_nh = utils_losses.masked_l1(y_hat, target_img, nh_mask, reduction='sum', weight=0.50)
         loss_vh = utils_losses.masked_l1(y_hat, target_img, vh_mask, reduction='sum', weight=2)
-        loss_vh_ref = utils_losses.masked_l1(y_hat, x_ref_aligned, vh_mask, reduction='sum', weight=0.10)
         loss_nvh = utils_losses.masked_l1(y_hat_comp, target_img, nvh_mask, reduction='sum', weight=0)
         loss_perceptual, *_ = utils_losses.perceptual(
-            y_hat.transpose(1, 2).reshape(-1, c, h, w), target_img.transpose(1, 2).reshape(-1, c, h, w), weight=0.25
+            y_hat.transpose(1, 2).reshape(-1, c, h, w), target_img.transpose(1, 2).reshape(-1, c, h, w), weight=0.50
         )
-        loss = loss_nh + loss_vh + loss_vh_ref + loss_nvh + loss_perceptual
-        return loss, [loss_nh, loss_vh, loss_vh_ref, loss_perceptual]
+        loss_grad = utils_losses.grad(y_hat.squeeze(2), target_img.squeeze(2), 1, reduction='mean', weight=1)
+        loss = loss_nh + loss_vh + loss_nvh + loss_perceptual + loss_grad
+        return loss, [loss_nh, loss_vh, loss_nvh, loss_perceptual, loss_grad]
