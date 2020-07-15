@@ -63,7 +63,7 @@ class LossesUtils:
     def grad(self, input, target, reduction, weight=1):
         input_grads = torch.cat((self._grad_horizontal(input), self._grad_vertical(input)), dim=1)
         target_grads = torch.cat((self._grad_horizontal(target), self._grad_vertical(target)), dim=1)
-        mask = torch.ones_like(input).to(input.device)
+        mask = torch.ones_like(input_grads).to(input.device)
         return self.masked_l1(input_grads, target_grads, mask, batch_mask=None, reduction=reduction, weight=weight)
 
     def _grad_horizontal(self, x):
