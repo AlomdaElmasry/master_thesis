@@ -41,12 +41,12 @@ class MovementSimulator:
         affine_matrices_inv = [MovementSimulator.affine_inverse(affine_mat) for affine_mat in affine_matrices]
 
         # Stack matrices
-        affine_matrices, affine_matrices_inv = torch.stack(affine_matrices), torch.stack(affine_matrices_inv)
+        affine_matrices_s, affine_matrices_inv = torch.stack(affine_matrices), torch.stack(affine_matrices_inv)
 
         # Stack affine transformations with respect to the central frame
-        affine_matrices = MovementSimulator.stack_transformations(affine_matrices, t=n // 2)
+        affine_matrices_s = MovementSimulator.stack_transformations(affine_matrices_s, t=n // 2)
         affine_matrices_inv = MovementSimulator.stack_transformations(affine_matrices_inv, t=n // 2)
-        affine_matrices_theta = torch.stack([MovementSimulator.affine2theta(ra, h, w) for ra in affine_matrices])
+        affine_matrices_theta = torch.stack([MovementSimulator.affine2theta(ra, h, w) for ra in affine_matrices_s])
         affine_matrices_inv_theta = torch.stack([
             MovementSimulator.affine2theta(ra, h, w) for ra in affine_matrices_inv])
 
@@ -58,7 +58,7 @@ class MovementSimulator:
         y = F.grid_sample(x.unsqueeze(0).repeat(n, 1, 1, 1), flow, align_corners=True)
 
         # Return both data_out and random_thetas_stacked
-        return y.permute(1, 0, 2, 3), flow_inv
+        return y.permute(1, 0, 2, 3), flow_inv, affine_matrices
 
     @staticmethod
     def identity_affine():

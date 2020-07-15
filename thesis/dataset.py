@@ -167,9 +167,9 @@ class ContentProvider(torch.utils.data.Dataset):
             if self.gts_movement_min_height != -1 and y.size(1) < self.gts_movement_min_height:
                 y = utils.transforms.ImageTransforms.resize(y.unsqueeze(1), (self.gts_movement_min_height, -1))
                 y = y.squeeze(1)
-            y, gt_movement = movement_simulator.simulate_movement(y, frames_n, gt_movement)
+            y, gt_movement, affine_transform = movement_simulator.simulate_movement(y, frames_n, gt_movement)
         if m is not None:
-            m, m_movement = movement_simulator.simulate_movement(m, frames_n, gt_movement)
+            m, m_movement, _ = movement_simulator.simulate_movement(m, frames_n, affine_transform)
         return y, m, item_name, None, gt_movement, m_movement
 
     def _load_data_in_ram(self):
