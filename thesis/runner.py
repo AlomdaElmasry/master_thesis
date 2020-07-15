@@ -176,7 +176,6 @@ class ThesisRunner(skeltorch.Runner):
                 sample = np.concatenate((sample, y_hat_trivial_sample), axis=2)
             if include_y_hat:
                 y_hat_sample = np.insert(arr=y_hat_tbx[b], obj=t, values=y_tbx[b, :, t], axis=1)
-                y_hat_sample = utils.draws.add_border(y_hat_sample, m_tbx[b, :, t])
                 sample = np.concatenate((sample, y_hat_sample), axis=2)
             if include_y_hat_comp:
                 y_hat_comp_sample = np.insert(arr=y_hat_comp_tbx[b], obj=t, values=y_tbx[b, :, t], axis=1)
