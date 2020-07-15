@@ -180,8 +180,7 @@ class ThesisData(skeltorch.Data):
             val_gts_indexes = list(range(len(self.datasets['validation'])))
 
         # Generate test samples of the epoch
-        test_max_items = batch_size * 200
-        #test_max_items = batch_size * self.experiment.configuration.get('training', 'test_max_iterations')
+        test_max_items = batch_size * self.experiment.configuration.get('training', 'test_max_iterations')
         if len(self.datasets['test']) > test_max_items:
             test_gts_indexes = random.sample(list(range(len(self.datasets['test']))), test_max_items)
         else:
@@ -190,7 +189,7 @@ class ThesisData(skeltorch.Data):
         # Create loader objects
         self.loaders['train'] = torch.utils.data.DataLoader(
             dataset=self.datasets['train'],
-            shuffle=True,
+            sampler=torch.utils.data.SubsetRandomSampler(indices=train_gts_indexes),
             batch_size=batch_size,
             num_workers=num_workers
         )
