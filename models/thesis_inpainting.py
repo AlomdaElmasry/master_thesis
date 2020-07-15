@@ -20,7 +20,7 @@ class ThesisInpaintingModel(nn.Module):
             nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1), nn.ReLU(),
             nn.ConvTranspose2d(256, 256, kernel_size=3, padding=1, output_padding=1, stride=2), nn.ReLU(),
             nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1), nn.ReLU(),
-            nn.Conv2d(256, 3, kernel_size=3, stride=1, padding=1), nn.ReLU(),
+            nn.Conv2d(256, 3, kernel_size=3, stride=1, padding=1),
         )
 
     def forward(self, x):

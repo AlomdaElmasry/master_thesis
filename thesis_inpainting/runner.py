@@ -23,7 +23,7 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
         self.model = models.thesis_inpainting.ThesisInpaintingVisible().to(device)
         self.init_model_load_alignment_state(device)
 
-    def init_model_load_alignment_state(self, device, experiment_name='align_double', epoch=66):
+    def init_model_load_alignment_state(self, device, experiment_name='align_double', epoch=64):
         experiment_path = os.path.join(os.path.dirname(self.experiment.paths['experiment']), experiment_name)
         checkpoint_path = os.path.join(experiment_path, 'checkpoints', '{}.checkpoint.pkl'.format(epoch))
         with open(checkpoint_path, 'rb') as checkpoint_file:
