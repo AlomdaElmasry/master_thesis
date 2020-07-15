@@ -158,6 +158,6 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
         loss_perceptual, *_ = utils_losses.perceptual(
             y_hat.transpose(1, 2).reshape(-1, c, h, w), target_img.transpose(1, 2).reshape(-1, c, h, w), weight=0.50
         )
-        loss_grad = utils_losses.grad(y_hat.squeeze(2), target_img.squeeze(2), None, reduction='mean', weight=1)
+        loss_grad = utils_losses.grad(y_hat.squeeze(2), target_img.squeeze(2), reduction='mean', weight=1)
         loss = loss_nh + loss_vh + loss_nvh + loss_perceptual + loss_grad
         return loss, [loss_nh, loss_vh, loss_nvh, loss_perceptual, loss_grad]
