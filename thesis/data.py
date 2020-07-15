@@ -192,20 +192,17 @@ class ThesisData(skeltorch.Data):
             dataset=self.datasets['train'],
             shuffle=True,
             batch_size=batch_size,
-            num_workers=num_workers,
-            pin_memory=True
+            num_workers=num_workers
         )
         self.loaders['validation'] = torch.utils.data.DataLoader(
             dataset=self.datasets['validation'],
             sampler=torch.utils.data.SubsetRandomSampler(indices=val_gts_indexes),
             batch_size=batch_size,
-            num_workers=num_workers,
-            pin_memory=True
+            num_workers=num_workers
         )
         self.loaders['test'] = torch.utils.data.DataLoader(
             dataset=self.datasets['test'],
             sampler=torch.utils.data.SubsetRandomSampler(indices=test_gts_indexes),
             batch_size=batch_size,
-            num_workers=num_workers,
-            pin_memory=True
+            num_workers=num_workers
         )
