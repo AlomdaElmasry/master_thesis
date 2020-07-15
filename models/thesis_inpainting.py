@@ -51,11 +51,12 @@ class ThesisInpaintingVisible(nn.Module):
 
         # Transform masks sizes
         v_target = v_target.unsqueeze(2).repeat(1, 1, f, 1, 1)
+        y_target = y_target.unsqueeze(2).repeat(1, 1, f, 1, 1)
 
         # Combine x_target with the aligned version
         x_target_inpainted_norm = v_map * x_ref_aligned_norm + \
                                   (1 - v_map) * x_target_norm.unsqueeze(2).repeat(1, 1, f, 1, 1)
-        v_target = torch.clamp(v_target + v_map, 0, 1)
+        v_target_c = torch.clamp(v_target + v_map, 0, 1)
 
         # Predict output depending on the NN
         if self.model_type == 'separable':
@@ -67,13 +68,12 @@ class ThesisInpaintingVisible(nn.Module):
                 v_map.transpose(1, 2).reshape(b * f, 1, h, w)
             ).reshape(b, f, c, h, w).transpose(1, 2)
         else:
-            nn_input = torch.cat([x_target_inpainted_norm, x_ref_aligned_norm, v_target, v_ref_aligned, v_map], dim=1)
+            nn_input = torch.cat([x_target_inpainted_norm, x_ref_aligned_norm, v_target_c, v_ref_aligned, v_map], dim=1)
             nn_output = self.nn(nn_input.transpose(1, 2).reshape(b * f, 9, h, w)).reshape(b, f, c, h, w).transpose(1, 2)
 
         # Propagate data through the NN
         y_hat = torch.clamp(nn_output * self.std + self.mean, 0, 1)
-        y_hat_comp = (y_target * v_target).unsqueeze(2).repeat(1, 1, f, 1, 1) + \
-                     y_hat * (1 - v_target).unsqueeze(2).repeat(1, 1, f, 1, 1)
+        y_hat_comp = v_target * y_target + y_hat * (1 - v_target)
 
         # Return the data
         return y_hat, y_hat_comp
