@@ -47,7 +47,7 @@ class ContentProvider(torch.utils.data.Dataset):
         sequence_index = next(x[0] for x in enumerate(self.items_limits) if x[1] > frame_index)
         frame_index_bis = frame_index - (self.items_limits[sequence_index - 1] if sequence_index > 0 else 0)
         y = self._get_item_background(sequence_index, frame_index_bis)
-        m = self._get_item_mask(sequence_index, frame_index_bis, y.shape)
+        m = self._get_item_mask(sequence_index, frame_index_bis, y.shape if y is not None else None)
         return y, m, self.items_names[sequence_index]
 
     def _get_item_background(self, sequence_index, frame_index_bis):
