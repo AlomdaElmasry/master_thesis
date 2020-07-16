@@ -68,7 +68,7 @@ class ThesisInpaintingVisible(nn.Module):
                 v_map.transpose(1, 2).reshape(b * f, 1, h, w)
             ).reshape(b, f, c, h, w).transpose(1, 2)
         else:
-            nn_input = torch.cat([x_target_inpainted_norm, x_ref_aligned_norm, v_target_c, v_ref_aligned, v_map], dim=1)
+            nn_input = torch.cat([x_target_inpainted_norm, x_ref_aligned_norm, v_target, v_ref_aligned, v_map], dim=1)
             nn_output = self.nn(nn_input.transpose(1, 2).reshape(b * f, 9, h, w)).reshape(b, f, c, h, w).transpose(1, 2)
 
         # Propagate data through the NN
