@@ -70,7 +70,7 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
         self.test_losses(self.test_losses_handler, self.losses_items_ids, device)
 
         # Inpaint individual frames on the test set
-        if self.counters['epoch'] % 5 == 0:
+        if self.counters['epoch'] % 1 == 0:
             self.test_frames(self.test_frames_handler, 'validation', device, include_y_hat=False, include_y_hat_comp=False)
             self.test_frames(self.test_frames_handler, 'test', device, include_y_hat=False, include_y_hat_comp=False)
 
