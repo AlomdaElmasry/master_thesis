@@ -8,6 +8,7 @@ import utils.transforms
 import matplotlib.pyplot as plt
 import utils.flow
 import torch.nn.functional as F
+import skimage.draw
 
 
 class ContentProvider(torch.utils.data.Dataset):
@@ -46,7 +47,7 @@ class ContentProvider(torch.utils.data.Dataset):
         sequence_index = next(x[0] for x in enumerate(self.items_limits) if x[1] > frame_index)
         frame_index_bis = frame_index - (self.items_limits[sequence_index - 1] if sequence_index > 0 else 0)
         y = self._get_item_background(sequence_index, frame_index_bis)
-        m = self._get_item_mask(sequence_index, frame_index_bis)
+        m = self._get_item_mask(sequence_index, frame_index_bis, y.shape)
         return y, m, self.items_names[sequence_index]
 
     def _get_item_background(self, sequence_index, frame_index_bis):
@@ -64,7 +65,7 @@ class ContentProvider(torch.utils.data.Dataset):
         item_path = os.path.join(self.data_folder, self.dataset_meta[item_name][0][frame_index_bis])
         return torch.from_numpy(jpeg.JPEG(item_path).decode() / 255).permute(2, 0, 1).float()
 
-    def _get_item_mask(self, sequence_index, frame_index_bis):
+    def _get_item_mask(self, sequence_index, frame_index_bis, frame_size):
         """Returns the mask associated to frame `frame_index_bis` of `sequence_index`. It will return None if the path
         at that position is None.
 
@@ -74,10 +75,20 @@ class ContentProvider(torch.utils.data.Dataset):
         item_name = self.items_names[sequence_index]
         if self.dataset_meta[item_name][1] is None:
             return None
-        if self._ram_data is not None and self._ram_data[item_name][1][frame_index_bis] is not None:
+        elif type(self.dataset_meta[item_name][1][frame_index_bis]) is list:
+            return self._get_item_mask_got(self.dataset_meta[item_name][1][frame_index_bis], frame_size)
+        elif self._ram_data is not None and self._ram_data[item_name][1][frame_index_bis] is not None:
             return self._ram_data[item_name][1][frame_index_bis]
         item_path = os.path.join(self.data_folder, self.dataset_meta[item_name][1][frame_index_bis])
         return torch.from_numpy(cv2.imread(item_path, cv2.IMREAD_GRAYSCALE) / 255 > 0).float()
+
+    def _get_item_mask_got(self, mask_coords, frame_size):
+        m, m_coords = np.zeros((frame_size[1], frame_size[2])), list(map(int, map(float, mask_coords)))
+        rr, cc = skimage.draw.rectangle(
+            (m_coords[1], m_coords[0]), extent=(m_coords[3], m_coords[2]), shape=(frame_size[1], frame_size[2])
+        )
+        m[rr, cc] = 1
+        return torch.from_numpy(m)
 
     def get_items(self, frames_indexes):
         y, m = None, None
@@ -273,7 +284,7 @@ class MaskedSequenceDataset(torch.utils.data.Dataset):
             gt_movement = utils.flow.crop_flow(gt_movement.unsqueeze(0), self.image_size, crop_position).squeeze(0)
 
         # Apply Mask transformations
-        if self.image_size != (m.size(2), m.size(3)): # keep_ratio = self.keep_ratio
+        if self.image_size != (m.size(2), m.size(3)):  # keep_ratio = self.keep_ratio
             m = utils.transforms.ImageTransforms.resize(m, self.image_size, mode='nearest', keep_ratio=False)
             m_movement = utils.flow.resize_flow(m_movement.unsqueeze(0), self.image_size).squeeze(0)
 

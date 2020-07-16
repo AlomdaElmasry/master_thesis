@@ -10,7 +10,7 @@ class DatasetPaths:
         if dataset_name == 'davis-2017':
             return DatasetPaths.get_davis(data_folder, return_gts, return_masks)
         elif dataset_name == 'got-10k':
-            return DatasetPaths.get_got10k(data_folder, split)
+            return DatasetPaths.get_got10k(data_folder, split, return_gts, return_masks)
         elif dataset_name == 'youtube-vos':
             return DatasetPaths.get_youtube_vos(data_folder, split, return_gts, return_masks)
 
@@ -33,7 +33,7 @@ class DatasetPaths:
         return items_meta
 
     @staticmethod
-    def get_got10k(data_folder, split):
+    def get_got10k(data_folder, split, return_gts, return_masks):
         dataset_folder = os.path.join(data_folder, 'GOT10k')
         split_folder = 'train' if split == 'train' else 'val' if split == 'validation' else 'test'
         items_file = open(os.path.join(dataset_folder, split_folder, 'list.txt'))
@@ -42,8 +42,13 @@ class DatasetPaths:
             if os.path.exists(os.path.join(dataset_folder, split_folder, item_name)):
                 item_gts_paths = sorted(glob.glob(os.path.join(dataset_folder, split_folder, item_name, '*.jpg')))
                 item_gts_paths = [os.path.relpath(path, data_folder) for path in item_gts_paths]
+                if return_masks:
+                    gt_path = os.path.join(dataset_folder, split_folder, item_name, 'groundtruth.txt')
+                    item_masks_path = [line.rstrip().split(',') for line in open(gt_path, 'r').readlines()]
+                else:
+                    item_masks_path = None
                 if len(item_gts_paths) > 0:
-                    items_meta[item_name] = (item_gts_paths, None)
+                    items_meta[item_name] = (item_gts_paths, item_masks_path)
         return items_meta
 
     @staticmethod
