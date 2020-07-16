@@ -36,6 +36,7 @@ class DatasetPaths:
     def get_got10k(data_folder, split, return_gts, return_masks):
         dataset_folder = os.path.join(data_folder, 'GOT10k')
         split_folder = 'train' if split == 'train' else 'val' if split == 'validation' else 'test'
+        split_folder = 'val_with_mask' if split == 'validation' and return_masks else split_folder
         items_file = open(os.path.join(dataset_folder, split_folder, 'list.txt'))
         items_meta = {}
         for item_name in sorted(items_file.read().splitlines()):
