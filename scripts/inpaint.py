@@ -43,9 +43,6 @@ checkpoint_path = os.path.join(experiment_path, 'checkpoints', '{}.checkpoint.pk
 with open(checkpoint_path, 'rb') as checkpoint_file:
     model.load_state_dict(torch.load(checkpoint_file, map_location=args.device)['model'])
 
-# Create handler to save the video
-frames_to_video = utils.FramesToVideo(0, 10, None)
-
 # Iterate over the data
 for it_data in dataset:
     (x, m), y, info = it_data
@@ -53,6 +50,7 @@ for it_data in dataset:
     y_inpainted = thesis_inpainting.runner.ThesisInpaintingRunner.test_sequence_individual_handler(
         x, m, y, model_alignment, model
     )
+    frames_to_video = utils.FramesToVideo(0, 10, None)
     frames_to_video.add_sequence(y_inpainted.cpu().numpy().transpose(1, 2, 3, 0) * 255)
     frames_to_video.save(args.results_path, info[0])
     print('Video saved')
