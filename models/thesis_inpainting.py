@@ -55,9 +55,9 @@ class ThesisInpaintingVisible(nn.Module):
         x_ref_aligned_norm = (x_ref_aligned - self.mean) / self.std
 
         # Combine x_target with the aligned version
-        x_target_inpainted_norm = v_map * x_ref_aligned_norm + \
-                                  (1 - v_map) * x_target_norm.unsqueeze(2).repeat(1, 1, f, 1, 1)
-        v_target_c = torch.clamp(v_target + v_map, 0, 1)
+        # x_target_inpainted_norm = v_map * x_ref_aligned_norm + \
+                                # (1 - v_map) * x_target_norm.unsqueeze(2).repeat(1, 1, f, 1, 1)
+        # v_target_c = torch.clamp(v_target + v_map, 0, 1)
 
         # Predict output depending on the NN
         if self.model_type == 'separable':
