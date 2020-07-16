@@ -176,6 +176,8 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
     @staticmethod
     def compute_loss(utils_losses, y_target, x_ref_aligned, v_target, y_hat, y_hat_comp, v_map):
         b, c, h, w = y_target.size()
+        plt.imshow(y_target[0].permute(1, 2 ,0))
+        plt.show()
         target_img = y_target.unsqueeze(2).repeat(1, 1, y_hat.size(2), 1, 1)
         nh_mask = v_target.unsqueeze(2).repeat(1, 1, y_hat.size(2), 1, 1)
         vh_mask = v_map
