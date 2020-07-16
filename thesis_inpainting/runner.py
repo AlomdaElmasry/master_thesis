@@ -85,8 +85,9 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
         # Compute objective measures
 
         # Inpaint individual frames on the test set
-        self.test_frames(self.test_frames_handler, 'validation', device)
-        self.test_frames(self.test_frames_handler, 'test', device)
+        if self.counters['epoch'] % 5 == 0:
+            self.test_frames(self.test_frames_handler, 'validation', device)
+            self.test_frames(self.test_frames_handler, 'test', device)
 
         # Inpaint test sequences every 10 epochs
         if epoch is not None or self.counters['epoch'] % 25 == 0:
