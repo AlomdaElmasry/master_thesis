@@ -29,7 +29,7 @@ dataset = thesis.dataset.MaskedSequenceDataset(
 # Load the models
 model_vgg = models.vgg_16.get_pretrained_model(args.device)
 model_alignment = models.thesis_alignment.ThesisAlignmentModel(model_vgg).to(args.device)
-model = models.thesis_inpainting.ThesisInpaintingVisible()
+model = models.thesis_inpainting.ThesisInpaintingVisible().to(args.device)
 
 # Load aligner checkpoint
 experiment_path = os.path.join(args.experiments_path, 'align_double')
