@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import thesis_inpainting.runner
 import models.vgg_16
 import models.thesis_alignment
+import models.thesis_inpainting
 import os.path
 
 parser = argparse.ArgumentParser(description='Cleans invalid images')
@@ -28,13 +29,19 @@ dataset = thesis.dataset.MaskedSequenceDataset(
 # Load the models
 model_vgg = models.vgg_16.get_pretrained_model(args.device)
 model_alignment = models.thesis_alignment.ThesisAlignmentModel(model_vgg).to(args.device)
-model = None
+model = models.thesis_inpainting.ThesisInpaintingVisible()
 
-# Load the checkpoints
+# Load aligner checkpoint
 experiment_path = os.path.join(args.experiments_path, 'align_double')
 checkpoint_path = os.path.join(experiment_path, 'checkpoints', '{}.checkpoint.pkl'.format(64))
 with open(checkpoint_path, 'rb') as checkpoint_file:
     model_alignment.load_state_dict(torch.load(checkpoint_file, map_location=args.device)['model'])
+
+# Load inpainting checkpoint
+experiment_path = os.path.join(args.experiments_path, 'inpaint_double')
+checkpoint_path = os.path.join(experiment_path, 'checkpoints', '{}.checkpoint.pkl'.format(136))
+with open(checkpoint_path, 'rb') as checkpoint_file:
+    model.load_state_dict(torch.load(checkpoint_file, map_location=args.device)['model'])
 
 # Create handler to save the video
 frames_to_video = utils.FramesToVideo(0, 10, None)
@@ -43,7 +50,7 @@ frames_to_video = utils.FramesToVideo(0, 10, None)
 for it_data in dataset:
     (x, m), y, info = it_data
     x, m, y = x.to(args.device), m.to(args.device), y.to(args.device)
-    y_inpainted = thesis_inpainting.runner.ThesisInpaintingRunner.test_sequence_individual_hard_handler(
+    y_inpainted = thesis_inpainting.runner.ThesisInpaintingRunner.test_sequence_individual_handler(
         x, m, y, model_alignment, model
     )
     frames_to_video.add_sequence(y_inpainted.cpu().numpy().transpose(1, 2, 3, 0) * 255)
