@@ -1,9 +1,9 @@
 {
   "data": {
     "train_gts_dataset": "davis-2017",
-    "train_masks_dataset": "davis-2017",
+    "train_masks_dataset": "youtube-vos",
     "validation_gts_dataset": "davis-2017",
-    "validation_masks_dataset": "davis-2017",
+    "validation_masks_dataset": "youtube-vos",
     "test_dataset": "davis-2017",
     "train_resize": true,
     "min_mask_size": 0.05,
