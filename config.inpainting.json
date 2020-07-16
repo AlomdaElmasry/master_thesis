@@ -5,7 +5,7 @@
     "validation_gts_dataset": "davis-2017",
     "validation_masks_dataset": "davis-2017",
     "test_dataset": "davis-2017",
-    "train_resize": false,
+    "train_resize": true,
     "min_mask_size": 0.05,
     "max_mask_size": 0.15,
     "validation_split": 0.2,
