@@ -45,13 +45,14 @@ class ThesisInpaintingVisible(nn.Module):
     def forward(self, x_target, v_target, y_target, x_ref_aligned, v_ref_aligned, v_map):
         b, c, f, h, w = x_ref_aligned.size()
 
-        # Normalize the input images
-        x_target_norm = (x_target - self.mean.squeeze(2)) / self.std.squeeze(2)
-        x_ref_aligned_norm = (x_ref_aligned - self.mean) / self.std
-
-        # Transform masks sizes
+        # Unsqueeze dimensions
+        x_target = x_target.unsqueeze(2).repeat(1, 1, f, 1, 1)
         v_target = v_target.unsqueeze(2).repeat(1, 1, f, 1, 1)
         y_target = y_target.unsqueeze(2).repeat(1, 1, f, 1, 1)
+
+        # Normalize the input images
+        x_target_norm = (x_target - self.mean) / self.std
+        x_ref_aligned_norm = (x_ref_aligned - self.mean) / self.std
 
         # Combine x_target with the aligned version
         x_target_inpainted_norm = v_map * x_ref_aligned_norm + \
