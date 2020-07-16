@@ -30,7 +30,7 @@ class ThesisInpaintingModel(nn.Module):
 class ThesisInpaintingVisible(nn.Module):
     model_type = None
 
-    def __init__(self, in_c=9, model_type='simple'):
+    def __init__(self, in_c=9, model_type='rrdb'):
         super(ThesisInpaintingVisible, self).__init__()
         self.model_type = model_type
         if model_type == 'separable':
@@ -63,7 +63,7 @@ class ThesisInpaintingVisible(nn.Module):
             nn_output = self.nn(
                 x_target_norm.unsqueeze(2).repeat(1, 1, f, 1, 1).transpose(1, 2).reshape(b * f, c, h, w),
                 x_ref_aligned_norm.transpose(1, 2).reshape(b * f, c, h, w),
-                v_target.unsqueeze(2).repeat(1, 1, f, 1, 1).transpose(1, 2).reshape(b * f, 1, h, w),
+                v_target.transpose(1, 2).reshape(b * f, 1, h, w),
                 v_ref_aligned.transpose(1, 2).reshape(b * f, 1, h, w),
                 v_map.transpose(1, 2).reshape(b * f, 1, h, w)
             ).reshape(b, f, c, h, w).transpose(1, 2)
