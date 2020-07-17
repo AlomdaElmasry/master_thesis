@@ -38,7 +38,7 @@ class ThesisInpaintingVisible(nn.Module):
         elif model_type == 'simple':
             self.nn = ThesisInpaintingModel(in_c=in_c)
         else:
-            self.nn = models.rrdb_net.RRDBNet(in_nc=in_c, out_nc=3, nb=10)
+            self.nn = models.rrdb_net.RRDBNet(in_nc=in_c, out_nc=3, nb=20)
         self.register_buffer('mean', torch.as_tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1, 1))
         self.register_buffer('std', torch.as_tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1, 1))
 
