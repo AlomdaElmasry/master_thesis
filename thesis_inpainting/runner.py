@@ -178,15 +178,13 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
     @staticmethod
     def compute_loss(utils_losses, y_target, x_ref_aligned, v_target, y_hat, y_hat_comp, v_map):
         b, c, h, w = y_target.size()
-        plt.imshow(y_target[0].permute(1, 2 ,0))
-        plt.show()
         target_img = y_target.unsqueeze(2).repeat(1, 1, y_hat.size(2), 1, 1)
         nh_mask = v_target.unsqueeze(2).repeat(1, 1, y_hat.size(2), 1, 1)
         vh_mask = v_map
         nvh_mask = (1 - nh_mask) - vh_mask
         loss_nh = utils_losses.masked_l1(y_hat, target_img, nh_mask, reduction='sum', weight=0.50)
         loss_vh = utils_losses.masked_l1(y_hat, target_img, vh_mask, reduction='sum', weight=2)
-        loss_nvh = utils_losses.masked_l1(y_hat_comp, target_img, nvh_mask, reduction='sum', weight=0)
+        loss_nvh = utils_losses.masked_l1(y_hat_comp, target_img, nvh_mask, reduction='sum', weight=1)
         loss_perceptual, *_ = utils_losses.perceptual(
             y_hat.transpose(1, 2).reshape(-1, c, h, w), target_img.transpose(1, 2).reshape(-1, c, h, w), weight=0.50
         )
