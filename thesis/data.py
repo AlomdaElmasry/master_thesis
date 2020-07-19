@@ -198,7 +198,6 @@ class ThesisData(skeltorch.Data):
     def regenerate_loader_indexes(self):
         self.logger.info('Regenerating indexes for the data loaders...')
         batch_size = self.experiment.configuration.get('training', 'batch_size')
-        batch_size = 3
 
         # Generate training samples of the epoch
         train_max_items = batch_size * self.experiment.configuration.get('training', 'train_max_iterations')
