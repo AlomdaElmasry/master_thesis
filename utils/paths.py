@@ -71,6 +71,5 @@ class DatasetPaths:
                     glob.glob(os.path.join(dataset_folder, split_folder, 'Annotations', item_name, '*.png'))
                 )
                 item_masks_paths = [os.path.relpath(path, data_folder) for path in item_masks_paths]
-            if len(item_gts_paths) > 0 or len(item_masks_paths) > 0:
-                items_meta[item_name] = (item_gts_paths, item_masks_paths)
+            items_meta[item_name] = (item_gts_paths, item_masks_paths)
         return items_meta
