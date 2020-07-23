@@ -195,9 +195,14 @@ class ThesisData(skeltorch.Data):
         torch.manual_seed(random_seed)
         torch.cuda.manual_seed_all(random_seed)
 
-    def regenerate_loader_indexes(self):
+    def regenerate_loader_indexes(self, epoch):
         self.logger.info('Regenerating indexes for the data loaders...')
-        batch_size = self.experiment.configuration.get('training', 'batch_size')
+
+        # Modify batch size depending on the epoch
+        if epoch < 500:
+            batch_size = 8
+        else:
+            batch_size = 12
 
         # Generate training samples of the epoch
         train_max_items = batch_size * self.experiment.configuration.get('training', 'train_max_iterations')

@@ -61,7 +61,7 @@ class ThesisRunner(skeltorch.Runner):
         self.e_train_losses_items = {loss_item_id: [] for loss_item_id in self.losses_items_ids}
         self.e_validation_losses_items = {loss_item_id: [] for loss_item_id in self.losses_items_ids}
         self.experiment.tbx.add_scalar('lr', self.optimizer.param_groups[0]['lr'], self.counters['epoch'])
-        self.experiment.data.regenerate_loader_indexes()
+        self.experiment.data.regenerate_loader_indexes(self.counters['epoch'])
 
     def train_iteration_log(self, e_train_losses, log_period, device):
         super().train_iteration_log(e_train_losses, log_period, device)
