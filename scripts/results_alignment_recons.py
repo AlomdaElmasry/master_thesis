@@ -13,6 +13,7 @@ import pandas as pd
 import numpy as np
 import os.path
 import thesis_alignment.runner
+import progressbar
 
 parser = argparse.ArgumentParser(description='Cleans invalid images')
 parser.add_argument('--data-path', required=True, help='Path where the images are stored')
@@ -64,8 +65,8 @@ for dataset_name in ['davis-2017', 'youtube-vos']:
         )
 
         # Iterate over the samples
+        bar = progressbar.ProgressBar(max_value=args.n_samples)
         for i, frame_index in enumerate(random.sample(range(len(dataset)), args.n_samples)):
-            print(i)
             (x, m), y, info = it_data = dataset[frame_index]
             x, m, y = x.to(args.device), m.to(args.device), y.to(args.device)
             t, r_list = 1, [0]
@@ -87,6 +88,9 @@ for dataset_name in ['davis-2017', 'youtube-vos']:
             losses[dataset_name][s]['got-vos'].append(got_vos_loss.cpu().item())
             losses[dataset_name][s]['fake-vos'].append(0)
             losses[dataset_name][s]['real-vos'].append(0)
+
+            # Update bar
+            bar.update(bar.value + 1)
 
     # Create the plot
     plt.figure()
