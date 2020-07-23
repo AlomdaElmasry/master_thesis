@@ -1,5 +1,6 @@
 import os.path
 import glob
+import random
 
 
 class DatasetPaths:
@@ -54,21 +55,25 @@ class DatasetPaths:
 
     @staticmethod
     def get_youtube_vos(data_folder, split, return_gts, return_masks):
+        assert split in ['train', 'validation']
         dataset_folder = os.path.join(data_folder, 'YouTubeVOS')
-        split_folder = 'train' if split == 'train' else 'valid' if split == 'validation' else 'test'
         type_folder = 'JPEGImages' if return_gts else 'Annotations'
+        samples_paths = sorted(os.listdir(os.path.join(dataset_folder, 'train', type_folder)))
+        random.Random(0).shuffle(samples_paths)
+        split_paths = samples_paths[:int(0.9 * len(samples_paths))] if split == 'train' else \
+            samples_paths[int(0.9 * len(samples_paths)):]
         items_meta = {}
-        for item_name in sorted(os.listdir(os.path.join(dataset_folder, split_folder, type_folder))):
+        for item_name in split_paths:
             item_gts_paths = None
             item_masks_paths = None
             if return_gts:
                 item_gts_paths = sorted(
-                    glob.glob(os.path.join(dataset_folder, split_folder, 'JPEGImages', item_name, '*.jpg'))
+                    glob.glob(os.path.join(dataset_folder, 'train', 'JPEGImages', item_name, '*.jpg'))
                 )
                 item_gts_paths = [os.path.relpath(path, data_folder) for path in item_gts_paths]
             if return_masks:
                 item_masks_paths = sorted(
-                    glob.glob(os.path.join(dataset_folder, split_folder, 'Annotations', item_name, '*.png'))
+                    glob.glob(os.path.join(dataset_folder, 'train', 'Annotations', item_name, '*.png'))
                 )
                 item_masks_paths = [os.path.relpath(path, data_folder) for path in item_masks_paths]
             items_meta[item_name] = (item_gts_paths, item_masks_paths)
