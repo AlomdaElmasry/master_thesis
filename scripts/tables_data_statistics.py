@@ -18,7 +18,7 @@ parser.add_argument('--data-path', required=True, help='Path where the images ar
 args = parser.parse_args()
 
 # Define list of items
-datasets_list = ['youtube-vos']
+datasets_list = ['got-10k']
 splits_list = ['train', 'val', 'test']
 
 
@@ -42,7 +42,7 @@ for dataset_name in datasets_list:
         data_meta = utils.paths.DatasetPaths.get_items(dataset_name, args.data_path, split)
         n_sequences += len(data_meta)
         avg_samples_per_video += [len(data_item[1][0]) for data_item in data_meta.items()]
-        if split in ['train']:
+        if dataset_name in ['davis-2017', 'youtube-vos'] and split in ['train']:
             avg_mask_size += [compute_avg_mask_size(data_item[1]) for data_item in data_meta.items()]
     samples_per_video = np.mean(avg_samples_per_video)
     avg_mask_size = np.mean(avg_mask_size)
