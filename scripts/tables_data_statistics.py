@@ -1,12 +1,5 @@
 import argparse
 import utils.paths
-import thesis.dataset
-import torch.utils.data
-import matplotlib.pyplot as plt
-import thesis_inpainting.runner
-import models.vgg_16
-import models.thesis_alignment
-import models.thesis_inpainting
 import os.path
 import numpy as np
 import cv2
@@ -39,7 +32,7 @@ for dataset_name in datasets_list:
     for split in splits_list:
         if dataset_name == 'davis-2017' and split not in ['train']:
             continue
-        data_meta = utils.paths.DatasetPaths.get_items(dataset_name, args.data_path, split)
+        data_meta = utils.paths.DatasetPaths.get_items(dataset_name, args.data_path, split, return_masks=False)
         n_sequences += len(data_meta)
         avg_samples_per_video += [len(data_item[1][0]) for data_item in data_meta.items()]
         if dataset_name in ['davis-2017', 'youtube-vos'] and split in ['train']:
