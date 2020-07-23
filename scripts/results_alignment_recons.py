@@ -64,7 +64,8 @@ for dataset_name in ['davis-2017', 'youtube-vos']:
         )
 
         # Iterate over the samples
-        for frame_index in random.sample(range(len(dataset)), args.n_samples):
+        for i, frame_index in enumerate(random.sample(range(len(dataset)), args.n_samples)):
+            print(i)
             (x, m), y, info = it_data = dataset[frame_index]
             x, m, y = x.to(args.device), m.to(args.device), y.to(args.device)
             t, r_list = 1, [0]
