@@ -123,29 +123,6 @@ class AlignmentCorrelationMixer(nn.Module):
 class FlowEstimator(nn.Module):
     def __init__(self, in_c=10):
         super(FlowEstimator, self).__init__()
-        # self.nn = nn.Sequential(
-        #     nn.Conv2d(in_c, in_c, kernel_size=5, padding=2), nn.ReLU(),
-        #     nn.Conv2d(in_c, in_c, kernel_size=3, padding=1), nn.ReLU(),
-        #     nn.Conv2d(in_c, in_c * 2, kernel_size=5, stride=2, padding=2), nn.ReLU(),
-        #     nn.Conv2d(in_c * 2, in_c * 2, kernel_size=5, padding=2), nn.ReLU(),
-        #     nn.Conv2d(in_c * 2, in_c * 2, kernel_size=3, padding=1), nn.ReLU(),
-        #     nn.Conv2d(in_c * 2, in_c * 4, kernel_size=3, stride=2, padding=1), nn.ReLU(),
-        #     nn.Conv2d(in_c * 4, in_c * 4, kernel_size=5, padding=2), nn.ReLU(),
-        #     nn.Conv2d(in_c * 4, in_c * 4, kernel_size=3, padding=1), nn.ReLU(),
-        #     nn.Conv2d(in_c * 4, in_c * 8, kernel_size=3, stride=2, padding=1), nn.ReLU(),
-        #     nn.Conv2d(in_c * 8, in_c * 8, kernel_size=5, padding=2), nn.ReLU(),
-        #     nn.Conv2d(in_c * 8, in_c * 8, kernel_size=3, padding=1), nn.ReLU(),
-        #     nn.ConvTranspose2d(in_c * 8, in_c * 4, kernel_size=3, padding=1, output_padding=1, stride=2), nn.ReLU(),
-        #     nn.Conv2d(in_c * 4, in_c * 4, kernel_size=5, padding=2), nn.ReLU(),
-        #     nn.Conv2d(in_c * 4, in_c * 4, kernel_size=3, padding=1), nn.ReLU(),
-        #     nn.ConvTranspose2d(in_c * 4, in_c * 2, kernel_size=3, padding=1, output_padding=1, stride=2), nn.ReLU(),
-        #     nn.Conv2d(in_c * 2, in_c * 2, kernel_size=5, padding=2), nn.ReLU(),
-        #     nn.Conv2d(in_c * 2, in_c * 2, kernel_size=3, padding=1), nn.ReLU(),
-        #     nn.ConvTranspose2d(in_c * 2, in_c, kernel_size=5, padding=2, output_padding=1, stride=2), nn.ReLU(),
-        #     nn.Conv2d(in_c, in_c, kernel_size=5, padding=2), nn.ReLU(),
-        #     nn.Conv2d(in_c, in_c, kernel_size=3, padding=1), nn.ReLU(),
-        #     nn.Conv2d(in_c, 2, kernel_size=3, padding=1)
-        # )
         self.nn = nn.Sequential(
             nn.Conv2d(in_c, 128, kernel_size=5, padding=2), nn.ReLU(),
             nn.Conv2d(128, 128, kernel_size=3, padding=1), nn.ReLU(),
@@ -197,15 +174,15 @@ class ThesisAlignmentModel(nn.Module):
         self.register_buffer('mean', torch.as_tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1, 1))
         self.register_buffer('std', torch.as_tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1, 1))
 
-    def forward(self, x_target, m_target, x_ref, m_ref):
-        b, c, ref_n, h, w = x_ref.size()
+    def forward(self, x_target, m_target, x_refs, m_refs):
+        b, c, ref_n, h, w = x_refs.size()
 
         # Normalize the input
         x_target = (x_target - self.mean.squeeze(2)) / self.std.squeeze(2)
-        x_ref = (x_ref - self.mean) / self.std
+        x_refs = (x_refs - self.mean) / self.std
 
         # Resize the data to be squared 256x256
-        x_target_sq, m_target_sq, x_ref_sq, m_ref_sq = self.interpolate_data(x_target, m_target, x_ref, m_ref, 256, 256)
+        x_target_sq, m_target_sq, x_ref_sq, m_ref_sq = self.interpolate_data(x_target, m_target, x_refs, m_refs, 256, 256)
 
         # Apply the CorrelationVGG module. Corr is (b, t, h, w, h, w)
         corr = self.corr(x_target_sq, m_target_sq, x_ref_sq, m_ref_sq)
@@ -214,7 +191,7 @@ class ThesisAlignmentModel(nn.Module):
         flow_16 = self.corr_mixer(corr)
 
         # Interpolate x, m and flow_16 to be 64xW
-        x_target_64, m_target_64, x_ref_64, m_ref_64 = self.interpolate_data(x_target, m_target, x_ref, m_ref, 64, 64)
+        x_target_64, m_target_64, x_ref_64, m_ref_64 = self.interpolate_data(x_target, m_target, x_refs, m_refs, 64, 64)
         flow_64_pre = self.interpolate_flow(flow_16, 64, 64)
 
         # Estimate 64x64 flow correction of size (b, t, 64, 64, 2)

@@ -1,34 +1,9 @@
 import torch
 import torch.nn as nn
 import models.rrdb_net
-import matplotlib.pyplot as plt
-
-
-class ThesisInpaintingModel(nn.Module):
-
-    def __init__(self, in_c):
-        super(ThesisInpaintingModel, self).__init__()
-        self.nn = nn.Sequential(
-            nn.Conv2d(in_c, 256, kernel_size=3, stride=1, padding=1), nn.ReLU(),
-            nn.Conv2d(256, 256, kernel_size=3, stride=2, padding=1), nn.ReLU(),
-            nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1), nn.ReLU(),
-            nn.Conv2d(256, 256, kernel_size=3, stride=2, padding=1), nn.ReLU(),
-            nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1), nn.ReLU(),
-            nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1), nn.ReLU(),
-            nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1), nn.ReLU(),
-            nn.ConvTranspose2d(256, 256, kernel_size=3, padding=1, output_padding=1, stride=2), nn.ReLU(),
-            nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1), nn.ReLU(),
-            nn.ConvTranspose2d(256, 256, kernel_size=3, padding=1, output_padding=1, stride=2), nn.ReLU(),
-            nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1), nn.ReLU(),
-            nn.Conv2d(256, 3, kernel_size=3, stride=1, padding=1),
-        )
-
-    def forward(self, x):
-        return self.nn(x)
 
 
 class ThesisInpaintingVisible(nn.Module):
-    model_type = None
 
     def __init__(self, in_c=9):
         super(ThesisInpaintingVisible, self).__init__()
@@ -36,8 +11,8 @@ class ThesisInpaintingVisible(nn.Module):
         self.register_buffer('mean', torch.as_tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1, 1))
         self.register_buffer('std', torch.as_tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1, 1))
 
-    def forward(self, x_target, v_target, x_ref_aligned, v_ref_aligned, v_map):
-        b, c, f, h, w = x_ref_aligned.size()
+    def forward(self, x_target, v_target, x_refs_aligned, v_refs_aligned, v_maps):
+        b, c, f, h, w = x_refs_aligned.size()
 
         # Unsqueeze dimensions
         x_target = x_target.unsqueeze(2).repeat(1, 1, f, 1, 1)
@@ -45,10 +20,10 @@ class ThesisInpaintingVisible(nn.Module):
 
         # Normalize the input images
         x_target_norm = (x_target - self.mean) / self.std
-        x_ref_aligned_norm = (x_ref_aligned - self.mean) / self.std
+        x_ref_aligned_norm = (x_refs_aligned - self.mean) / self.std
 
         # Predict output depending on the NN
-        nn_input = torch.cat([x_target_norm, x_ref_aligned_norm, v_target, v_ref_aligned, v_map], dim=1)
+        nn_input = torch.cat([x_target_norm, x_ref_aligned_norm, v_target, v_refs_aligned, v_maps], dim=1)
         nn_output = self.nn(
             nn_input.transpose(1, 2).reshape(b * f, 9, h, w)
         ).reshape(b, f, c, h, w).transpose(1, 2)

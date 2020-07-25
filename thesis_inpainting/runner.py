@@ -146,15 +146,15 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
 
     def test_losses_handler(self, x, m, y, flows_use, flow_gt, t, r_list):
         x_ref_aligned, v_ref_aligned, v_map, y_hat, y_hat_comp = ThesisInpaintingRunner.infer_step_propagate(
-            self.model_alignment, self.model, x[:, :, t], m[:, :, t], y[:, :, t], x[:, :, r_list], m[:, :, r_list]
+            self.model_alignment, self.model, x[:, :, t], m[:, :, t], x[:, :, r_list], m[:, :, r_list]
         )
         return ThesisInpaintingRunner.compute_loss(
-            self.utils_losses, y[:, :, t], x_ref_aligned, (1 - m)[:, :, t], y_hat, y_hat_comp, v_map
+            self.utils_losses, y[:, :, t], (1 - m)[:, :, t], y_hat, y_hat_comp, v_map
         )
 
     def test_frames_handler(self, x, m, y, t, r_list):
         return ThesisInpaintingRunner.infer_step_propagate(
-            self.model_alignment, self.model, x[:, :, t], m[:, :, t], y[:, :, t], x[:, :, r_list], m[:, :, r_list]
+            self.model_alignment, self.model, x[:, :, t], m[:, :, t], x[:, :, r_list], m[:, :, r_list]
         )
 
     @staticmethod
