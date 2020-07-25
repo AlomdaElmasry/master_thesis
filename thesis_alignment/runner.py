@@ -10,6 +10,7 @@ import utils.correlation
 import utils.transforms
 import torch.utils.data
 import matplotlib.pyplot as plt
+import os.path
 
 
 class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
@@ -20,6 +21,13 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
     def init_model(self, device):
         self.model_vgg = models.vgg_16.get_pretrained_model(device)
         self.model = models.thesis_alignment.ThesisAlignmentModel(self.model_vgg).to(device)
+
+    @staticmethod
+    def init_model_with_state(model, experiments_path, experiment_name, epoch, device):
+        experiment_path = os.path.join(os.path.dirname(self.experiment.paths['experiment']), experiment_name)
+        checkpoint_path = os.path.join(experiment_path, 'checkpoints', '{}.checkpoint.pkl'.format(epoch))
+        with open(checkpoint_path, 'rb') as checkpoint_file:
+            model.load_state_dict(torch.load(checkpoint_file, map_location=device)['model'])
 
     def init_optimizer(self, device):
         self.optimizer = torch.optim.Adam(
@@ -71,7 +79,8 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
 
         # Inpaint individual frames on the test set
         if self.counters['epoch'] % 1 == 0:
-            self.test_frames(self.test_frames_handler, 'validation', device, include_y_hat=False, include_y_hat_comp=False)
+            self.test_frames(self.test_frames_handler, 'validation', device, include_y_hat=False,
+                             include_y_hat_comp=False)
             self.test_frames(self.test_frames_handler, 'test', device, include_y_hat=False, include_y_hat_comp=False)
 
     def test_losses_handler(self, x, m, y, flows_use, flow_gt, t, r_list):

@@ -47,7 +47,7 @@ with open(checkpoint_path, 'rb') as checkpoint_file:
 for it_data in dataset:
     (x, m), y, info = it_data
     x, m, y = x.to(args.device), m.to(args.device), y.to(args.device)
-    y_inpainted = thesis_inpainting.runner.ThesisInpaintingRunner.test_sequence_individual_handler(
+    y_inpainted = thesis_inpainting.runner.ThesisInpaintingRunner.inpainting_algorithm_ff(
         x, m, y, model_alignment, model
     )
     frames_to_video = utils.FramesToVideo(0, 10, None)

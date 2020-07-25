@@ -219,13 +219,51 @@ class CM_Module(nn.Module):
         return torch.cat([t_feat, c_out, c_mask], dim=1), c_mask
 
 
-class CPNOriginalAligner(nn.Module):
+class CPNOriginal(nn.Module):
     def __init__(self):
-        super(CPNOriginalAligner, self).__init__()
+        super(CPNOriginal, self).__init__()
         self.A_Encoder = A_Encoder()  # Align
         self.A_Regressor = A_Regressor()  # output: alignment network
         self.register_buffer('mean', torch.FloatTensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1))
         self.register_buffer('mean3d', torch.FloatTensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1, 1))
+        self.register_buffer('std', torch.as_tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1, 1))
+
+    def forward(self, x_target, m_target, y_target, x_refs, m_refs):
+        # x_target, x_refs = (x_target - self.mean) / self.std.squeeze(2), (x_refs - self.mean3d) / self.std
+        x_aligned, v_aligned, v_maps = self.align(x_target, m_target, x_refs, m_refs)
+        return x_aligned, v_aligned, v_maps
+
+    def align(self, x_target, m_target, x_refs, m_refs):
+        b, c, ref_n, h, w = x_refs.size()
+
+        # Get alignment features
+        x_target_feats = self.A_Encoder(x_target, m_target)
+        x_refs_feats = self.A_Encoder(
+            x_refs.transpose(1, 2).reshape(-1, c, h, w), m_refs.transpose(1, 2).reshape(-1, 1, h, w)
+        ).reshape(b, ref_n, x_target_feats.size(1), x_target_feats.size(2), x_target_feats.size(3)).transpose(1, 2)
+
+        # Get alignment grid
+        theta_rt = self.A_Regressor(
+            x_target_feats.unsqueeze(2).repeat(1, 1, ref_n, 1, 1).transpose(1, 2).reshape(
+                -1, x_refs_feats.size(1), x_refs_feats.size(3), x_refs_feats.size(4)
+            ),
+            x_refs_feats.transpose(1, 2).reshape(-1, x_refs_feats.size(1), x_refs_feats.size(3), x_refs_feats.size(4))
+        )
+        grid_rt = F.affine_grid(theta_rt, (theta_rt.size(0), c, h, w), align_corners=False)
+
+        # Align data
+        x_aligned = F.grid_sample(
+            x_refs.transpose(1, 2).reshape(-1, c, h, w), grid_rt, align_corners=False
+        ).reshape(b, ref_n, c, h, w).transpose(1, 2)
+        v_aligned = (F.grid_sample(
+            1 - m_refs.transpose(1, 2).reshape(-1, 1, h, w), grid_rt, align_corners=False
+        ).reshape(b, ref_n, 1, h, w).transpose(1, 2) > 0.5).float()
+
+        # Compute visibility map
+        v_maps = (v_aligned - (1 - m_target.unsqueeze(2))).clamp(0, 1)
+
+        # Return data
+        return x_aligned, v_aligned, v_maps
 
     def encoding(self, frames, holes):
         batch_size, _, num_frames, height, width = frames.size()
@@ -239,7 +277,7 @@ class CPNOriginalAligner(nn.Module):
         feats = torch.stack(feat_, dim=2)
         return feats
 
-    def forward(self, x, m, y, t, r_list):
+    def align_2(self, x, m, y, t, r_list):
         rfeats = self.encoding(x, m)
         rfeats = rfeats[:, :, r_list]
         rframes = x[:, :, r_list]

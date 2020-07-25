@@ -41,17 +41,19 @@ loss_utils = utils.losses.LossesUtils(None, args.device)
 losses = {}
 
 # Iterate over the data sets and the displacements
-for dataset_name in ['davis-2017', 'youtube-vos']:
+for dataset_name in ['got-10k', 'davis-2017']:
     losses[dataset_name] = {}
     for s in range(1, 11):
         losses[dataset_name][s] = {'baseline': [], 'got-vos': [], 'fake-vos': [], 'real-vos': []}
 
         # Create the dataset object
-        gts_meta = utils.paths.DatasetPaths.get_items(dataset_name, args.data_path, 'validation')
+        gts_meta = utils.paths.DatasetPaths.get_items(dataset_name, args.data_path, 'validation', return_masks=False)
+        masks_meta = utils.paths.DatasetPaths.get_items('youtube-vos', args.data_path, 'train')
         gts_data = ContentProvider(args.data_path, gts_meta, None, 512)
+        masks_data = ContentProvider(args.data_path, masks_meta, None)
         dataset = MaskedSequenceDataset(
             gts_dataset=gts_data,
-            masks_dataset=None,
+            masks_dataset=masks_data,
             gts_simulator=None,
             masks_simulator=None,
             image_size=(256, 256),
@@ -91,6 +93,7 @@ for dataset_name in ['davis-2017', 'youtube-vos']:
 
             # Update bar
             bar.update(bar.value + 1)
+            break
 
     # Create the plot
     plt.figure()

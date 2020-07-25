@@ -109,6 +109,38 @@ class ThesisRunner(skeltorch.Runner):
                 'loss_items_test_epoch/{}'.format(loss_item_id), np.mean(losses_items_t[i]), self.counters['epoch'])
         self.logger.info('Epoch: {} | Average Test Loss: {}'.format(self.counters['epoch'], np.mean(loss_t)))
 
+    def _test_objective_measures(self, samples_dataset, samples_indexes, device):
+        subset_dataset = torch.utils.data.Subset(samples_dataset, samples_indexes)
+        loader = torch.utils.data.DataLoader(
+            subset_dataset, self.experiment.configuration.get('training', 'batch_size')
+        )
+
+        # Initialize LPSIS model to proper device
+        self.utils_measures.init_lpips(device)
+
+        # Create variables to store PSNR, SSIM and LPIPS
+        psnr, ssim, lpips = [], [], []
+
+        # Iterate over the samples
+        for it_data in loader:
+            (x, m), y, _ = it_data
+            x = x.to(device)
+            m = m.to(device)
+            y = y.to(device)
+            with torch.no_grad():
+                (_, y_hat_comp, _, _, (_, _)), t, _ = self.train_step_propagate(x, m, y)
+                psnr += self.utils_measures.psnr(y[:, :, t].cpu(), y_hat_comp.cpu())
+                ssim += self.utils_measures.ssim(y[:, :, t].cpu(), y_hat_comp.cpu())
+                lpips += self.utils_measures.lpips(y[:, :, t], y_hat_comp)
+
+        # Remove LPSIS model from memory
+        self.utils_measures.destroy_lpips()
+
+        # Log measures in TensorBoard
+        self.experiment.tbx.add_scalar('test_measures/psrn', np.mean(psnr), global_step=self.counters['epoch'])
+        self.experiment.tbx.add_scalar('test_measures/ssim', np.mean(ssim), global_step=self.counters['epoch'])
+        self.experiment.tbx.add_scalar('test_measures/lpips', np.mean(lpips), global_step=self.counters['epoch'])
+
     def test_frames(self, test_handler, split, device, include_y_hat=True, include_y_hat_comp=True,
                     include_y_hat_trivial=True):
         # Create a Subset using self.experiment.data.test_frames_indexes defined frames
@@ -184,15 +216,20 @@ class ThesisRunner(skeltorch.Runner):
                 'frames_{}/{}'.format(split, b + 1), sample.transpose(1, 0, 2, 3), global_step=self.counters['epoch']
             )
 
-    def _test_frames_trivial(self, x_target, x_ref_aligned, v_map):
-        b, c, ref_n, h, w = x_ref_aligned.size()
-        return x_target.unsqueeze(2).repeat(1, 1, ref_n, 1, 1) * (1 - v_map) + x_ref_aligned * v_map
-
     def test_sequence(self, handler, folder_name, model_alignment, model, device):
         for it_data in self.experiment.data.datasets['test_sequences']:
             (x, m), y, info = it_data
             x, m, y = x.to(device), m.to(device), y.to(device)
             self._save_sample(handler(x, m, y, model_alignment, model).cpu().numpy() * 255, folder_name, info[0])
+
+    def _test_frames_trivial(self, x_target, x_ref_aligned, v_map):
+        b, c, ref_n, h, w = x_ref_aligned.size()
+        return x_target.unsqueeze(2).repeat(1, 1, ref_n, 1, 1) * (1 - v_map) + x_ref_aligned * v_map
+
+    @staticmethod
+    def inpainting_hard_copy(x_target, v_target, x_ref_aligned, v_ref_aligned, v_map):
+        y_hat = y_hat_comp = v_target * x_target + v_map[:, :, 0] * x_ref_aligned[:, :, 0]
+        return y_hat.unsqueeze(2), y_hat_comp.unsqueeze(2)
 
     def get_indexes(self, size):
         t, r_list = size // 2, list(range(size))

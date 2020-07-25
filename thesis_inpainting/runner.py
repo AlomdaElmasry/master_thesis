@@ -8,8 +8,9 @@ import utils.losses
 import thesis_alignment.runner
 import utils.flow
 import utils.draws
-import os.path
 import matplotlib.pyplot as plt
+import thesis_cpn.runner
+import models.cpn_original
 
 
 class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
@@ -19,15 +20,19 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
 
     def init_model(self, device):
         self.model_vgg = models.vgg_16.get_pretrained_model(device)
-        self.model_alignment = models.thesis_alignment.ThesisAlignmentModel(self.model_vgg).to(device)
         self.model = models.thesis_inpainting.ThesisInpaintingVisible().to(device)
-        self.init_model_load_alignment_state(device)
-
-    def init_model_load_alignment_state(self, device, experiment_name='align_faith', epoch=82):
-        experiment_path = os.path.join(os.path.dirname(self.experiment.paths['experiment']), experiment_name)
-        checkpoint_path = os.path.join(experiment_path, 'checkpoints', '{}.checkpoint.pkl'.format(epoch))
-        with open(checkpoint_path, 'rb') as checkpoint_file:
-            self.model_alignment.load_state_dict(torch.load(checkpoint_file, map_location=device)['model'])
+        if self.experiment.configuration.get('model', 'alignment_network') == 'cpn':
+            self.model_alignment = thesis_cpn.runner.ThesisCPNRunner.init_model_with_state(
+                models.cpn_original.CPNOriginal(), device
+            )
+        else:
+            self.model_alignment = thesis_alignment.runner.ThesisAlignmentRunner.init_model_with_state(
+                models.thesis_alignment.ThesisAlignmentModel(self.model_vgg).to(device),
+                self.experiment.paths['experiment'],
+                self.experiment.configuration.get('model', 'alignment_experiment_name'),
+                self.experiment.configuration.get('model', 'alignment_experiment_epoch'),
+                device
+            )
 
     def init_optimizer(self, device):
         self.optimizer = torch.optim.Adam(
@@ -51,12 +56,12 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
 
         # Compute t and r_list
         x_ref_aligned, v_ref_aligned, v_map, y_hat, y_hat_comp = ThesisInpaintingRunner.train_step_propagate(
-            self.model_alignment, self.model, x[:, :, t], m[:, :, t], y[:, :, t], x[:, :, r_list], m[:, :, r_list]
+            self.model_alignment, self.model, x[:, :, t], m[:, :, t], x[:, :, r_list], m[:, :, r_list]
         )
 
         # Get both total loss and loss items
         loss, loss_items = ThesisInpaintingRunner.compute_loss(
-            self.utils_losses, y[:, :, t], x_ref_aligned, (1 - m)[:, :, t], y_hat, y_hat_comp, v_map
+            self.utils_losses, y[:, :, t], (1 - m)[:, :, t], y_hat, y_hat_comp, v_map
         )
 
         # Append loss items to epoch dictionary
@@ -67,13 +72,53 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
         # Return total loss
         return loss
 
+    @staticmethod
+    def train_step_propagate(model_alignment, model, x_target, m_target, x_ref, m_ref):
+        with torch.no_grad():
+            if isinstance(model_alignment, models.thesis_alignment.ThesisAlignmentModel):
+                x_ref_aligned, v_ref_aligned, v_map = thesis_alignment.runner.ThesisAlignmentRunner.infer_step_propagate(
+                    model_alignment, x_target, m_target, x_ref, m_ref
+                )
+            else:
+                x_ref_aligned, v_ref_aligned, v_map = thesis_cpn.runner.ThesisCPNRunner.infer_alignment_step_propagate(
+                    model_alignment, x_target, m_target, x_ref, m_ref
+                )
+        y_hat, y_hat_comp = model(x_target, 1 - m_target, x_ref_aligned, v_ref_aligned, v_map)
+        return x_ref_aligned, v_ref_aligned, v_map, y_hat, y_hat_comp
+
+    @staticmethod
+    def infer_step_propagate(model_alignment, model, x_target, m_target, x_ref, m_ref):
+        with torch.no_grad():
+            if isinstance(model_alignment, models.thesis_alignment.ThesisAlignmentModel):
+                x_ref_aligned, v_ref_aligned, v_map = thesis_alignment.runner.ThesisAlignmentRunner.infer_step_propagate(
+                    model_alignment, x_target, m_target, x_ref, m_ref
+                )
+            else:
+                x_ref_aligned, v_ref_aligned, v_map = thesis_cpn.runner.ThesisCPNRunner.infer_alignment_step_propagate(
+                    model_alignment, x_target, m_target, x_ref, m_ref
+                )
+            y_hat, y_hat_comp = model(x_target, 1 - m_target, x_ref_aligned, v_ref_aligned, v_map)
+        return x_ref_aligned, v_ref_aligned, v_map, y_hat, y_hat_comp
+
+    @staticmethod
+    def compute_loss(utils_losses, y_target, v_target, y_hat, y_hat_comp, v_map):
+        b, c, h, w = y_target.size()
+        target_img = y_target.unsqueeze(2).repeat(1, 1, y_hat.size(2), 1, 1)
+        nh_mask = v_target.unsqueeze(2).repeat(1, 1, y_hat.size(2), 1, 1)
+        vh_mask = v_map
+        nvh_mask = (1 - nh_mask) - vh_mask
+        loss_nh = utils_losses.masked_l1(y_hat, target_img, nh_mask, reduction='sum', weight=0.50)
+        loss_vh = utils_losses.masked_l1(y_hat, target_img, vh_mask, reduction='sum', weight=2)
+        loss_nvh = utils_losses.masked_l1(y_hat_comp, target_img, nvh_mask, reduction='sum', weight=1)
+        loss_perceptual, *_ = utils_losses.perceptual(
+            y_hat.transpose(1, 2).reshape(-1, c, h, w), target_img.transpose(1, 2).reshape(-1, c, h, w), weight=0.50
+        )
+        loss_grad = utils_losses.grad(y_hat.squeeze(2), target_img.squeeze(2), reduction='mean', weight=1)
+        loss = loss_nh + loss_vh + loss_nvh + loss_perceptual + loss_grad
+        return loss, [loss_nh, loss_vh, loss_nvh, loss_perceptual, loss_grad]
+
     def test(self, epoch, device):
         self.model.eval()
-
-        # Inpainting with hard alignment if required
-        if epoch == 0:
-            self.test_sequence(self.test_sequence_individual_hard_handler, 'test_seq_individual_hard', device)
-            exit()
 
         # If epoch != 0, loadit
         if epoch is not None:
@@ -82,18 +127,22 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
         # Compute the losses on the test set
         self.test_losses(self.test_losses_handler, self.losses_items_ids, device)
 
-        # Compute objective measures
-
         # Inpaint individual frames on the test set
         if self.counters['epoch'] % 5 == 0:
             self.test_frames(self.test_frames_handler, 'validation', device)
             self.test_frames(self.test_frames_handler, 'test', device)
 
         # Inpaint test sequences every 10 epochs
-        if epoch is not None or self.counters['epoch'] % 25 == 0:
+        if epoch is not None or self.counters['epoch'] % 2 == 0:
             self.test_sequence(
-                self.test_sequence_individual_handler, 'test_seq_individual', self.model_alignment, self.model, device
+                self.inpainting_algorithm_ff, 'algorithm_ff', self.model_alignment, self.model, device
             )
+            self.test_sequence(
+                self.inpainting_algorithm_ip, 'algorithm_ip', self.model_alignment, self.model, device
+            )
+            # self.test_sequence(
+            #     self.inpainting_algorithm_cp, 'algorithm_cp', self.model_alignment, self.model, device
+            # )
 
     def test_losses_handler(self, x, m, y, flows_use, flow_gt, t, r_list):
         x_ref_aligned, v_ref_aligned, v_map, y_hat, y_hat_comp = ThesisInpaintingRunner.infer_step_propagate(
@@ -109,46 +158,25 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
         )
 
     @staticmethod
-    def test_sequence_individual_hard_handler(x, m, y, model_alignment, model):
+    def inpainting_algorithm_ff(x, m, y, model_alignment, model):
         fill_color = torch.as_tensor([0.485, 0.456, 0.406], dtype=torch.float32).view(1, 3, 1, 1).to(x.device)
         y_inpainted = torch.zeros_like(x)
         for t in range(x.size(1)):
-            x_target, m_target, y_target, y_hat = x[:, t].unsqueeze(0), m[:, t].unsqueeze(0), y[:, t].unsqueeze(0), None
-            t_candidates = ThesisInpaintingRunner.compute_priority_indexes(t, x.size(1), d_step=2, max_d=10)
-            while (len(t_candidates) > 0 and torch.sum(m_target) * 100 / m_target.numel() > 1) or y_hat is None:
-                r_index = [t_candidates.pop(0)]
-                x_ref, m_ref = x[:, r_index].unsqueeze(0), m[:, r_index].unsqueeze(0)
-                x_ref_aligned, v_ref_aligned, v_map = thesis_alignment.runner.ThesisAlignmentRunner.infer_step_propagate(
-                    model_alignment, x_target, m_target, x_ref, m_ref
-                )
-                y_hat = (1 - m_target) * x_target + v_map[:, :, 0] * x_ref_aligned[:, :, 0]
-                m_target = m_target - v_map[:, :, 0]
-                x_target = (1 - m_target) * y_hat + m_target.repeat(1, 3, 1, 1) * fill_color
-                y_target = (1 - m_target) * y_hat + m_target.repeat(1, 3, 1, 1) * y_target
-            y_inpainted[:, t] = x_target
-        return y_inpainted
-
-    @staticmethod
-    def test_sequence_individual_handler(x, m, y, model_alignment, model):
-        fill_color = torch.as_tensor([0.485, 0.456, 0.406], dtype=torch.float32).view(1, 3, 1, 1).to(x.device)
-        y_inpainted = torch.zeros_like(x)
-        for t in range(x.size(1)):
-            x_target, m_target, y_target, y_hat = x[:, t].unsqueeze(0), m[:, t].unsqueeze(0), y[:, t].unsqueeze(0), None
-            t_candidates = ThesisInpaintingRunner.compute_priority_indexes(t, x.size(1), d_step=2, max_d=10)
-            while (len(t_candidates) > 0 and torch.sum(m_target) * 100 / m_target.numel() > 1) or y_hat is None:
-                r_index = [t_candidates.pop(0)]
-                x_ref, m_ref = x[:, r_index].unsqueeze(0), m[:, r_index].unsqueeze(0)
-                x_ref_aligned, _, v_map, y_hat, y_hat_comp = ThesisInpaintingRunner.infer_step_propagate(
-                    model_alignment, model, x_target, m_target, y_target, x_ref, m_ref
+            x_target, m_target, y_hat_comp = x[:, t].unsqueeze(0), m[:, t].unsqueeze(0), None
+            t_candidates = ThesisInpaintingRunner.inpainting_algorithm_ff_indexes(t, x.size(1), d_step=2, max_d=20)
+            while (len(t_candidates) > 0 and torch.sum(m_target) * 100 / m_target.numel() > 1) or y_hat_comp is None:
+                r_list = [t_candidates.pop(0)]
+                _, _, v_map, y_hat, y_hat_comp = ThesisInpaintingRunner.infer_step_propagate(
+                    model_alignment, model, x_target, m_target, x[:, r_list].unsqueeze(0),
+                    m[:, r_list].unsqueeze(0)
                 )
                 m_target = m_target - v_map[:, :, 0]
                 x_target = (1 - m_target) * y_hat_comp[:, :, 0] + m_target.repeat(1, 3, 1, 1) * fill_color
-                y_target = (1 - m_target) * y_hat_comp[:, :, 0] + m_target.repeat(1, 3, 1, 1) * y_target
-            y_inpainted[:, t] = x_target
+            y_inpainted[:, t] = y_hat_comp[:, :, 0]
         return y_inpainted
 
     @staticmethod
-    def compute_priority_indexes(t, max_t, d_step, max_d):
+    def inpainting_algorithm_ff_indexes(t, max_t, d_step, max_d):
         ref_candidates = list(range(max_t))
         ref_candidates.pop(t)
         ref_candidates_dist = list(map(lambda x: abs(x - t), ref_candidates))
@@ -158,36 +186,34 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
         )
 
     @staticmethod
-    def train_step_propagate(model_alignment, model, x_target, m_target, y_target, x_ref, m_ref):
-        with torch.no_grad():
-            x_ref_aligned, v_ref_aligned, v_map = thesis_alignment.runner.ThesisAlignmentRunner.infer_step_propagate(
-                model_alignment, x_target, m_target, x_ref, m_ref
-            )
-        y_hat, y_hat_comp = model(x_target, 1 - m_target, y_target, x_ref_aligned, v_ref_aligned, v_map)
-        return x_ref_aligned, v_ref_aligned, v_map, y_hat, y_hat_comp
+    def inpainting_algorithm_ip(x, m, y, model_alignment, model):
+        fill_color = torch.as_tensor([0.485, 0.456, 0.406], dtype=torch.float32).view(1, 3, 1, 1).to(x.device)
+        y_inpainted, m_inpainted = x.unsqueeze(0), m.unsqueeze(0)
+        t_list = sorted(list(range(x.size(1))), key=lambda xi: abs(xi - x.size(1) // 2))
+        for t in t_list:
+            t_candidates = ThesisInpaintingRunner.inpainting_algorithm_ip_indexes(t, t_list, d_step=2, max_d=20)
+            y_hat_comp = None
+            while (len(t_candidates) > 0 and torch.sum(m_inpainted[:, :, t]) * 100 / m_inpainted[:, :, t].numel() > 1) \
+                    or y_hat_comp is None:
+                r_list = [t_candidates.pop(0)]
+                _, _, v_map, y_hat, y_hat_comp = ThesisInpaintingRunner.infer_step_propagate(
+                    model_alignment, model, y_inpainted[:, :, t], m_inpainted[:, :, t], y_inpainted[:, :, r_list],
+                    m_inpainted[:, :, r_list]
+                )
+                m_inpainted[:, :, t] = m_inpainted[:, :, t] - v_map[:, :, 0]
+                y_inpainted[:, :, t] = (1 - m_inpainted[:, :, t]) * y_hat_comp[:, :, 0] + \
+                                       m_inpainted[:, :, t].repeat(1, 3, 1, 1) * fill_color
+            m_inpainted[:, :, t] = 0
+            y_inpainted[:, :, t] = y_hat_comp[:, :, 0]
+        return y_inpainted[0]
 
     @staticmethod
-    def infer_step_propagate(model_alignment, model, x_target, m_target, y_target, x_ref, m_ref):
-        with torch.no_grad():
-            x_ref_aligned, v_ref_aligned, v_map = thesis_alignment.runner.ThesisAlignmentRunner.infer_step_propagate(
-                model_alignment, x_target, m_target, x_ref, m_ref
-            )
-            y_hat, y_hat_comp = model(x_target, 1 - m_target, y_target, x_ref_aligned, v_ref_aligned, v_map)
-        return x_ref_aligned, v_ref_aligned, v_map, y_hat, y_hat_comp
+    def inpainting_algorithm_ip_indexes(t, t_list, d_step, max_d):
+        t_list_inpainted = list(reversed(t_list[:t_list.index(t)]))
+        t_list_ff = ThesisInpaintingRunner.inpainting_algorithm_ff_indexes(t, len(t_list), d_step, max_d)
+        t_list_ff = [t_item for t_item in t_list_ff if t_item not in t_list_inpainted]
+        return t_list_inpainted + t_list_ff
 
     @staticmethod
-    def compute_loss(utils_losses, y_target, x_ref_aligned, v_target, y_hat, y_hat_comp, v_map):
-        b, c, h, w = y_target.size()
-        target_img = y_target.unsqueeze(2).repeat(1, 1, y_hat.size(2), 1, 1)
-        nh_mask = v_target.unsqueeze(2).repeat(1, 1, y_hat.size(2), 1, 1)
-        vh_mask = v_map
-        nvh_mask = (1 - nh_mask) - vh_mask
-        loss_nh = utils_losses.masked_l1(y_hat, target_img, nh_mask, reduction='sum', weight=0.50)
-        loss_vh = utils_losses.masked_l1(y_hat, target_img, vh_mask, reduction='sum', weight=2)
-        loss_nvh = utils_losses.masked_l1(y_hat_comp, target_img, nvh_mask, reduction='sum', weight=1)
-        loss_perceptual, *_ = utils_losses.perceptual(
-            y_hat.transpose(1, 2).reshape(-1, c, h, w), target_img.transpose(1, 2).reshape(-1, c, h, w), weight=0.50
-        )
-        loss_grad = utils_losses.grad(y_hat.squeeze(2), target_img.squeeze(2), reduction='mean', weight=1)
-        loss = loss_nh + loss_vh + loss_nvh + loss_perceptual + loss_grad
-        return loss, [loss_nh, loss_vh, loss_nvh, loss_perceptual, loss_grad]
+    def inpainting_algorithm_cp(x, m, y, model_alignment, model):
+        pass

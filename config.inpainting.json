@@ -23,10 +23,13 @@
     "p_repeat": 0
   },
   "model": {
-    "loss_lambdas": [100, 1]
+    "alignment_network": "cpn",
+    "alignment_experiment_name": "experiment_name",
+    "alignment_experiment_epoch": 100,
+    "loss_lambdas": [0.5, 2, 1, 0.5, 1]
   },
   "training": {
-    "batch_size": 12,
+    "batch_size": 16,
     "train_max_iterations": 2000,
     "validation_max_iterations": 200,
     "test_max_iterations": 200,

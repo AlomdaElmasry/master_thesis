@@ -22,15 +22,11 @@ class ThesisData(skeltorch.Data):
     test_sequences_indexes = None
 
     def create(self, data_path):
-        train_gts_return_masks = self.experiment.configuration.get('data', 'train_gts_dataset') == \
-                                 self.experiment.configuration.get('data', 'train_masks_dataset')
-        validation_gts_return_masks = self.experiment.configuration.get('data', 'validation_gts_dataset') == \
-                                      self.experiment.configuration.get('data', 'validation_masks_dataset')
         self.train_gts_meta = utils.paths.DatasetPaths.get_items(
             dataset_name=self.experiment.configuration.get('data', 'train_gts_dataset'),
             data_folder=data_path,
             split='train',
-            return_masks=train_gts_return_masks
+            return_masks=False
         )
         self.train_masks_meta = utils.paths.DatasetPaths.get_items(
             dataset_name=self.experiment.configuration.get('data', 'train_masks_dataset'),
@@ -42,7 +38,7 @@ class ThesisData(skeltorch.Data):
             dataset_name=self.experiment.configuration.get('data', 'validation_gts_dataset'),
             data_folder=data_path,
             split='validation',
-            return_masks=validation_gts_return_masks
+            return_masks=False
         )
         self.validation_masks_meta = utils.paths.DatasetPaths.get_items(
             dataset_name=self.experiment.configuration.get('data', 'validation_masks_dataset'),

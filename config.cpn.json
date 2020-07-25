@@ -6,6 +6,7 @@
     "validation_masks_dataset": "youtube-vos",
     "test_dataset": "davis-2017",
     "train_resize": false,
+    "min_mask_size": 0.05,
     "max_mask_size": 0.1,
     "validation_split": 0.2,
     "train_size": [256, 256],
@@ -22,17 +23,17 @@
     "p_repeat": 0
   },
   "model": {
-    "mode": "full",
-    "trained_aligner": "cpn",
+    "version": "original",
     "loss_constant_normalization": true,
     "loss_lambdas": [2, 100, 100, 6, 1, 500, 0.1, 2]
   },
   "training": {
     "batch_size": 2,
-    "train_max_iterations": 5000,
-    "validation_max_iterations": 500,
-    "lr": 1e-4,
-    "lr_scheduler_step_size": 50,
-    "lr_scheduler_gamma": 0.1
+    "train_max_iterations": 2000,
+    "validation_max_iterations": 200,
+    "test_max_iterations": 200,
+    "lr": 2e-4,
+    "lr_scheduler_step_size": 100,
+    "lr_scheduler_gamma": 0.5
   }
 }
