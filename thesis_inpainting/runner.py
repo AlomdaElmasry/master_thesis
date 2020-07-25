@@ -23,7 +23,7 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
         self.model = models.thesis_inpainting.ThesisInpaintingVisible().to(device)
         if self.experiment.configuration.get('model', 'alignment_network') == 'cpn':
             self.model_alignment = thesis_cpn.runner.ThesisCPNRunner.init_model_with_state(
-                models.cpn_original.CPNOriginal(), device
+                models.cpn_original.CPNOriginal().to(device), device
             )
         else:
             self.model_alignment = thesis_alignment.runner.ThesisAlignmentRunner.init_model_with_state(
