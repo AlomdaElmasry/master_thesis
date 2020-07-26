@@ -5,7 +5,6 @@ import models.thesis_alignment
 import models.vgg_16
 import random
 import matplotlib.pyplot as plt
-import utils.alignment
 import utils.losses
 import seaborn as sns
 import torch
@@ -14,6 +13,9 @@ import numpy as np
 import os.path
 import thesis_alignment.runner
 import progressbar
+import models.cpn_original
+import thesis_cpn.runner
+import utils.alignment
 
 parser = argparse.ArgumentParser(description='Cleans invalid images')
 parser.add_argument('--data-path', required=True, help='Path where the images are stored')
@@ -23,17 +25,14 @@ parser.add_argument('--device', default='cpu', help='Device to use')
 args = parser.parse_args()
 
 # Load the baseline model
-baseline_alignment = utils.alignment.AlignmentUtils('cpn', args.device)
 vgg_model = models.vgg_16.get_pretrained_model(args.device)
-got_vos_model = models.thesis_alignment.ThesisAlignmentModel(vgg_model).to(args.device)
-fake_vos_model = models.thesis_alignment.ThesisAlignmentModel(vgg_model).to(args.device)
-real_vos_model = models.thesis_alignment.ThesisAlignmentModel(vgg_model).to(args.device)
-
-# Load models checkpoints
-experiment_path = os.path.join(args.experiments_path, 'align_faith')
-checkpoint_path = os.path.join(experiment_path, 'checkpoints', '{}.checkpoint.pkl'.format(82))
-with open(checkpoint_path, 'rb') as checkpoint_file:
-    got_vos_model.load_state_dict(torch.load(checkpoint_file, map_location=args.device)['model'])
+cpn_model = thesis_cpn.runner.ThesisCPNRunner.init_model_with_state(
+    models.cpn_original.CPNOriginal().to(args.device), args.device
+)
+ours_model = thesis_alignment.runner.ThesisAlignmentRunner.init_model_with_state(
+    models.thesis_alignment.ThesisAlignmentModel(vgg_model).to(args.device),
+    args.experiments_path, 'align_faith', 82, args.device
+)
 
 # Create utils
 sns.set()
@@ -44,7 +43,7 @@ losses = {}
 for dataset_name in ['got-10k', 'davis-2017']:
     losses[dataset_name] = {}
     for s in range(1, 11):
-        losses[dataset_name][s] = {'baseline': [], 'got-vos': [], 'fake-vos': [], 'real-vos': []}
+        losses[dataset_name][s] = {'baseline': [], 'cpn': [], 'ours': []}
 
         # Create the dataset object
         gts_meta = utils.paths.DatasetPaths.get_items(dataset_name, args.data_path, 'validation', return_masks=False)
@@ -74,36 +73,37 @@ for dataset_name in ['got-10k', 'davis-2017']:
             t, r_list = 1, [0]
 
             # Obtain alignments of the different networks
-            x_aligned_baseline, _, _ = \
-                baseline_alignment.align(x.unsqueeze(0), m.unsqueeze(0), y.unsqueeze(0), t, r_list)
-            x_aligned_got_vos, _, _ = thesis_alignment.runner.ThesisAlignmentRunner.infer_step_propagate(
-                got_vos_model, x[:, t].unsqueeze(0), m[:, t].unsqueeze(0), x[:, r_list].unsqueeze(0),
+            x_aligned_baseline = utils.alignment.alignment_baseline(x[:, t].cpu(), x[:, r_list].squeeze(1).cpu())
+            x_aligned_cpn, _, _ = thesis_cpn.runner.ThesisCPNRunner.infer_alignment_step_propagate(
+                cpn_model, x[:, t].unsqueeze(0), m[:, t].unsqueeze(0), x[:, r_list].unsqueeze(0),
+                m[:, r_list].unsqueeze(0)
+            )
+            x_aligned_ours, _, _ = thesis_alignment.runner.ThesisAlignmentRunner.infer_step_propagate(
+                ours_model, x[:, t].unsqueeze(0), m[:, t].unsqueeze(0), x[:, r_list].unsqueeze(0),
                 m[:, r_list].unsqueeze(0),
             )
 
             # Compute L1 losses outside the hole
-            baseline_loss = loss_utils.masked_l1(x_aligned_baseline[0, :, 0], x[:, t], mask=1 - m[:, t])
-            got_vos_loss = loss_utils.masked_l1(x_aligned_got_vos[0, :, 0], x[:, t], mask=1 - m[:, t])
+            baseline_loss = loss_utils.masked_l1(x_aligned_baseline, x[:, t], mask=1 - m[:, t])
+            cpn_loss = loss_utils.masked_l1(x_aligned_cpn[0, :, 0], x[:, t], mask=1 - m[:, t])
+            ours_loss = loss_utils.masked_l1(x_aligned_ours[0, :, 0], x[:, t], mask=1 - m[:, t])
 
             # Append the losses
-            losses[dataset_name][s]['baseline'].append(baseline_loss.cpu().item())
-            losses[dataset_name][s]['got-vos'].append(got_vos_loss.cpu().item())
-            losses[dataset_name][s]['fake-vos'].append(0)
-            losses[dataset_name][s]['real-vos'].append(0)
+            losses[dataset_name][s]['baseline'].append(baseline_loss)
+            losses[dataset_name][s]['cpn'].append(cpn_loss.cpu().item())
+            losses[dataset_name][s]['ours'].append(ours_loss.cpu().item())
 
             # Update bar
             bar.update(bar.value + 1)
-            break
 
     # Create the plot
     plt.figure()
-    plt.title('Data set: {}'.format('DAVIS' if dataset_name == 'davis-2017' else 'YouTube-VOS'))
+    plt.title('Data set: {}'.format('DAVIS' if dataset_name == 'davis-2017' else 'GOT-10k Validation'))
     data = pd.DataFrame({
         'Frame distance (s)': list(range(1, 11)),
         'Baseline': [np.mean(losses[dataset_name][s]['baseline']) for s in range(1, 11)],
-        'GOT+VOS': [np.mean(losses[dataset_name][s]['got-vos']) for s in range(1, 11)],
-        'Fake VOS': [np.mean(losses[dataset_name][s]['fake-vos']) for s in range(1, 11)],
-        'Real VOS': [np.mean(losses[dataset_name][s]['real-vos']) for s in range(1, 11)]
+        'CPN': [np.mean(losses[dataset_name][s]['cpn']) for s in range(1, 11)],
+        'Ours (DFPN)': [np.mean(losses[dataset_name][s]['ours']) for s in range(1, 11)]
     })
     ax = sns.lineplot(
         x='Frame distance (s)',
