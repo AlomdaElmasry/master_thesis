@@ -5,7 +5,7 @@ from thesis.data import ContentProvider, MaskedSequenceDataset
 import matplotlib.pyplot as plt
 import torch
 import models.vgg_16
-import models.corr
+import models.thesis_alignment
 import numpy as np
 import random
 import matplotlib.patches as patches
@@ -15,18 +15,20 @@ import torch.nn.functional as F
 
 parser = argparse.ArgumentParser(description='Visualize samples from the dataset')
 parser.add_argument('--data-path', required=True, help='Path where the images are stored')
+parser.add_argument('--device', default='cpu', help='Device to use')
 args = parser.parse_args()
 
 
 # Create a function to plot an image with grids
-def plot_with_grid(x, h_pos, w_pos, size=256):
+def plot_with_grid(x, h_pos, w_pos, size=256, add_rectanble=True):
     fig = plt.figure()
     ax = fig.gca()
     ax.set_xticks(np.arange(0, size, size // 16))
     ax.set_yticks(np.arange(0, size, size // 16))
     plt.imshow(x)
-    rect = patches.Rectangle((w_pos * 16, h_pos * 16), 16, 16, linewidth=3, edgecolor='r', facecolor='none')
-    ax.add_patch(rect)
+    if add_rectanble:
+        rect = patches.Rectangle((w_pos * 16, h_pos * 16), 16, 16, linewidth=3, edgecolor='r', facecolor='none')
+        ax.add_patch(rect)
     plt.grid()
     plt.show()
 
@@ -43,9 +45,9 @@ def plot_horiz(plots_list):
 
 
 # Seed seeds
-torch.manual_seed(9)
-np.random.seed(15)
-random.seed(15)
+# torch.manual_seed(0)
+# np.random.seed(0)
+# random.seed(0)
 
 # Get meta
 gts_meta = utils.paths.DatasetPaths.get_items('got-10k', args.data_path, 'train', return_masks=False)
@@ -62,8 +64,8 @@ dataset = MaskedSequenceDataset(
     gts_simulator=None,
     masks_simulator=None,
     image_size=[256, 256],
-    frames_n=5,
-    frames_spacing=2,
+    frames_n=2,
+    frames_spacing=5,
     frames_randomize=False,
     dilatation_filter_size=(3, 3),
     dilatation_iterations=4,
@@ -74,40 +76,23 @@ dataset = MaskedSequenceDataset(
 # Created Loader object
 loader = iter(torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=True))
 
-# Test movement affine
-obj_mov = utils.movement.MovementSimulator(20, 0, 0)
-affine_grid = obj_mov.identity_affine_theta(16, 16).unsqueeze(0)
-affine_test = F.affine_grid(affine_grid, [1, 3, 16, 16], align_corners=True)
-a1 = affine_test[0, :, :, 0]
-a2 = affine_test[0, :, :, 1]
-b = 1
-
 # Get first sample
 (x, m), y, info = next(loader)
 
 # Get correlation volume
-corr = models.corr.CorrelationVGG('cpu')
-t, r_list = 2, [0, 1, 3, 4]
+vgg_model = models.vgg_16.get_pretrained_model(args.device)
+corr = models.thesis_alignment.CorrelationVGG(vgg_model, use_softmax=False).to(args.device)
+t, r_list = 1, [0]
 with torch.no_grad():
-    x_corr_vol = corr(y, m, t, r_list).detach()
-
-# Transform corr to dense flow
-corr_flow = utils.flow.corr_to_flow(x_corr_vol)
-corr_flow_relative = utils.flow.flow_abs_to_relative(corr_flow)
-
-# Plot relative flow
-utils.flow.plot_relative_flow(corr_flow_relative[0, 0])
+    x_corr_vol = corr(x[:, :, t], m[:, :, t], x[:, :, r_list], m[:, :, r_list]).detach()
 
 # Ask for position to plot. x_corr_vol is (b, t, h, w, h, w)
 h_pos, w_pos = 11, 0
 
 # Plot the target frame with a square in the pos
-plot_with_grid(x[0, :, 2].permute(1, 2, 0), h_pos, w_pos)
+plot_with_grid(x[0, :, 1].permute(1, 2, 0), h_pos, w_pos)
+plot_with_grid(x[0, :, 0].permute(1, 2, 0), h_pos, w_pos, add_rectanble=False)
 
-# Plot map for each t
-plots_list = []
-for t, ref_index in enumerate(r_list):
-    plots_list.append(
-        (x[0, :, ref_index].permute(1, 2, 0), x_corr_vol[0, t, h_pos, w_pos])
-    )
-plot_horiz(plots_list)
+# Plot heat map
+plt.imshow(x_corr_vol[0, 0, h_pos, w_pos])
+plt.show()

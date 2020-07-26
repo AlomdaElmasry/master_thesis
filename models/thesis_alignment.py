@@ -87,7 +87,7 @@ class CorrelationVGG(nn.Module):
         corr = utils.correlation.compute_masked_4d_correlation(x_target_feats, v_target, x_ref_feats, v_ref)
 
         # Fill holes in the correlation matrix using a NN
-        corr = self.conv(corr)
+        # corr = self.conv(corr)
 
         # Compute the Softmax over each pixel (b, t, h, w, h, w)
         return self.softmax(corr) if self.softmax else corr

@@ -7,10 +7,8 @@ import random
 import matplotlib.pyplot as plt
 import utils.losses
 import seaborn as sns
-import torch
 import pandas as pd
 import numpy as np
-import os.path
 import thesis_alignment.runner
 import progressbar
 import models.cpn_original
@@ -113,4 +111,4 @@ for dataset_name in ['got-10k', 'davis-2017']:
     )
     handles, labels = ax.get_legend_handles_labels()
     ax.legend(handles=handles[1:], labels=labels[1:])
-    plt.savefig('results_alignment_recons_{}.png'.format(dataset_name))
+    plt.savefig('results_alignment_{}.png'.format(dataset_name))

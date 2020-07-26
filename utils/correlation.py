@@ -47,7 +47,7 @@ def compute_masked_4d_correlation(x_target_feats, v_target, x_ref_feats, v_ref):
     corr_1 = x_target_feats.reshape(b, c, -1).transpose(-1, -2).unsqueeze(1)
     corr_1_norm = torch.norm(corr_1, dim=3).unsqueeze(3) + 1e-9
     corr_2 = x_ref_feats.reshape(b, c, ref_n, -1).permute(0, 2, 1, 3)
-    corr_2_norm = torch.norm(corr_2, dim=3).unsqueeze(3) + 1e-9
+    corr_2_norm = torch.norm(corr_2, dim=2).unsqueeze(2) + 1e-9
     corr = torch.matmul(corr_1 / corr_1_norm, corr_2 / corr_2_norm).reshape(b, ref_n, h, w, h, w)
 
     # Return 4D volume corr
