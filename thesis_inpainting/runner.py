@@ -188,14 +188,14 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
         )
 
     @staticmethod
-    def inpainting_algorithm_ip(x, m, model_alignment, model):
+    def inpainting_algorithm_ip(x, m, model_alignment, model, e=1):
         fill_color = torch.as_tensor([0.485, 0.456, 0.406], dtype=torch.float32).view(1, 3, 1, 1).to(x.device)
         y_inpainted, m_inpainted = x.unsqueeze(0), m.unsqueeze(0)
         t_list = sorted(list(range(x.size(1))), key=lambda xi: abs(xi - x.size(1) // 2))
         for t in t_list:
             t_candidates = ThesisInpaintingRunner.inpainting_algorithm_ip_indexes(t, t_list, d_step=2, max_d=20)
             y_hat_comp = None
-            while (len(t_candidates) > 0 and torch.sum(m_inpainted[:, :, t]) * 100 / m_inpainted[:, :, t].numel() > 1) \
+            while (len(t_candidates) > 0 and torch.sum(m_inpainted[:, :, t]) * 100 / m_inpainted[:, :, t].numel() > e) \
                     or y_hat_comp is None:
                 r_list = [t_candidates.pop(0)]
                 _, _, v_map, y_hat, y_hat_comp = ThesisInpaintingRunner.infer_step_propagate(
@@ -239,4 +239,4 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
                     if torch.sum(m_inpainted[:, :, t]) * 100 / m_inpainted[:, :, t].numel() < e:
                         m_inpainted[:, :, t] = 0
                         y_inpainted[:, :, t] = y_hat_comp[:, :, 0]
-        return y_inpainted
+        return y_inpainted[0]
