@@ -253,6 +253,8 @@ class CPNOriginal(nn.Module):
         self.Decoder = Decoder()
 
     def forward(self, x_target, m_target, x_refs, m_refs):
+        print(x_target.device)
+        print(self.device)
         x_refs_aligned, v_refs_aligned, v_maps = self.align(x_target, m_target, x_refs, m_refs)
         y_hat, y_hat_comp = self.copy_and_paste(x_target, 1 - m_target, x_refs_aligned, v_refs_aligned)
         return y_hat, y_hat_comp

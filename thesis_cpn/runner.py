@@ -123,7 +123,7 @@ class ThesisCPNRunner(thesis.runner.ThesisRunner):
         x, m = x.unsqueeze(0), m.unsqueeze(0)
 
         # Create a matrix to store inpainted frames. Size (B, 2, C, F, H, W), where the 2 is due to double direction
-        y_inpainted = np.zeros((2, c, f, h, w), dtype=np.float32).to(x.device)
+        y_inpainted = np.zeros((2, c, f, h, w), dtype=np.float32)
 
         # Use the model twice: forward (0) and backward (1)
         for d in range(2):
