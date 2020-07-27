@@ -311,8 +311,5 @@ class CPNOriginal(nn.Module):
         # Combine prediction with GT of the frame.
         y_hat_comp = v_target * x_target + (1 - v_target) * y_hat
 
-        plt.imshow(y_hat[0].permute(1, 2, 0))
-        plt.show()
-
         # Return everything
         return y_hat, y_hat_comp

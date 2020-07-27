@@ -115,10 +115,11 @@ class ThesisCPNRunner(thesis.runner.ThesisRunner):
     def test(self, epoch, device):
         self.model.eval()
         self.test_sequence(
-            self.inpainting_algorithm, 'algorithm_cpn', None, self.model, device
+            ThesisCPNRunner.inpainting_algorithm, 'algorithm_cpn', None, self.model, device
         )
 
-    def inpainting_algorithm(self, x, m, model_alignment, model):
+    @staticmethod
+    def inpainting_algorithm(x, m, model_alignment, model):
         c, f, h, w = x.size()
         x, m = x.unsqueeze(0), m.unsqueeze(0)
 
