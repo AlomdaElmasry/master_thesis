@@ -38,7 +38,7 @@ class ThesisCPNRunner(thesis.runner.ThesisRunner):
         model.load_state_dict(model_state)
         for param in model.parameters():
             param.requires_grad = False
-        return model
+        return model.to(device)
 
     def init_optimizer(self, device):
         self.optimizer = torch.optim.Adam(
