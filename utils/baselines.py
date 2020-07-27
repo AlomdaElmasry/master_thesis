@@ -4,7 +4,7 @@ import numpy as np
 import torch
 
 
-def alignment_baseline(x_target, x_ref):
+def alignment(x_target, x_ref):
     MAX_FEATURES = 500
     GOOD_MATCH_PERCENT = 0.15
 
@@ -46,3 +46,7 @@ def alignment_baseline(x_target, x_ref):
     im1Reg = cv2.warpPerspective(im1, h, (width, height))
 
     return torch.from_numpy(im1Reg.astype(np.float) / 255).permute(2, 0, 1)
+
+
+def inpainting(x_target, v_target, x_ref_aligned):
+    pass

@@ -13,7 +13,7 @@ import thesis_alignment.runner
 import progressbar
 import models.cpn_original
 import thesis_cpn.runner
-import utils.alignment
+import utils.baselines
 
 parser = argparse.ArgumentParser(description='Cleans invalid images')
 parser.add_argument('--data-path', required=True, help='Path where the images are stored')
@@ -71,7 +71,7 @@ for dataset_name in ['got-10k', 'davis-2017']:
             t, r_list = 1, [0]
 
             # Obtain alignments of the different networks
-            x_aligned_baseline = utils.alignment.alignment_baseline(x[:, t].cpu(), x[:, r_list].squeeze(1).cpu())
+            x_aligned_baseline = utils.baselines.alignment(x[:, t].cpu(), x[:, r_list].squeeze(1).cpu())
             x_aligned_cpn, _, _ = thesis_cpn.runner.ThesisCPNRunner.infer_alignment_step_propagate(
                 cpn_model, x[:, t].unsqueeze(0), m[:, t].unsqueeze(0), x[:, r_list].unsqueeze(0),
                 m[:, r_list].unsqueeze(0)

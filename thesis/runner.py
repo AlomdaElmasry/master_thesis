@@ -219,8 +219,8 @@ class ThesisRunner(skeltorch.Runner):
     def test_sequence(self, handler, folder_name, model_alignment, model, device):
         for it_data in self.experiment.data.datasets['test_sequences']:
             (x, m), y, info = it_data
-            x, m, y = x.to(device), m.to(device), y.to(device)
-            self._save_sample(handler(x, m, y, model_alignment, model).cpu().numpy() * 255, folder_name, info[0])
+            x, m = x.to(device), m.to(device)
+            self._save_sample(handler(x, m, model_alignment, model).cpu().numpy() * 255, folder_name, info[0])
 
     def _test_frames_trivial(self, x_target, x_ref_aligned, v_map):
         b, c, ref_n, h, w = x_ref_aligned.size()

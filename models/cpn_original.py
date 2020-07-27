@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
+import matplotlib.pyplot as plt
 
 class Conv2d(nn.Module):
     def __init__(self, in_ch, out_ch, kernel_size=3, stride=1, padding=1, D=1, activation=nn.ReLU()):
@@ -112,6 +112,30 @@ class A_Regressor(nn.Module):
         return theta
 
 
+# Encoder (Copy network)
+class Encoder(nn.Module):
+    def __init__(self):
+        super(Encoder, self).__init__()
+        self.conv12 = Conv2d(4, 64, kernel_size=5, stride=2, padding=2, activation=nn.ReLU())  # 2
+        self.conv2 = Conv2d(64, 64, kernel_size=3, stride=1, padding=1, activation=nn.ReLU())  # 2
+        self.conv23 = Conv2d(64, 128, kernel_size=3, stride=2, padding=1, activation=nn.ReLU())  # 4
+        self.conv3 = Conv2d(128, 128, kernel_size=3, stride=1, padding=1, activation=nn.ReLU())  # 4
+        self.value3 = Conv2d(128, 128, kernel_size=3, stride=1, padding=1, activation=None)  # 4
+        init_He(self)
+        self.register_buffer('mean', torch.FloatTensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1))
+        self.register_buffer('std', torch.FloatTensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1))
+
+    def forward(self, in_f, in_v):
+        f = (in_f - self.mean) / self.std
+        x = torch.cat([f, in_v], dim=1)
+        x = self.conv12(x)
+        x = self.conv2(x)
+        x = self.conv23(x)
+        x = self.conv3(x)
+        v = self.value3(x)
+        return v
+
+
 # Decoder (Paste network)
 class Decoder(nn.Module):
     def __init__(self):
@@ -200,7 +224,7 @@ class CM_Module(nn.Module):
             gs[zeros] = 0
             v_sum += zeros.float()
             gs = gs / v_sum / C
-            gs = torch.ones(t_feat.shape).float().cuda() * gs.view(B, 1, 1, 1)
+            gs = torch.ones(t_feat.shape).float().to(t_feat.device) * gs.view(B, 1, 1, 1)
             gs_.append(gs)
             vmap_.append(rvmap_t)
 
@@ -224,14 +248,14 @@ class CPNOriginal(nn.Module):
         super(CPNOriginal, self).__init__()
         self.A_Encoder = A_Encoder()  # Align
         self.A_Regressor = A_Regressor()  # output: alignment network
-        self.register_buffer('mean', torch.FloatTensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1))
-        self.register_buffer('mean3d', torch.FloatTensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1, 1))
-        self.register_buffer('std', torch.as_tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1, 1))
+        self.Encoder = Encoder()  # Merge
+        self.CM_Module = CM_Module()
+        self.Decoder = Decoder()
 
-    def forward(self, x_target, m_target, y_target, x_refs, m_refs):
-        # x_target, x_refs = (x_target - self.mean) / self.std.squeeze(2), (x_refs - self.mean3d) / self.std
-        x_aligned, v_aligned, v_maps = self.align(x_target, m_target, x_refs, m_refs)
-        return x_aligned, v_aligned, v_maps
+    def forward(self, x_target, m_target, x_refs, m_refs):
+        x_refs_aligned, v_refs_aligned, v_maps = self.align(x_target, m_target, x_refs, m_refs)
+        y_hat, y_hat_comp = self.copy_and_paste(x_target, 1 - m_target, x_refs_aligned, v_refs_aligned)
+        return y_hat, y_hat_comp
 
     def align(self, x_target, m_target, x_refs, m_refs):
         b, c, ref_n, h, w = x_refs.size()
@@ -265,71 +289,30 @@ class CPNOriginal(nn.Module):
         # Return data
         return x_aligned, v_aligned, v_maps
 
-    def encoding(self, frames, holes):
-        batch_size, _, num_frames, height, width = frames.size()
-        # padding
-        (frames, holes), pad = pad_divide_by([frames, holes], 8, (frames.size()[3], frames.size()[4]))
+    def copy_and_paste(self, x_target, v_target, x_aligned, v_aligned):
+        b, c, f_ref, h, w = x_aligned.size()
 
-        feat_ = []
-        for t in range(num_frames):
-            feat = self.A_Encoder(frames[:, :, t], holes[:, :, t])
-            feat_.append(feat)
-        feats = torch.stack(feat_, dim=2)
-        return feats
+        # Get c_features of everything
+        c_feats = self.Encoder(
+            torch.cat([x_target.unsqueeze(2), x_aligned], dim=2).transpose(1, 2).reshape(-1, c, h, w),
+            torch.cat([1 - v_target.unsqueeze(2), v_aligned], dim=2).transpose(1, 2).reshape(-1, 1, h, w)
+        )
+        c_feats = c_feats.reshape(b, f_ref + 1, c_feats.size(1), c_feats.size(2), c_feats.size(3)).transpose(1, 2)
 
-    def align_2(self, x, m, y, t, r_list):
-        rfeats = self.encoding(x, m)
-        rfeats = rfeats[:, :, r_list]
-        rframes = x[:, :, r_list]
-        rholes = m[:, :, r_list]
-        frame = x[:, :, t]
-        hole = m[:, :, t]
-        gt = 0
+        # Apply Content-Matching Module
+        p_in, c_mask = self.CM_Module(c_feats, v_target, v_aligned)
 
-        # Parameters
-        batch_size, _, height, width = frame.size()  # B C H W
-        num_r = rfeats.size()[2]  # # of reference frames
+        # Upscale c_mask to match the size of the mask
+        c_mask = (F.interpolate(c_mask, size=(h, w), mode='bilinear', align_corners=False)).detach()
 
-        # padding
-        (rframes, rholes, frame, hole), pad = pad_divide_by([rframes, rholes, frame, hole], 8, (height, width))
+        # Obtain the predicted output y_hat. Clip the output to be between [0, 1]
+        y_hat = torch.clamp(self.Decoder(p_in), 0, 1)
 
-        # Target embedding
-        tfeat = self.A_Encoder(frame, hole)
+        # Combine prediction with GT of the frame.
+        y_hat_comp = v_target * x_target + (1 - v_target) * y_hat
 
-        # c_feat: Encoder(Copy Network) features
-        # c_feat_ = [self.Encoder(frame, hole)]
-        L_align = torch.zeros_like(frame)
+        plt.imshow(y_hat[0].permute(1, 2, 0))
+        plt.show()
 
-        # aligned_r: aligned reference frames
-        aligned_r_ = []
-
-        # rvmap: aligned reference frames valid maps
-        rvmap_ = []
-
-        for r in range(num_r):
-            theta_rt = self.A_Regressor(tfeat, rfeats[:, :, r])
-            grid_rt = F.affine_grid(theta_rt, frame.size())
-
-            # aligned_r: aligned reference frame
-            # reference frame affine transformation
-            aligned_r = F.grid_sample(rframes[:, :, r], grid_rt)
-
-            # aligned_v: aligned reference visiblity map
-            # reference mask affine transformation
-            aligned_v = F.grid_sample(1 - rholes[:, :, r], grid_rt)
-            aligned_v = (aligned_v > 0.5).float()
-
-            aligned_r_.append(aligned_r)
-
-            # intersection of target and reference valid map
-            trvmap = (1 - hole) * aligned_v
-            # compare the aligned frame - target frame
-
-            # c_feat_.append(self.Encoder(aligned_r, aligned_v))
-
-            rvmap_.append(aligned_v)
-
-        aligned_rs = torch.stack(aligned_r_, 2)
-        rvmap = torch.stack(rvmap_, 2)
-
-        return aligned_rs, rvmap, None
+        # Return everything
+        return y_hat, y_hat_comp

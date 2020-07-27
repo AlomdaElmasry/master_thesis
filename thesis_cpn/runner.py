@@ -113,60 +113,42 @@ class ThesisCPNRunner(thesis.runner.ThesisRunner):
     #     return loss, [loss_alignment, loss_vh, loss_nvh, loss_nh, loss_perceptual, loss_style, loss_tv, loss_grad]
 
     def test(self, epoch, device):
-        raise NotImplementedError
+        self.model.eval()
+        self.test_sequence(
+            self.inpainting_algorithm, 'algorithm_cpn', None, self.model, device
+        )
 
-    def inpainting_algorithm(self, device):
-        # Set training parameters to the original test dataset
-        self.experiment.data.datasets['test'].frames_n = -1
+    def inpainting_algorithm(self, x, m, model_alignment, model):
+        c, f, h, w = x.size()
+        x, m = x.unsqueeze(0), m.unsqueeze(0)
 
-        # Iterate over the set of sequences
-        for sequence_index in self.experiment.data.test_sequences_indexes:
-            (x, m), y, info = self.experiment.data.datasets['test'][sequence_index]
-            c, f, h, w = x.size()
+        # Create a matrix to store inpainted frames. Size (B, 2, C, F, H, W), where the 2 is due to double direction
+        y_inpainted = np.zeros((2, c, f, h, w), dtype=np.float32)
 
-            # Unsqueeze batch dimension
-            x = x.unsqueeze(0)
-            m = m.unsqueeze(0)
-            y = y.unsqueeze(0)
+        # Use the model twice: forward (0) and backward (1)
+        for d in range(2):
+            x_copy, m_copy = x.clone(), m.clone()
 
-            # Create a matrix to store inpainted frames. Size (B, 2, C, F, H, W), where the 2 is due to double direction
-            y = y.to(device)
-            y_hat_comp = np.zeros((2, c, f, h, w), dtype=np.float32)
+            # Iterate over all the frames of the video
+            for t in (list(range(f)) if d == 0 else reversed(list(range(f)))):
+                r_list = ThesisCPNRunner.get_reference_frame_indexes(t, f)
 
-            # Use the model twice: forward (0) and backward (1)
-            for d in range(2):
-                x_copy = x.clone().to(device)
-                m_copy = m.clone().to(device)
+                # Replace input_frames and input_masks with previous predictions to improve quality
+                with torch.no_grad():
+                    _, x_copy[:, :, t] = model(
+                        x_copy[:, :, t], m_copy[:, :, t], x_copy[:, :, r_list], m_copy[:, :, r_list]
+                    )
+                    m_copy[:, :, t] = 0
+                    y_inpainted[d, :, t] = x_copy[:, :, t].squeeze(0).detach().cpu().numpy()
 
-                # Iterate over all the frames of the video
-                for t in (list(range(f)) if d == 0 else reversed(list(range(f)))):
-                    r_list = ThesisCPNRunner.get_reference_frame_indexes(t, f)
-
-                    # Replace input_frames and input_masks with previous predictions to improve quality
-                    with torch.no_grad():
-                        _, x_copy[:, :, t], _, _, _ = self.model(x_copy, m_copy, y, t, r_list)
-                        m_copy[:, :, t] = 0
-                        y_hat_comp[d, :, t] = x_copy[:, :, t].squeeze(0).detach().cpu().numpy()
-
-            # Combine forward and backward predictions
-            forward_factor = np.arange(start=0, stop=y_hat_comp.shape[2]) / f
-            backward_factor = (f - np.arange(start=0, stop=y_hat_comp.shape[2])) / f
-            y_hat_comp = (
-                    y_hat_comp[0].transpose(0, 2, 3, 1) * forward_factor +
-                    y_hat_comp[1].transpose(0, 2, 3, 1) * backward_factor
-            ).transpose(0, 3, 1, 2)
-
-            # Log 4 middle frames inside TensorBoard
-            y_hat_comp_tbx = [
-                y_hat_comp[:, f] for f in range(y_hat_comp.shape[1] // 2 - 2, y_hat_comp.shape[1] // 2 + 2)
-            ]
-            self.experiment.tbx.add_images(
-                'test_sequences/{}'.format(info[0]), y_hat_comp_tbx, global_step=self.counters['epoch'],
-                dataformats='CHW'
-            )
-
-            # Save the sequence in disk
-            self._save_sample((y_hat_comp * 255).astype(np.uint8), 'test', info[0], True)
+        # Combine forward and backward predictions
+        forward_factor = np.arange(start=0, stop=y_inpainted.shape[2]) / f
+        backward_factor = (f - np.arange(start=0, stop=y_inpainted.shape[2])) / f
+        y_inpainted = (
+                y_inpainted[0].transpose(0, 2, 3, 1) * forward_factor +
+                y_inpainted[1].transpose(0, 2, 3, 1) * backward_factor
+        ).transpose(0, 3, 1, 2)
+        return y_inpainted
 
     @staticmethod
     def get_reference_frame_indexes(t, n_frames, p=2, r_list_max_length=120):

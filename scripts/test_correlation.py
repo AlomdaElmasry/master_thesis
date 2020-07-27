@@ -87,7 +87,7 @@ with torch.no_grad():
     x_corr_vol = corr(x[:, :, t], m[:, :, t], x[:, :, r_list], m[:, :, r_list]).detach()
 
 # Ask for position to plot. x_corr_vol is (b, t, h, w, h, w)
-h_pos, w_pos = 11, 0
+h_pos, w_pos = 4, 4
 
 # Plot the target frame with a square in the pos
 plot_with_grid(x[0, :, 1].permute(1, 2, 0), h_pos, w_pos)
