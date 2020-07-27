@@ -50,7 +50,6 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
         super().init_others(device)
 
     def train_step(self, it_data, device):
-        self.test(None, device)
         (x, m), y, info = it_data
         x, m, y, flows_use, flow_gt = x.to(device), m.to(device), y.to(device), info[2], info[5].to(device)
         t, r_list = self.get_indexes(x.size(2))
@@ -121,10 +120,6 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
     def test(self, epoch, device):
         self.model.eval()
 
-        self.test_sequence(
-            self.inpainting_algorithm_cp, 'algorithm_cp', self.model_alignment, self.model, device
-        )
-
         # If epoch != 0, loadit
         if epoch is not None:
             self.load_states(epoch, device)
@@ -144,6 +139,9 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
             )
             self.test_sequence(
                 self.inpainting_algorithm_ip, 'algorithm_ip', self.model_alignment, self.model, device
+            )
+            self.test_sequence(
+                self.inpainting_algorithm_cp, 'algorithm_cp', self.model_alignment, self.model, device
             )
 
     def test_losses_handler(self, x, m, y, flows_use, flow_gt, t, r_list):
@@ -217,11 +215,11 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
         return t_list_inpainted + t_list_ff
 
     @staticmethod
-    def inpainting_algorithm_cp(x, m, model_alignment, model, s=2, e=1):
+    def inpainting_algorithm_cp(x, m, model_alignment, model, N=20, s=1, e=1):
         fill_color = torch.as_tensor([0.485, 0.456, 0.406], dtype=torch.float32).view(1, 3, 1, 1).to(x.device)
         y_inpainted, m_inpainted = x.unsqueeze(0), m.unsqueeze(0)
-        for i in range(20):
-            t_list = [t for t in range(y_inpainted.size(s)) if (t // s) % s == i % 2]
+        for i in range(N):
+            t_list = [t for t in range(y_inpainted.size(s)) if (t // s) % s == i % 2] # bad implementation
             for t in t_list:
                 if m_inpainted[:, :, t].sum() == 0:
                     continue
