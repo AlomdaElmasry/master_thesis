@@ -92,10 +92,10 @@ for dataset_name in ['got-10k', 'davis-2017']:
                 ours_loss = loss_utils.masked_l1(x_aligned_ours[0, :, 0], x[:, t], mask=1 - m[:, t])
 
                 # Append the losses
-                losses[dataset_name][s]['baseline'].append(baseline_loss)
+                losses[dataset_name][s]['baseline'].append(baseline_loss.cpu().item())
                 losses[dataset_name][s]['cpn'].append(cpn_loss.cpu().item())
                 losses[dataset_name][s]['ours'].append(ours_loss.cpu().item())
-            except:
+            except Exception:
                 continue
 
             # Update bar
