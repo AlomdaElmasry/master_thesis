@@ -11,6 +11,7 @@ import utils.draws
 import matplotlib.pyplot as plt
 import thesis_cpn.runner
 import models.cpn_original
+import os.path
 
 
 class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
