@@ -29,7 +29,7 @@ cpn_model = thesis_cpn.runner.ThesisCPNRunner.init_model_with_state(
 )
 ours_model = thesis_alignment.runner.ThesisAlignmentRunner.init_model_with_state(
     models.thesis_alignment.ThesisAlignmentModel(vgg_model).to(args.device),
-    args.experiments_path, 'align_faith', 82, args.device
+    args.experiments_path, 'alignment_final', 110, args.device
 )
 
 # Create utils
