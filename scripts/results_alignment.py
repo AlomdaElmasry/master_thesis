@@ -71,25 +71,32 @@ for dataset_name in ['got-10k', 'davis-2017']:
             t, r_list = 1, [0]
 
             # Obtain alignments of the different networks
-            x_aligned_baseline = utils.baselines.alignment(x[:, t].cpu(), x[:, r_list].squeeze(1).cpu()).to(args.device)
-            x_aligned_cpn, _, _ = thesis_cpn.runner.ThesisCPNRunner.infer_alignment_step_propagate(
-                cpn_model, x[:, t].unsqueeze(0), m[:, t].unsqueeze(0), x[:, r_list].unsqueeze(0),
-                m[:, r_list].unsqueeze(0)
-            )
-            x_aligned_ours, _, _ = thesis_alignment.runner.ThesisAlignmentRunner.infer_step_propagate(
-                ours_model, x[:, t].unsqueeze(0), m[:, t].unsqueeze(0), x[:, r_list].unsqueeze(0),
-                m[:, r_list].unsqueeze(0),
-            )
+            try:
+                x_aligned_baseline = utils.baselines.alignment(
+                    x[:, t].cpu(), x[:, r_list].squeeze(1).cpu()
+                ).to(args.device)
 
-            # Compute L1 losses outside the hole
-            baseline_loss = loss_utils.masked_l1(x_aligned_baseline, x[:, t], mask=1 - m[:, t])
-            cpn_loss = loss_utils.masked_l1(x_aligned_cpn[0, :, 0], x[:, t], mask=1 - m[:, t])
-            ours_loss = loss_utils.masked_l1(x_aligned_ours[0, :, 0], x[:, t], mask=1 - m[:, t])
+                x_aligned_cpn, _, _ = thesis_cpn.runner.ThesisCPNRunner.infer_alignment_step_propagate(
+                    cpn_model, x[:, t].unsqueeze(0), m[:, t].unsqueeze(0), x[:, r_list].unsqueeze(0),
+                    m[:, r_list].unsqueeze(0)
+                )
 
-            # Append the losses
-            losses[dataset_name][s]['baseline'].append(baseline_loss)
-            losses[dataset_name][s]['cpn'].append(cpn_loss.cpu().item())
-            losses[dataset_name][s]['ours'].append(ours_loss.cpu().item())
+                x_aligned_ours, _, _ = thesis_alignment.runner.ThesisAlignmentRunner.infer_step_propagate(
+                    ours_model, x[:, t].unsqueeze(0), m[:, t].unsqueeze(0), x[:, r_list].unsqueeze(0),
+                    m[:, r_list].unsqueeze(0),
+                )
+
+                # Compute L1 losses outside the hole
+                baseline_loss = loss_utils.masked_l1(x_aligned_baseline, x[:, t], mask=1 - m[:, t])
+                cpn_loss = loss_utils.masked_l1(x_aligned_cpn[0, :, 0], x[:, t], mask=1 - m[:, t])
+                ours_loss = loss_utils.masked_l1(x_aligned_ours[0, :, 0], x[:, t], mask=1 - m[:, t])
+
+                # Append the losses
+                losses[dataset_name][s]['baseline'].append(baseline_loss)
+                losses[dataset_name][s]['cpn'].append(cpn_loss.cpu().item())
+                losses[dataset_name][s]['ours'].append(ours_loss.cpu().item())
+            except:
+                continue
 
             # Update bar
             bar.update(bar.value + 1)
