@@ -29,7 +29,7 @@ cpn_model = thesis_cpn.runner.ThesisCPNRunner.init_model_with_state(
 )
 ours_model = thesis_alignment.runner.ThesisAlignmentRunner.init_model_with_state(
     models.thesis_alignment.ThesisAlignmentModel(vgg_model).to(args.device),
-    args.experiments_path, 'alignment_final', 110, args.device
+    args.experiments_path, 'alignment_final', 125, args.device
 )
 
 # Create utils
@@ -103,12 +103,12 @@ for dataset_name in ['got-10k', 'davis-2017']:
 
     # Create the plot
     plt.figure()
-    plt.title('Data set: {}'.format('DAVIS' if dataset_name == 'davis-2017' else 'GOT-10k Validation'))
+    plt.title('DAVIS Extended Annotations Set' if dataset_name == 'davis-2017' else 'GOT-10k Validation Set')
     data = pd.DataFrame({
         'Frame distance (s)': list(range(1, 11)),
         'Baseline': [np.mean(losses[dataset_name][s]['baseline']) for s in range(1, 11)],
-        'CPN': [np.mean(losses[dataset_name][s]['cpn']) for s in range(1, 11)],
-        'Ours (DFPN)': [np.mean(losses[dataset_name][s]['ours']) for s in range(1, 11)]
+        'DFPN': [np.mean(losses[dataset_name][s]['ours']) for s in range(1, 11)],
+        'State of the Art (CPN)': [np.mean(losses[dataset_name][s]['cpn']) for s in range(1, 11)],
     })
     ax = sns.lineplot(
         x='Frame distance (s)',
