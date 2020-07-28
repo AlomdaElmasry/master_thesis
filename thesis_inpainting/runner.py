@@ -28,7 +28,7 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
         else:
             self.model_alignment = thesis_alignment.runner.ThesisAlignmentRunner.init_model_with_state(
                 models.thesis_alignment.ThesisAlignmentModel(self.model_vgg).to(device),
-                self.experiment.paths['experiments'],
+                os.path.dirname(self.experiment.paths['experiment']),
                 self.experiment.configuration.get('model', 'alignment_experiment_name'),
                 self.experiment.configuration.get('model', 'alignment_experiment_epoch'),
                 device
