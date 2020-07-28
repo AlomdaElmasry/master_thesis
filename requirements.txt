@@ -16,3 +16,4 @@ jpeg4py~=0.1.4
 tqdm~=4.46.1
 seaborn~=0.10.1
 pandas~=1.0.5
+tabulate

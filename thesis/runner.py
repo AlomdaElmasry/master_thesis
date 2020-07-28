@@ -228,7 +228,7 @@ class ThesisRunner(skeltorch.Runner):
 
     @staticmethod
     def inpainting_hard_copy(x_target, v_target, x_ref_aligned, v_ref_aligned, v_map):
-        y_hat = y_hat_comp = v_target * x_target + v_map[:, :, 0] * x_ref_aligned[:, :, 0]
+        y_hat = y_hat_comp = (1 - v_map[:, :, 0]) * x_target + v_map[:, :, 0] * x_ref_aligned[:, :, 0]
         return y_hat.unsqueeze(2), y_hat_comp.unsqueeze(2)
 
     def get_indexes(self, size):

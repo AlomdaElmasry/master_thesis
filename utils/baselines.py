@@ -48,5 +48,5 @@ def alignment(x_target, x_ref):
     return torch.from_numpy(im1Reg.astype(np.float) / 255).permute(2, 0, 1)
 
 
-def inpainting(x_target, v_target, x_ref_aligned):
-    pass
+def inpainting(x_target, m_target, x_refs, m_refs):
+    a = 1

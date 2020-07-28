@@ -22,7 +22,7 @@ parser.add_argument('--n-samples', default=1000, type=int, help='Number of sampl
 parser.add_argument('--device', default='cpu', help='Device to use')
 args = parser.parse_args()
 
-# Load the baseline model
+# Load the models
 vgg_model = models.vgg_16.get_pretrained_model(args.device)
 cpn_model = thesis_cpn.runner.ThesisCPNRunner.init_model_with_state(
     models.cpn_original.CPNOriginal().to(args.device), args.device

@@ -23,9 +23,9 @@
     "p_repeat": 0
   },
   "model": {
-    "alignment_network": "cpn",
-    "alignment_experiment_name": "experiment_name",
-    "alignment_experiment_epoch": 100,
+    "alignment_network": "dfpn",
+    "alignment_experiment_name": "alignment_final",
+    "alignment_experiment_epoch": 125,
     "loss_lambdas": [0.5, 2, 1, 0.5, 1]
   },
   "training": {

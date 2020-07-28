@@ -28,7 +28,7 @@ class ThesisAlignmentRunner(thesis.runner.ThesisRunner):
         checkpoint_path = os.path.join(experiment_path, 'checkpoints', '{}.checkpoint.pkl'.format(epoch))
         with open(checkpoint_path, 'rb') as checkpoint_file:
             model.load_state_dict(torch.load(checkpoint_file, map_location=device)['model'])
-        return model
+        return model.to(device)
 
     def init_optimizer(self, device):
         self.optimizer = torch.optim.Adam(
