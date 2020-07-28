@@ -45,7 +45,7 @@ for dataset_name in ['got-10k', 'davis-2017']:
 
         # Create the dataset object
         gts_meta = utils.paths.DatasetPaths.get_items(dataset_name, args.data_path, 'validation', return_masks=False)
-        masks_meta = utils.paths.DatasetPaths.get_items('youtube-vos', args.data_path, 'train')
+        masks_meta = utils.paths.DatasetPaths.get_items('youtube-vos', args.data_path, 'train', return_gts=False)
         gts_data = ContentProvider(args.data_path, gts_meta, None, 512)
         masks_data = ContentProvider(args.data_path, masks_meta, None)
         dataset = MaskedSequenceDataset(
