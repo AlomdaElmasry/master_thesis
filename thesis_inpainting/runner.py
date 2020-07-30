@@ -129,17 +129,17 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
     def test(self, epoch, device):
         self.model.eval()
 
-        # If epoch != 0, loadit
-        if epoch is not None:
-            self.load_states(epoch, device)
-
-        # Compute the losses on the test set
-        self.test_losses(self.test_losses_handler, self.losses_items_ids, device)
-
-        # Inpaint individual frames on the test set
-        if self.counters['epoch'] % 5 == 0:
-            self.test_frames(self.test_frames_handler, 'validation', device)
-            self.test_frames(self.test_frames_handler, 'test', device)
+        # # If epoch != 0, loadit
+        # if epoch is not None:
+        #     self.load_states(epoch, device)
+        #
+        # # Compute the losses on the test set
+        # self.test_losses(self.test_losses_handler, self.losses_items_ids, device)
+        #
+        # # Inpaint individual frames on the test set
+        # if self.counters['epoch'] % 5 == 0:
+        #     self.test_frames(self.test_frames_handler, 'validation', device)
+        #     self.test_frames(self.test_frames_handler, 'test', device)
 
         # Inpaint test sequences every 10 epochs
         if epoch is not None or self.counters['epoch'] % 50 == 0:
