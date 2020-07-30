@@ -151,7 +151,7 @@ for dataset_name in ['got-10k', 'davis-2017']:
         l1_baseline_dfpn_cp.append(loss_utils.masked_l1(y_inpainted_baseline_dfpn_cp, y, mask=m, reduction='sum').item())
         l1_cpn_chn_cp.append(loss_utils.masked_l1(y_inpainted_cpn_chn_cp, y, mask=m, reduction='sum'))
         l1_dfpn_chn_cp.append(loss_utils.masked_l1(y_inpainted_dfpn_chn_cp, y, mask=m, reduction='sum'))
-        l1_cpn.append(loss_utils.masked_l1(y_inpainted_cpn, y, mask=m, reduction='sum'))
+        l1_cpn.append(loss_utils.masked_l1(y_inpainted_cpn, y, mask=m, reduction='sum').item())
 
         # Quality Measure: PSNR
         psnr_baseline_cpn_ff.append(measures_utils.psnr(y_inpainted_baseline_cpn_ff.cpu(), y.cpu()))
