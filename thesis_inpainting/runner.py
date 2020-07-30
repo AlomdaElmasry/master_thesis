@@ -195,7 +195,7 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
         )
 
     @staticmethod
-    def inpainting_algorithm_ip(x, m, model_alignment, model, s=2, D=20, e=1):
+    def inpainting_algorithm_ip(x, m, model_alignment, model, s=1, D=20, e=1):
         fill_color = torch.as_tensor([0.485, 0.456, 0.406], dtype=torch.float32).view(1, 3, 1, 1).to(x.device)
         y_inpainted, m_inpainted = x.unsqueeze(0), m.unsqueeze(0)
         t_list = sorted(list(range(x.size(1))), key=lambda xi: abs(xi - x.size(1) // 2))
