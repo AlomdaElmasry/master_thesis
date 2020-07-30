@@ -4,8 +4,6 @@ from thesis.dataset import ContentProvider, MaskedSequenceDataset
 import models.thesis_alignment
 import models.vgg_16
 import random
-import torch
-import matplotlib.pyplot as plt
 import utils.losses
 import numpy as np
 import thesis_alignment.runner
@@ -14,7 +12,6 @@ import progressbar
 import models.thesis_inpainting
 import models.cpn_original
 import thesis_cpn.runner
-import utils.baselines
 import utils.measures
 import thesis.runner
 from prettytable import PrettyTable
@@ -37,7 +34,7 @@ dfpn_model = thesis_alignment.runner.ThesisAlignmentRunner.init_model_with_state
 cpn_chn_model = thesis_inpainting.runner.ThesisInpaintingRunner.init_model_with_state(
     models.thesis_inpainting.ThesisInpaintingVisible(), args.experiments_path, 'inpainting_final_cpn', 100, args.device
 )
-dfpn_chn_model = None
+dfpn_chn_model = cpn_chn_model
 
 # Iterate over the data sets and the displacements
 loss_utils = utils.losses.LossesUtils(None, args.device)
@@ -106,7 +103,9 @@ for dataset_name in ['got-10k', 'davis-2017']:
         y_inpainted_cpn_chn_ff = thesis_inpainting.runner.ThesisInpaintingRunner.inpainting_algorithm_ff(
             x.clone(), m.clone(), cpn_model, cpn_chn_model
         )
-        y_inpainted_dfpn_chn_ff = y
+        y_inpainted_dfpn_chn_ff = thesis_inpainting.runner.ThesisInpaintingRunner.inpainting_algorithm_ff(
+            x.clone(), m.clone(), cpn_model, dfpn_chn_model
+        )
 
         # Algorithm 2: IP
         y_inpainted_baseline_cpn_ip = thesis_inpainting.runner.ThesisInpaintingRunner.inpainting_algorithm_ip(
@@ -118,7 +117,9 @@ for dataset_name in ['got-10k', 'davis-2017']:
         y_inpainted_cpn_chn_ip = thesis_inpainting.runner.ThesisInpaintingRunner.inpainting_algorithm_ip(
             x.clone(), m.clone(), cpn_model, cpn_chn_model
         )
-        y_inpainted_dfpn_chn_ip = y
+        y_inpainted_dfpn_chn_ip = thesis_inpainting.runner.ThesisInpaintingRunner.inpainting_algorithm_ip(
+            x.clone(), m.clone(), cpn_model, dfpn_chn_model
+        )
 
         # Algorithm 3: CP
         y_inpainted_baseline_cpn_cp = thesis_inpainting.runner.ThesisInpaintingRunner.inpainting_algorithm_cp(
@@ -130,10 +131,12 @@ for dataset_name in ['got-10k', 'davis-2017']:
         y_inpainted_cpn_chn_cp = thesis_inpainting.runner.ThesisInpaintingRunner.inpainting_algorithm_cp(
             x.clone(), m.clone(), cpn_model, cpn_chn_model
         )
-        y_inpainted_dfpn_chn_cp = y
+        y_inpainted_dfpn_chn_cp = thesis_inpainting.runner.ThesisInpaintingRunner.inpainting_algorithm_cp(
+            x.clone(), m.clone(), cpn_model, dfpn_chn_model
+        )
 
         # CPN
-        y_inpainted_cpn = y
+        y_inpainted_cpn = thesis_cpn.runner.ThesisCPNRunner.inpainting_algorithm(x.clone(), m.clone(), None, cpn_model)
 
         # Quality Measure: Hole L1
         l1_baseline_cpn_ff.append(loss_utils.masked_l1(y_inpainted_baseline_cpn_ff, y, mask=m, reduction='sum').item())
@@ -151,34 +154,34 @@ for dataset_name in ['got-10k', 'davis-2017']:
         l1_cpn.append(loss_utils.masked_l1(y_inpainted_cpn, y, mask=m, reduction='sum'))
 
         # Quality Measure: PSNR
-        psnr_baseline_cpn_ff.append(measures_utils.psnr(y_inpainted_baseline_cpn_ff, y))
-        psnr_baseline_dfpn_ff.append(measures_utils.psnr(y_inpainted_baseline_dfpn_ff, y))
-        psnr_cpn_chn_ff.append(measures_utils.psnr(y_inpainted_cpn_chn_ff, y))
-        psnr_dfpn_chn_ff.append(measures_utils.psnr(y_inpainted_dfpn_chn_ff, y))
-        psnr_baseline_cpn_ip.append(measures_utils.psnr(y_inpainted_baseline_cpn_ip, y))
-        psnr_baseline_dfpn_ip.append(measures_utils.psnr(y_inpainted_baseline_dfpn_ip, y))
-        psnr_cpn_chn_ip.append(measures_utils.psnr(y_inpainted_cpn_chn_ip, y))
-        psnr_dfpn_chn_ip.append(measures_utils.psnr(y_inpainted_dfpn_chn_ip, y))
-        psnr_baseline_cpn_cp.append(measures_utils.psnr(y_inpainted_baseline_cpn_cp, y))
-        psnr_baseline_dfpn_cp.append(measures_utils.psnr(y_inpainted_baseline_dfpn_cp, y))
-        psnr_cpn_chn_cp.append(measures_utils.psnr(y_inpainted_cpn_chn_cp, y))
-        psnr_dfpn_chn_cp.append(measures_utils.psnr(y_inpainted_dfpn_chn_cp, y))
-        psnr_cpn.append(measures_utils.psnr(y_inpainted_cpn, y))
+        psnr_baseline_cpn_ff.append(measures_utils.psnr(y_inpainted_baseline_cpn_ff.cpu(), y))
+        psnr_baseline_dfpn_ff.append(measures_utils.psnr(y_inpainted_baseline_dfpn_ff.cpu(), y))
+        psnr_cpn_chn_ff.append(measures_utils.psnr(y_inpainted_cpn_chn_ff.cpu(), y))
+        psnr_dfpn_chn_ff.append(measures_utils.psnr(y_inpainted_dfpn_chn_ff.cpu(), y))
+        psnr_baseline_cpn_ip.append(measures_utils.psnr(y_inpainted_baseline_cpn_ip.cpu(), y))
+        psnr_baseline_dfpn_ip.append(measures_utils.psnr(y_inpainted_baseline_dfpn_ip.cpu(), y))
+        psnr_cpn_chn_ip.append(measures_utils.psnr(y_inpainted_cpn_chn_ip.cpu(), y))
+        psnr_dfpn_chn_ip.append(measures_utils.psnr(y_inpainted_dfpn_chn_ip.cpu(), y))
+        psnr_baseline_cpn_cp.append(measures_utils.psnr(y_inpainted_baseline_cpn_cp.cpu(), y))
+        psnr_baseline_dfpn_cp.append(measures_utils.psnr(y_inpainted_baseline_dfpn_cp.cpu(), y))
+        psnr_cpn_chn_cp.append(measures_utils.psnr(y_inpainted_cpn_chn_cp.cpu(), y))
+        psnr_dfpn_chn_cp.append(measures_utils.psnr(y_inpainted_dfpn_chn_cp.cpu(), y))
+        psnr_cpn.append(measures_utils.psnr(y_inpainted_cpn.cpu(), y))
 
         # Quality Measure: SSIM
-        ssim_baseline_cpn_ff.append(measures_utils.ssim(y_inpainted_baseline_cpn_ff, y))
-        ssim_baseline_dfpn_ff.append(measures_utils.ssim(y_inpainted_baseline_dfpn_ff, y))
-        ssim_cpn_chn_ff.append(measures_utils.ssim(y_inpainted_cpn_chn_ff, y))
-        ssim_dfpn_chn_ff.append(measures_utils.ssim(y_inpainted_dfpn_chn_ff, y))
-        ssim_baseline_cpn_ip.append(measures_utils.ssim(y_inpainted_baseline_cpn_ip, y))
-        ssim_baseline_dfpn_ip.append(measures_utils.ssim(y_inpainted_baseline_dfpn_ip, y))
-        ssim_cpn_chn_ip.append(measures_utils.ssim(y_inpainted_cpn_chn_ip, y))
-        ssim_dfpn_chn_ip.append(measures_utils.ssim(y_inpainted_dfpn_chn_ip, y))
-        ssim_baseline_cpn_cp.append(measures_utils.ssim(y_inpainted_baseline_cpn_cp, y))
-        ssim_baseline_dfpn_cp.append(measures_utils.ssim(y_inpainted_baseline_dfpn_cp, y))
-        ssim_cpn_chn_cp.append(measures_utils.ssim(y_inpainted_cpn_chn_cp, y))
-        ssim_dfpn_chn_cp.append(measures_utils.ssim(y_inpainted_dfpn_chn_cp, y))
-        ssim_cpn.append(measures_utils.ssim(y_inpainted_cpn, y))
+        ssim_baseline_cpn_ff.append(measures_utils.ssim(y_inpainted_baseline_cpn_ff.cpu(), y))
+        ssim_baseline_dfpn_ff.append(measures_utils.ssim(y_inpainted_baseline_dfpn_ff.cpu(), y))
+        ssim_cpn_chn_ff.append(measures_utils.ssim(y_inpainted_cpn_chn_ff.cpu(), y))
+        ssim_dfpn_chn_ff.append(measures_utils.ssim(y_inpainted_dfpn_chn_ff.cpu(), y))
+        ssim_baseline_cpn_ip.append(measures_utils.ssim(y_inpainted_baseline_cpn_ip.cpu(), y))
+        ssim_baseline_dfpn_ip.append(measures_utils.ssim(y_inpainted_baseline_dfpn_ip.cpu(), y))
+        ssim_cpn_chn_ip.append(measures_utils.ssim(y_inpainted_cpn_chn_ip.cpu(), y))
+        ssim_dfpn_chn_ip.append(measures_utils.ssim(y_inpainted_dfpn_chn_ip.cpu(), y))
+        ssim_baseline_cpn_cp.append(measures_utils.ssim(y_inpainted_baseline_cpn_cp.cpu(), y))
+        ssim_baseline_dfpn_cp.append(measures_utils.ssim(y_inpainted_baseline_dfpn_cp.cpu(), y))
+        ssim_cpn_chn_cp.append(measures_utils.ssim(y_inpainted_cpn_chn_cp.cpu(), y))
+        ssim_dfpn_chn_cp.append(measures_utils.ssim(y_inpainted_dfpn_chn_cp.cpu(), y))
+        ssim_cpn.append(measures_utils.ssim(y_inpainted_cpn.cpu(), y))
 
         # Quality Measure: LPIPS
         lpips_baseline_cpn_ff.append(measures_utils.lpips(y_inpainted_baseline_cpn_ff, y))
@@ -196,7 +199,7 @@ for dataset_name in ['got-10k', 'davis-2017']:
         lpips_cpn.append(measures_utils.lpips(y_inpainted_cpn, y))
 
     # Plot the measures in a table
-    t = PrettyTable(['Model', 'L1 Hole', 'PSNR', 'SSIM', 'LPIPS'], float_format='.2')
+    t = PrettyTable(['Model', 'L1 Hole', 'PSNR', 'SSIM', 'LPIPS'])
 
     # Algorithm 1: FF
     t.add_row([
