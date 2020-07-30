@@ -96,6 +96,11 @@ for dataset_name in ['got-10k', 'davis-2017']:
         (x, m), y, info = it_data = dataset[frame_index]
         x, m, y = x.to(args.device), m.to(args.device), y.to(args.device)
 
+        # Check that the mask is not empty
+        if m.sum() == 0:
+            print('Invalid mask sample')
+            continue
+
         # Algorithm 1: FF
         y_inpainted_baseline_cpn_ff = thesis_inpainting.runner.ThesisInpaintingRunner.inpainting_algorithm_ff(
             x.clone(), m.clone(), cpn_model, thesis.runner.ThesisRunner.inpainting_hard_copy
