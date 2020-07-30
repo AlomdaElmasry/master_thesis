@@ -35,6 +35,14 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
                 device
             )
 
+    @staticmethod
+    def init_model_with_state(model, experiments_path, experiment_name, epoch, device):
+        experiment_path = os.path.join(experiments_path, experiment_name)
+        checkpoint_path = os.path.join(experiment_path, 'checkpoints', '{}.checkpoint.pkl'.format(epoch))
+        with open(checkpoint_path, 'rb') as checkpoint_file:
+            model.load_state_dict(torch.load(checkpoint_file, map_location=device)['model'])
+        return model.to(device)
+
     def init_optimizer(self, device):
         self.optimizer = torch.optim.Adam(
             self.model.parameters(), lr=self.experiment.configuration.get('training', 'lr')

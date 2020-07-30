@@ -11,6 +11,7 @@ import numpy as np
 import thesis_alignment.runner
 import thesis_inpainting.runner
 import progressbar
+import models.thesis_inpainting
 import models.cpn_original
 import thesis_cpn.runner
 import utils.baselines
@@ -33,7 +34,9 @@ cpn_model = thesis_cpn.runner.ThesisCPNRunner.init_model_with_state(
 dfpn_model = thesis_alignment.runner.ThesisAlignmentRunner.init_model_with_state(
     models.thesis_alignment.ThesisAlignmentModel(vgg_model), args.experiments_path, 'alignment_final', 110, args.device
 )
-cpn_chn_model = None
+cpn_chn_model = thesis_inpainting.runner.ThesisInpaintingRunner.init_model_with_state(
+    models.thesis_inpainting.ThesisInpaintingVisible(), args.experiments_path, 'inpainting_final_cpn', 100, args.device
+)
 dfpn_chn_model = None
 
 # Iterate over the data sets and the displacements
@@ -97,24 +100,36 @@ for dataset_name in ['got-10k', 'davis-2017']:
         y_inpainted_baseline_cpn_ff = thesis_inpainting.runner.ThesisInpaintingRunner.inpainting_algorithm_ff(
             x.clone(), m.clone(), cpn_model, thesis.runner.ThesisRunner.inpainting_hard_copy
         )
-        y_inpainted_baseline_dfpn_ff = y
-        y_inpainted_cpn_chn_ff = y
+        y_inpainted_baseline_dfpn_ff = thesis_inpainting.runner.ThesisInpaintingRunner.inpainting_algorithm_ff(
+            x.clone(), m.clone(), dfpn_model, thesis.runner.ThesisRunner.inpainting_hard_copy
+        )
+        y_inpainted_cpn_chn_ff = thesis_inpainting.runner.ThesisInpaintingRunner.inpainting_algorithm_ff(
+            x.clone(), m.clone(), cpn_model, cpn_chn_model
+        )
         y_inpainted_dfpn_chn_ff = y
 
         # Algorithm 2: IP
         y_inpainted_baseline_cpn_ip = thesis_inpainting.runner.ThesisInpaintingRunner.inpainting_algorithm_ip(
             x.clone(), m.clone(), cpn_model, thesis.runner.ThesisRunner.inpainting_hard_copy
         )
-        y_inpainted_baseline_dfpn_ip = y
-        y_inpainted_cpn_chn_ip = y
+        y_inpainted_baseline_dfpn_ip = thesis_inpainting.runner.ThesisInpaintingRunner.inpainting_algorithm_ip(
+            x.clone(), m.clone(), dfpn_model, thesis.runner.ThesisRunner.inpainting_hard_copy
+        )
+        y_inpainted_cpn_chn_ip = thesis_inpainting.runner.ThesisInpaintingRunner.inpainting_algorithm_ip(
+            x.clone(), m.clone(), cpn_model, cpn_chn_model
+        )
         y_inpainted_dfpn_chn_ip = y
 
         # Algorithm 3: CP
         y_inpainted_baseline_cpn_cp = thesis_inpainting.runner.ThesisInpaintingRunner.inpainting_algorithm_cp(
             x.clone(), m.clone(), cpn_model, thesis.runner.ThesisRunner.inpainting_hard_copy
         )
-        y_inpainted_baseline_dfpn_cp = y
-        y_inpainted_cpn_chn_cp = y
+        y_inpainted_baseline_dfpn_cp = thesis_inpainting.runner.ThesisInpaintingRunner.inpainting_algorithm_cp(
+            x.clone(), m.clone(), dfpn_model, thesis.runner.ThesisRunner.inpainting_hard_copy
+        )
+        y_inpainted_cpn_chn_cp = thesis_inpainting.runner.ThesisInpaintingRunner.inpainting_algorithm_cp(
+            x.clone(), m.clone(), cpn_model, cpn_chn_model
+        )
         y_inpainted_dfpn_chn_cp = y
 
         # CPN
