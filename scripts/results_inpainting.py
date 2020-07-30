@@ -80,7 +80,7 @@ for dataset_name in ['got-10k', 'davis-2017']:
         gts_simulator=None,
         masks_simulator=None,
         image_size=(256, 256),
-        frames_n=10,
+        frames_n=9,
         frames_spacing=1,
         frames_randomize=False,
         dilatation_filter_size=(3, 3),
