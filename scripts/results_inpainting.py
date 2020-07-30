@@ -19,7 +19,8 @@ from prettytable import PrettyTable
 parser = argparse.ArgumentParser(description='Cleans invalid images')
 parser.add_argument('--data-path', required=True, help='Path where the images are stored')
 parser.add_argument('--experiments-path', required=True, help='Path where the experiments are stored')
-parser.add_argument('--n-samples', default=3, type=int, help='Number of samples')
+parser.add_argument('--n-frames', default=11, type=int, help='Number of frames')
+parser.add_argument('--n-samples', default=100, type=int, help='Number of samples')
 parser.add_argument('--device', default='cpu', help='Device to use')
 args = parser.parse_args()
 
@@ -80,7 +81,7 @@ for dataset_name in ['got-10k', 'davis-2017']:
         gts_simulator=None,
         masks_simulator=None,
         image_size=(256, 256),
-        frames_n=11,
+        frames_n=args.n_frames,
         frames_spacing=1,
         frames_randomize=False,
         dilatation_filter_size=(3, 3),
