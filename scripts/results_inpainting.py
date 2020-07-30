@@ -29,7 +29,7 @@ cpn_model = thesis_cpn.runner.ThesisCPNRunner.init_model_with_state(
     models.cpn_original.CPNOriginal().to(args.device), args.device
 )
 dfpn_model = thesis_alignment.runner.ThesisAlignmentRunner.init_model_with_state(
-    models.thesis_alignment.ThesisAlignmentModel(vgg_model), args.experiments_path, 'alignment_final', 110, args.device
+    models.thesis_alignment.ThesisAlignmentModel(vgg_model), args.experiments_path, 'alignment_final', 125, args.device
 )
 cpn_chn_model = thesis_inpainting.runner.ThesisInpaintingRunner.init_model_with_state(
     models.thesis_inpainting.ThesisInpaintingVisible(), args.experiments_path, 'inpainting_final_cpn', 70, args.device
