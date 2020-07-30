@@ -149,7 +149,7 @@ class ThesisCPNRunner(thesis.runner.ThesisRunner):
                 y_inpainted[0].transpose(0, 2, 3, 1) * forward_factor +
                 y_inpainted[1].transpose(0, 2, 3, 1) * backward_factor
         ).transpose(0, 3, 1, 2)
-        return torch.from_numpy(y_inpainted)
+        return torch.from_numpy(y_inpainted).to(x.device)
 
     @staticmethod
     def get_reference_frame_indexes(t, n_frames, p=2, r_list_max_length=120):
