@@ -198,6 +198,9 @@ for dataset_name in ['got-10k', 'davis-2017']:
         lpips_dfpn_chn_cp.append(measures_utils.lpips(y_inpainted_dfpn_chn_cp, y))
         lpips_cpn.append(measures_utils.lpips(y_inpainted_cpn, y))
 
+        # Update the bar
+        bar.update(bar.value + 1)
+
     # Plot the measures in a table
     t = PrettyTable(['Model', 'L1 Hole', 'PSNR', 'SSIM', 'LPIPS'])
 
