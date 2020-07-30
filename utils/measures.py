@@ -43,8 +43,14 @@ class UtilsMeasures:
             )
         return np.mean(items_ssim)
 
-    def lpips(self, y, y_hat_comp):
-        # Escale both y and y_hat_comp to be between [-1, 1]. The initial state is between [0, 1]
-        y, y_hat_comp = y * 2 - 1, y_hat_comp * 2 - 1
+    def lpips(self, input, target):
+        """Computes the LPIPS between two images.
+
+        Args:
+            input (torch.FloatTensor): tensor of size (C,F,H,W) containing predicted images.
+            target (torch.FloatTensor): tensor of size (C,F,H,W) containing ground-truth images.
+        """
         with torch.no_grad():
-            return self.model_lpips.forward(y, y_hat_comp).flatten().cpu().tolist()
+            return np.mean(self.model_lpips.forward(
+                input.transpose(0, 1), target.transpose(0, 1), normalize=True
+            ).flatten().cpu().tolist())

@@ -39,6 +39,7 @@ dfpn_chn_model = None
 # Iterate over the data sets and the displacements
 loss_utils = utils.losses.LossesUtils(None, args.device)
 measures_utils = utils.measures.UtilsMeasures()
+measures_utils.init_lpips(args.device)
 for dataset_name in ['got-10k', 'davis-2017']:
 
     # Create lists to store samples results
@@ -77,8 +78,8 @@ for dataset_name in ['got-10k', 'davis-2017']:
         gts_simulator=None,
         masks_simulator=None,
         image_size=(256, 256),
-        frames_n=5,
-        frames_spacing=2,
+        frames_n=15,
+        frames_spacing=1,
         frames_randomize=False,
         dilatation_filter_size=(3, 3),
         dilatation_iterations=0,
@@ -92,35 +93,32 @@ for dataset_name in ['got-10k', 'davis-2017']:
         (x, m), y, info = it_data = dataset[frame_index]
         x, m, y = x.to(args.device), m.to(args.device), y.to(args.device)
 
-        # Align the data with both CPN and DFPN
-        x_refs_aligned_cpn, v_refs_aligned_cpn, v_maps_cpn = None, None, None
-
         # Algorithm 1: FF
         y_inpainted_baseline_cpn_ff = thesis_inpainting.runner.ThesisInpaintingRunner.inpainting_algorithm_ff(
             x.clone(), m.clone(), cpn_model, thesis.runner.ThesisRunner.inpainting_hard_copy
         )
-        y_inpainted_baseline_dfpn_ff = x
-        y_inpainted_cpn_chn_ff = x
-        y_inpainted_dfpn_chn_ff = x
+        y_inpainted_baseline_dfpn_ff = y
+        y_inpainted_cpn_chn_ff = y
+        y_inpainted_dfpn_chn_ff = y
 
         # Algorithm 2: IP
         y_inpainted_baseline_cpn_ip = thesis_inpainting.runner.ThesisInpaintingRunner.inpainting_algorithm_ip(
             x.clone(), m.clone(), cpn_model, thesis.runner.ThesisRunner.inpainting_hard_copy
         )
-        y_inpainted_baseline_dfpn_ip = x
-        y_inpainted_cpn_chn_ip = x
-        y_inpainted_dfpn_chn_ip = x
+        y_inpainted_baseline_dfpn_ip = y
+        y_inpainted_cpn_chn_ip = y
+        y_inpainted_dfpn_chn_ip = y
 
         # Algorithm 3: CP
         y_inpainted_baseline_cpn_cp = thesis_inpainting.runner.ThesisInpaintingRunner.inpainting_algorithm_cp(
             x.clone(), m.clone(), cpn_model, thesis.runner.ThesisRunner.inpainting_hard_copy
         )
-        y_inpainted_baseline_dfpn_cp = x
-        y_inpainted_cpn_chn_cp = x
-        y_inpainted_dfpn_chn_cp = x
+        y_inpainted_baseline_dfpn_cp = y
+        y_inpainted_cpn_chn_cp = y
+        y_inpainted_dfpn_chn_cp = y
 
         # CPN
-        y_inpainted_cpn = x
+        y_inpainted_cpn = y
 
         # Quality Measure: Hole L1
         l1_baseline_cpn_ff.append(loss_utils.masked_l1(y_inpainted_baseline_cpn_ff, y, mask=m, reduction='sum').item())
@@ -168,19 +166,19 @@ for dataset_name in ['got-10k', 'davis-2017']:
         ssim_cpn.append(measures_utils.ssim(y_inpainted_cpn, y))
 
         # Quality Measure: LPIPS
-        lpips_baseline_cpn_ff.append(0)
-        lpips_baseline_dfpn_ff.append(0)
-        lpips_cpn_chn_ff.append(0)
-        lpips_dfpn_chn_ff.append(0)
-        lpips_baseline_cpn_ip.append(0)
-        lpips_baseline_dfpn_ip.append(0)
-        lpips_cpn_chn_ip.append(0)
-        lpips_dfpn_chn_ip.append(0)
-        lpips_baseline_cpn_cp.append(0)
-        lpips_baseline_dfpn_cp.append(0)
-        lpips_cpn_chn_cp.append(0)
-        lpips_dfpn_chn_cp.append(0)
-        lpips_cpn.append(0)
+        lpips_baseline_cpn_ff.append(measures_utils.lpips(y_inpainted_baseline_cpn_ff, y))
+        lpips_baseline_dfpn_ff.append(measures_utils.lpips(y_inpainted_baseline_dfpn_ff, y))
+        lpips_cpn_chn_ff.append(measures_utils.lpips(y_inpainted_cpn_chn_ff, y))
+        lpips_dfpn_chn_ff.append(measures_utils.lpips(y_inpainted_dfpn_chn_ff, y))
+        lpips_baseline_cpn_ip.append(measures_utils.lpips(y_inpainted_baseline_cpn_ip, y))
+        lpips_baseline_dfpn_ip.append(measures_utils.lpips(y_inpainted_baseline_dfpn_ip, y))
+        lpips_cpn_chn_ip.append(measures_utils.lpips(y_inpainted_cpn_chn_ip, y))
+        lpips_dfpn_chn_ip.append(measures_utils.lpips(y_inpainted_dfpn_chn_ip, y))
+        lpips_baseline_cpn_cp.append(measures_utils.lpips(y_inpainted_baseline_cpn_cp, y))
+        lpips_baseline_dfpn_cp.append(measures_utils.lpips(y_inpainted_baseline_dfpn_cp, y))
+        lpips_cpn_chn_cp.append(measures_utils.lpips(y_inpainted_cpn_chn_cp, y))
+        lpips_dfpn_chn_cp.append(measures_utils.lpips(y_inpainted_dfpn_chn_cp, y))
+        lpips_cpn.append(measures_utils.lpips(y_inpainted_cpn, y))
 
     # Plot the measures in a table
     t = PrettyTable(['Model', 'L1 Hole', 'PSNR', 'SSIM', 'LPIPS'], float_format='.2')

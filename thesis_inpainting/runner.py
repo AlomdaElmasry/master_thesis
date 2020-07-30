@@ -220,7 +220,7 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
         fill_color = torch.as_tensor([0.485, 0.456, 0.406], dtype=torch.float32).view(1, 3, 1, 1).to(x.device)
         y_inpainted, m_inpainted = x.unsqueeze(0), m.unsqueeze(0)
         for i in range(N):
-            t_list = [t for t in range(y_inpainted.size(s)) if (t // s) % s == i % 2] # bad implementation
+            t_list = [t for t in range(y_inpainted.size(2)) if (t // s) % (s if s > 1 else 2) == i % 2]
             for t in t_list:
                 if m_inpainted[:, :, t].sum() == 0:
                     continue
@@ -235,7 +235,7 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
                     m_inpainted[:, :, t] = m_inpainted[:, :, t] - v_map[:, :, 0]
                     y_inpainted[:, :, t] = (1 - m_inpainted[:, :, t]) * y_hat_comp[:, :, 0] + \
                                            m_inpainted[:, :, t].repeat(1, 3, 1, 1) * fill_color
-                    if torch.sum(m_inpainted[:, :, t]) * 100 / m_inpainted[:, :, t].numel() < e:
+                    if torch.sum(m_inpainted[:, :, t]) * 100 / m_inpainted[:, :, t].numel() < e or i == N - 1:
                         m_inpainted[:, :, t] = 0
                         y_inpainted[:, :, t] = y_hat_comp[:, :, 0]
         return y_inpainted[0]
