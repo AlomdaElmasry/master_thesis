@@ -32,9 +32,11 @@ dfpn_model = thesis_alignment.runner.ThesisAlignmentRunner.init_model_with_state
     models.thesis_alignment.ThesisAlignmentModel(vgg_model), args.experiments_path, 'alignment_final', 110, args.device
 )
 cpn_chn_model = thesis_inpainting.runner.ThesisInpaintingRunner.init_model_with_state(
-    models.thesis_inpainting.ThesisInpaintingVisible(), args.experiments_path, 'inpainting_final_cpn', 100, args.device
+    models.thesis_inpainting.ThesisInpaintingVisible(), args.experiments_path, 'inpainting_final_cpn', 70, args.device
 )
-dfpn_chn_model = cpn_chn_model
+dfpn_chn_model = thesis_inpainting.runner.ThesisInpaintingRunner.init_model_with_state(
+    models.thesis_inpainting.ThesisInpaintingVisible(), args.experiments_path, 'inpainting_final_dfpn', 70, args.device
+)
 
 # Iterate over the data sets and the displacements
 loss_utils = utils.losses.LossesUtils(None, args.device)
@@ -78,7 +80,7 @@ for dataset_name in ['got-10k', 'davis-2017']:
         gts_simulator=None,
         masks_simulator=None,
         image_size=(256, 256),
-        frames_n=5,
+        frames_n=10,
         frames_spacing=1,
         frames_randomize=False,
         dilatation_filter_size=(3, 3),
