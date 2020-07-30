@@ -108,7 +108,7 @@ for dataset_name in ['got-10k', 'davis-2017']:
         'Frame distance (s)': list(range(1, 11)),
         'Baseline': [np.mean(losses[dataset_name][s]['baseline']) for s in range(1, 11)],
         'DFPN': [np.mean(losses[dataset_name][s]['ours']) for s in range(1, 11)],
-        'State of the Art (CPN)': [np.mean(losses[dataset_name][s]['cpn']) for s in range(1, 11)],
+        'State of the Art (CPA)': [np.mean(losses[dataset_name][s]['cpn']) for s in range(1, 11)],
     })
     ax = sns.lineplot(
         x='Frame distance (s)',

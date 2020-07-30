@@ -33,10 +33,10 @@ dfpn_model = thesis_alignment.runner.ThesisAlignmentRunner.init_model_with_state
     models.thesis_alignment.ThesisAlignmentModel(vgg_model), args.experiments_path, 'alignment_final', 125, args.device
 )
 cpn_chn_model = thesis_inpainting.runner.ThesisInpaintingRunner.init_model_with_state(
-    models.thesis_inpainting.ThesisInpaintingVisible(), args.experiments_path, 'inpainting_final_cpn', 100, args.device
+    models.thesis_inpainting.ThesisInpaintingVisible(), args.experiments_path, 'inpainting_final_cpn', 88, args.device
 )
 dfpn_chn_model = thesis_inpainting.runner.ThesisInpaintingRunner.init_model_with_state(
-    models.thesis_inpainting.ThesisInpaintingVisible(), args.experiments_path, 'inpainting_final_dfpn', 70, args.device
+    models.thesis_inpainting.ThesisInpaintingVisible(), args.experiments_path, 'inpainting_final_dfpn', 88, args.device
 )
 
 # Iterate over the data sets and the displacements
