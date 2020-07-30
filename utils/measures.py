@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import skimage.metrics
 import models.lpips
-
+import math
 
 class UtilsMeasures:
     model_lpips = None
@@ -27,6 +27,7 @@ class UtilsMeasures:
             items_psnr.append(skimage.metrics.peak_signal_noise_ratio(
                 target[:, f].numpy(), input[:, f].numpy())
             )
+        items_psnr = [100 if math.isnan(i_psnr) else i_psnr for i_psnr in items_psnr]
         return np.mean([item_psnr for item_psnr in items_psnr if not np.isinf(item_psnr) and not np.isnan(item_psnr)])
 
     def ssim(self, input, target):

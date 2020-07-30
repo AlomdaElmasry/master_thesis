@@ -29,7 +29,7 @@ class LossesUtils:
         elif batch_mask is not None:
             input, target, mask = input[batch_mask], target[batch_mask], mask[batch_mask]
         masked_l1_loss = F.l1_loss(input * mask, target * mask, reduction=reduction)
-        return weight * masked_l1_loss / (torch.sum(mask) if reduction == 'sum' else 1)
+        return weight * masked_l1_loss / (torch.sum(mask) + 1E-9 if reduction == 'sum' else 1)
 
     def bce(self, input, target, mask, batch_mask=None, reduction='mean', weight=1):
         if batch_mask is not None:
