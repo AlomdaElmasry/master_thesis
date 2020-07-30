@@ -130,10 +130,10 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
     def test(self, epoch, device):
         self.model.eval()
 
-        # # If epoch != 0, loadit
-        # if epoch is not None:
-        #     self.load_states(epoch, device)
-        #
+        # If epoch != 0, loadit
+        if epoch is not None:
+            self.load_states(epoch, device)
+
         # # Compute the losses on the test set
         # self.test_losses(self.test_losses_handler, self.losses_items_ids, device)
         #
