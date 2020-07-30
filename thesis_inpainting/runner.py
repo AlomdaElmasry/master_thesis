@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 import thesis_cpn.runner
 import models.cpn_original
 import os.path
+import progressbar
 
 
 class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
@@ -168,10 +169,11 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
 
     @staticmethod
     def inpainting_algorithm_ff(x, m, model_alignment, model, s=2, D=20, e=1):
-        print('Inpainting sequence...')
         fill_color = torch.as_tensor([0.485, 0.456, 0.406], dtype=torch.float32).view(1, 3, 1, 1).to(x.device)
         y_inpainted = torch.zeros_like(x)
+        bar = progressbar.ProgressBar(max_value=x.size(1))
         for t in range(x.size(1)):
+            bar.update(bar.value + 1)
             x_target, m_target, y_hat_comp = x[:, t].unsqueeze(0), m[:, t].unsqueeze(0), None
             t_candidates = ThesisInpaintingRunner.inpainting_algorithm_ff_indexes(t, x.size(1), s=s, D=D)
             while (len(t_candidates) > 0 and torch.sum(m_target) * 100 / m_target.numel() > e) or y_hat_comp is None:
@@ -199,8 +201,10 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
     def inpainting_algorithm_ip(x, m, model_alignment, model, s=2, D=20, e=1):
         fill_color = torch.as_tensor([0.485, 0.456, 0.406], dtype=torch.float32).view(1, 3, 1, 1).to(x.device)
         y_inpainted, m_inpainted = x.unsqueeze(0), m.unsqueeze(0)
+        bar = progressbar.ProgressBar(max_value=x.size(1))
         t_list = sorted(list(range(x.size(1))), key=lambda xi: abs(xi - x.size(1) // 2))
         for t in t_list:
+            bar.update(bar.value + 1)
             t_candidates = ThesisInpaintingRunner.inpainting_algorithm_ip_indexes(t, t_list, s, D)
             y_hat_comp = None
             while (len(t_candidates) > 0 and torch.sum(m_inpainted[:, :, t]) * 100 / m_inpainted[:, :, t].numel() > e) \
@@ -228,7 +232,9 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
     def inpainting_algorithm_cp(x, m, model_alignment, model, N=20, s=2, e=1):
         fill_color = torch.as_tensor([0.485, 0.456, 0.406], dtype=torch.float32).view(1, 3, 1, 1).to(x.device)
         y_inpainted, m_inpainted = x.unsqueeze(0), m.unsqueeze(0)
+        bar = progressbar.ProgressBar(max_value=N)
         for i in range(N):
+            bar.update(bar.value + 1)
             t_list = [t for t in range(y_inpainted.size(2)) if (t // s) % (s if s > 1 else 2) == i % 2]
             for t in t_list:
                 if m_inpainted[:, :, t].sum() == 0:
