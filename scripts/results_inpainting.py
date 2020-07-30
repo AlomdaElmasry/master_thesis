@@ -141,16 +141,16 @@ for dataset_name in ['got-10k', 'davis-2017']:
         # Quality Measure: Hole L1
         l1_baseline_cpn_ff.append(loss_utils.masked_l1(y_inpainted_baseline_cpn_ff, y, mask=m, reduction='sum').item())
         l1_baseline_dfpn_ff.append(loss_utils.masked_l1(y_inpainted_baseline_dfpn_ff, y, mask=m, reduction='sum').item())
-        l1_cpn_chn_ff.append(loss_utils.masked_l1(y_inpainted_cpn_chn_ff, y, mask=m, reduction='sum'))
-        l1_dfpn_chn_ff.append(loss_utils.masked_l1(y_inpainted_dfpn_chn_ff, y, mask=m, reduction='sum'))
+        l1_cpn_chn_ff.append(loss_utils.masked_l1(y_inpainted_cpn_chn_ff, y, mask=m, reduction='sum').item())
+        l1_dfpn_chn_ff.append(loss_utils.masked_l1(y_inpainted_dfpn_chn_ff, y, mask=m, reduction='sum').item())
         l1_baseline_cpn_ip.append(loss_utils.masked_l1(y_inpainted_baseline_cpn_ip, y, mask=m, reduction='sum').item())
         l1_baseline_dfpn_ip.append(loss_utils.masked_l1(y_inpainted_baseline_dfpn_ip, y, mask=m, reduction='sum').item())
-        l1_cpn_chn_ip.append(loss_utils.masked_l1(y_inpainted_cpn_chn_ip, y, mask=m, reduction='sum'))
-        l1_dfpn_chn_ip.append(loss_utils.masked_l1(y_inpainted_dfpn_chn_ip, y, mask=m, reduction='sum'))
+        l1_cpn_chn_ip.append(loss_utils.masked_l1(y_inpainted_cpn_chn_ip, y, mask=m, reduction='sum').item())
+        l1_dfpn_chn_ip.append(loss_utils.masked_l1(y_inpainted_dfpn_chn_ip, y, mask=m, reduction='sum').item())
         l1_baseline_cpn_cp.append(loss_utils.masked_l1(y_inpainted_baseline_cpn_cp, y, mask=m, reduction='sum').item())
         l1_baseline_dfpn_cp.append(loss_utils.masked_l1(y_inpainted_baseline_dfpn_cp, y, mask=m, reduction='sum').item())
-        l1_cpn_chn_cp.append(loss_utils.masked_l1(y_inpainted_cpn_chn_cp, y, mask=m, reduction='sum'))
-        l1_dfpn_chn_cp.append(loss_utils.masked_l1(y_inpainted_dfpn_chn_cp, y, mask=m, reduction='sum'))
+        l1_cpn_chn_cp.append(loss_utils.masked_l1(y_inpainted_cpn_chn_cp, y, mask=m, reduction='sum').item())
+        l1_dfpn_chn_cp.append(loss_utils.masked_l1(y_inpainted_dfpn_chn_cp, y, mask=m, reduction='sum').item())
         l1_cpn.append(loss_utils.masked_l1(y_inpainted_cpn, y, mask=m, reduction='sum').item())
 
         # Quality Measure: PSNR
