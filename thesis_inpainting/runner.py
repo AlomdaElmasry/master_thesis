@@ -147,12 +147,12 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
             self.test_sequence(
                 self.inpainting_algorithm_ff, 'algorithm_ff', self.model_alignment, self.model, device
             )
-            self.test_sequence(
-                self.inpainting_algorithm_ip, 'algorithm_ip', self.model_alignment, self.model, device
-            )
-            self.test_sequence(
-                self.inpainting_algorithm_cp, 'algorithm_cp', self.model_alignment, self.model, device
-            )
+            # self.test_sequence(
+            #     self.inpainting_algorithm_ip, 'algorithm_ip', self.model_alignment, self.model, device
+            # )
+            # self.test_sequence(
+            #     self.inpainting_algorithm_cp, 'algorithm_cp', self.model_alignment, self.model, device
+            # )
 
     def test_losses_handler(self, x, m, y, flows_use, flow_gt, t, r_list):
         x_ref_aligned, v_ref_aligned, v_map, y_hat, y_hat_comp = ThesisInpaintingRunner.infer_step_propagate(
@@ -168,7 +168,7 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
         )
 
     @staticmethod
-    def inpainting_algorithm_ff(x, m, model_alignment, model, s=1, D=20, e=1):
+    def inpainting_algorithm_ff(x, m, model_alignment, model, s=2, D=20, e=1):
         print('Inpainting sequence...')
         fill_color = torch.as_tensor([0.485, 0.456, 0.406], dtype=torch.float32).view(1, 3, 1, 1).to(x.device)
         y_inpainted = torch.zeros_like(x)
