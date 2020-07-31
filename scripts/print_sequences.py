@@ -7,8 +7,8 @@ import matplotlib.pyplot as plt
 # Define folder where the sequences are
 sequences_folders = {
     'sota': '/Users/DavidAlvarezDLT/Desktop/cpn/epoch-0',
-    'cpn': '/Users/DavidAlvarezDLT/Desktop/cpa_chn/epoch-100',
-    'dfpn': '/Users/DavidAlvarezDLT/Desktop/cpn/epoch-0'
+    'cpn': '/Users/DavidAlvarezDLT/Desktop/cpa_chn/epoch-88',
+    'dfpn': '/Users/DavidAlvarezDLT/Desktop/dfpn_chn/epoch-88'
 }
 
 # Define the folder where the results are stored
@@ -43,4 +43,4 @@ for video_item in videos_list:
         video_rows.append(np.concatenate(middle_frames, axis=1))
     if save_video:
         video = np.concatenate(video_rows, axis=0)
-        cv2.imwrite(os.path.join(results_folder, video_name + '.png'), video)
+        cv2.imwrite(os.path.join(results_folder, 'results_seq_' + video_name + '.png'), video)

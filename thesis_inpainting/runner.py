@@ -168,7 +168,7 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
         )
 
     @staticmethod
-    def inpainting_algorithm_ff(x, m, model_alignment, model, s=2, D=20, e=1):
+    def inpainting_algorithm_ff(x, m, model_alignment, model, s=1, D=20, e=1):
         print('Inpainting sequence...')
         fill_color = torch.as_tensor([0.485, 0.456, 0.406], dtype=torch.float32).view(1, 3, 1, 1).to(x.device)
         y_inpainted = torch.zeros_like(x)
