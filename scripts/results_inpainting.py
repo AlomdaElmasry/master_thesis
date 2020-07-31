@@ -43,7 +43,7 @@ dfpn_chn_model = thesis_inpainting.runner.ThesisInpaintingRunner.init_model_with
 loss_utils = utils.losses.LossesUtils(None, args.device)
 measures_utils = utils.measures.UtilsMeasures()
 measures_utils.init_lpips(args.device)
-for dataset_name in ['got-10k']:
+for dataset_name in ['davis-2017']:
 
     # Create lists to store samples results
     l1_baseline_cpn_ff, l1_baseline_cpn_ip, l1_baseline_cpn_cp = [], [], []
