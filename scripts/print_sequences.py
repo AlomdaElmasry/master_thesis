@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 
 # Define folder where the sequences are
 sequences_folders = {
-    'sota': '/Users/DavidAlvarezDLT/Desktop/cpn/epoch-0',
+    'sota': '/Users/DavidAlvarezDLT/Desktop/CPN',
     'cpn': '/Users/DavidAlvarezDLT/Desktop/cpa_chn/epoch-88',
     'dfpn': '/Users/DavidAlvarezDLT/Desktop/dfpn_chn/epoch-88'
 }

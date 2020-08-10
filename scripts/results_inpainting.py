@@ -6,7 +6,7 @@ import models.vgg_16
 import random
 import utils.losses
 import numpy as np
-import thesis_alignment.runner
+import thesis_dfpn.runner
 import thesis_inpainting.runner
 import progressbar
 import models.thesis_inpainting
@@ -20,7 +20,7 @@ parser = argparse.ArgumentParser(description='Cleans invalid images')
 parser.add_argument('--data-path', required=True, help='Path where the images are stored')
 parser.add_argument('--experiments-path', required=True, help='Path where the experiments are stored')
 parser.add_argument('--n-frames', default=11, type=int, help='Number of frames')
-parser.add_argument('--n-samples', default=100, type=int, help='Number of samples')
+parser.add_argument('--n-samples', default=50, type=int, help='Number of samples')
 parser.add_argument('--device', default='cpu', help='Device to use')
 args = parser.parse_args()
 
@@ -29,7 +29,7 @@ vgg_model = models.vgg_16.get_pretrained_model(args.device)
 cpn_model = thesis_cpn.runner.ThesisCPNRunner.init_model_with_state(
     models.cpn_original.CPNOriginal().to(args.device), args.device
 )
-dfpn_model = thesis_alignment.runner.ThesisAlignmentRunner.init_model_with_state(
+dfpn_model = thesis_dfpn.runner.ThesisAlignmentRunner.init_model_with_state(
     models.thesis_alignment.ThesisAlignmentModel(vgg_model), args.experiments_path, 'alignment_final', 125, args.device
 )
 cpn_chn_model = thesis_inpainting.runner.ThesisInpaintingRunner.init_model_with_state(

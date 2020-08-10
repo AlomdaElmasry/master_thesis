@@ -17,3 +17,4 @@ tqdm~=4.46.1
 seaborn~=0.10.1
 pandas~=1.0.5
 tabulate
+moviepy
