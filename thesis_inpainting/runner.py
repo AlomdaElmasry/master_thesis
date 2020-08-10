@@ -86,7 +86,7 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
     def train_step_propagate(model_alignment, model, x_target, m_target, x_ref, m_ref):
         with torch.no_grad():
             if isinstance(model_alignment, models.thesis_alignment.ThesisAlignmentModel):
-                x_ref_aligned, v_ref_aligned, v_map = thesis_alignment.runner.ThesisAlignmentRunner.infer_step_propagate(
+                x_ref_aligned, v_ref_aligned, v_map = thesis_dfpn.runner.ThesisAlignmentRunner.infer_step_propagate(
                     model_alignment, x_target, m_target, x_ref, m_ref
                 )
             else:
@@ -100,7 +100,7 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
     def infer_step_propagate(model_alignment, model, x_target, m_target, x_ref, m_ref):
         with torch.no_grad():
             if isinstance(model_alignment, models.thesis_alignment.ThesisAlignmentModel):
-                x_ref_aligned, v_ref_aligned, v_map = thesis_alignment.runner.ThesisAlignmentRunner.infer_step_propagate(
+                x_ref_aligned, v_ref_aligned, v_map = thesis_dfpn.runner.ThesisAlignmentRunner.infer_step_propagate(
                     model_alignment, x_target, m_target, x_ref, m_ref
                 )
             else:
