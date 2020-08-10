@@ -247,7 +247,7 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
                     m_inpainted[:, :, t] = m_inpainted[:, :, t] - v_map[:, :, 0]
                     y_inpainted[:, :, t] = (1 - m_inpainted[:, :, t]) * y_hat_comp[:, :, 0] + \
                                            m_inpainted[:, :, t].repeat(1, 3, 1, 1) * fill_color
-                    if torch.sum(m_inpainted[:, :, t]) * 100 / m_inpainted[:, :, t].numel() < e or i == N - 1:
+                    if torch.sum(m_inpainted[:, :, t]) * 100 / m_inpainted[:, :, t].numel() < e or i >= N - 2:
                         m_inpainted[:, :, t] = 0
                         y_inpainted[:, :, t] = y_hat_comp[:, :, 0]
         return y_inpainted[0]
