@@ -4,6 +4,7 @@ import skimage.metrics
 import models.lpips
 import math
 
+
 class UtilsMeasures:
     model_lpips = None
 

@@ -144,12 +144,12 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
 
         # Inpaint test sequences every 10 epochs
         if epoch is not None or self.counters['epoch'] % 50 == 0:
-            self.test_sequence(
-                self.inpainting_algorithm_ff, 'algorithm_ff', self.model_alignment, self.model, device
-            )
             # self.test_sequence(
-            #     self.inpainting_algorithm_ip, 'algorithm_ip', self.model_alignment, self.model, device
+            #     self.inpainting_algorithm_ff, 'algorithm_ff', self.model_alignment, self.model, device
             # )
+            self.test_sequence(
+                self.inpainting_algorithm_ip, 'algorithm_ip', self.model_alignment, self.model, device
+            )
             # self.test_sequence(
             #     self.inpainting_algorithm_cp, 'algorithm_cp', self.model_alignment, self.model, device
             # )
