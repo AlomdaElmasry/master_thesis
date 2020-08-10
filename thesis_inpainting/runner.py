@@ -147,12 +147,12 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
             # self.test_sequence(
             #     self.inpainting_algorithm_ff, 'algorithm_ff', self.model_alignment, self.model, device
             # )
-            self.test_sequence(
-                self.inpainting_algorithm_ip, 'algorithm_ip', self.model_alignment, self.model, device
-            )
             # self.test_sequence(
-            #     self.inpainting_algorithm_cp, 'algorithm_cp', self.model_alignment, self.model, device
+            #     self.inpainting_algorithm_ip, 'algorithm_ip', self.model_alignment, self.model, device
             # )
+            self.test_sequence(
+                self.inpainting_algorithm_cp, 'algorithm_cp', self.model_alignment, self.model, device
+            )
 
     def test_losses_handler(self, x, m, y, flows_use, flow_gt, t, r_list):
         x_ref_aligned, v_ref_aligned, v_map, y_hat, y_hat_comp = ThesisInpaintingRunner.infer_step_propagate(
