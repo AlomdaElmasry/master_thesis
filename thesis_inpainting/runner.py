@@ -5,7 +5,7 @@ import models.thesis_inpainting
 import models.thesis_inpainting
 import torch
 import utils.losses
-import thesis_alignment.runner
+import thesis_dfpn.runner
 import utils.flow
 import utils.draws
 import matplotlib.pyplot as plt
@@ -28,7 +28,7 @@ class ThesisInpaintingRunner(thesis.runner.ThesisRunner):
                 models.cpn_original.CPNOriginal().to(device), device
             )
         else:
-            self.model_alignment = thesis_alignment.runner.ThesisAlignmentRunner.init_model_with_state(
+            self.model_alignment = thesis_dfpn.runner.ThesisAlignmentRunner.init_model_with_state(
                 models.thesis_alignment.ThesisAlignmentModel(self.model_vgg).to(device),
                 os.path.dirname(self.experiment.paths['experiment']),
                 self.experiment.configuration.get('model', 'alignment_experiment_name'),
