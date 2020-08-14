@@ -13,12 +13,13 @@ for file_name in glob.glob(os.path.join(args.data_path, '*.avi')):
 
     # Check that the file is part of a hole sequence
     name_normalized = os.path.basename(file_name).replace('davis_', '')
-    if '_hole' not in name_normalized:
-        continue
+    name_normalized = os.path.basename(file_name)
+    # if '_hole' not in name_normalized:
+    #     continue
 
     # Prepare the folder where the frames will be stored
     name_normalized = name_normalized.replace('_hole.avi', '')
-    frames_folder = os.path.join(args.data_path, name_normalized)
+    frames_folder = os.path.join(args.data_path, 'to_frames', name_normalized)
     if not os.path.exists(frames_folder):
         os.makedirs(frames_folder)
 
